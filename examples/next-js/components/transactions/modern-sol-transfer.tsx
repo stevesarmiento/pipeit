@@ -78,15 +78,15 @@ export function ModernSolTransfer() {
             });
 
             console.log('✅ Gill SOL Transfer: Transaction confirmed', { signature: transactionSignature });
-            setSignature(transactionSignature);
+        setSignature(transactionSignature);
             console.log('🎉 Gill SOL Transfer: Transaction complete!', { signature: transactionSignature });
 
-            // Track transaction in debugger
-            if (client) {
-                client.trackTransaction({
+        // Track transaction in debugger
+        if (client) {
+            client.trackTransaction({
                     signature: transactionSignature as any,
-                    status: 'confirmed',
-                    method: 'signAndSendTransaction',
+                status: 'confirmed',
+                method: 'signAndSendTransaction',
                     feePayer: signer.address,
                 });
             }
@@ -106,7 +106,7 @@ const transferInstruction = getTransferSolInstruction({
     source: signer,
     destination: address(recipientAddress),
     amount: lamports(BigInt(Math.floor(amount * Number(LAMPORTS_PER_SOL)))),
-});
+            });
 
 // Build transaction with Gill's createTransaction
 const transactionMessage = createTransaction({

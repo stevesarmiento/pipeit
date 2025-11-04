@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo } from 'react';
-import { createPipeline, type StepContext } from '@pipeit/tx-orchestration';
+import { createPipeline } from '@pipeit/tx-orchestration';
+import type { StepContext } from '@pipeit/tx-orchestration';
 import { VisualPipeline } from '@/lib/visual-pipeline';
 import { getTransferSolInstruction } from 'gill/programs';
 import { lamports } from 'gill';

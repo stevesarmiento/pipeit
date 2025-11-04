@@ -85,7 +85,7 @@ export default function PipelineDetailPage() {
   if (!example || !pipelineConfig) {
     return (
       <div className="container mx-auto px-4 py-12">
-        <h1 className="text-2xl font-bold">Pipeline not found</h1>
+        <h1 className="text-title-4">Pipeline not found</h1>
       </div>
     );
   }
@@ -94,15 +94,15 @@ export default function PipelineDetailPage() {
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
       <div className="container mx-auto px-4 py-12">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">{example.name}</h1>
-          <p className="text-muted-foreground text-lg">{example.description}</p>
+          <h1 className="text-h2 mb-2">{example.name}</h1>
+          <p className="text-body-xl text-muted-foreground">{example.description}</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Visualization */}
           <Card>
             <CardHeader>
-              <CardTitle>Visualization</CardTitle>
+              <CardTitle className="text-title-5">Visualization</CardTitle>
             </CardHeader>
             <CardContent>
               {visualPipeline && (
@@ -144,7 +144,7 @@ export default function PipelineDetailPage() {
           {/* Code */}
           <Card>
             <CardHeader>
-              <CardTitle>Code</CardTitle>
+              <CardTitle className="text-title-5">Code</CardTitle>
             </CardHeader>
             <CardContent>
               <SyntaxHighlighter
@@ -166,4 +166,6 @@ export default function PipelineDetailPage() {
     </div>
   );
 }
+
+
 

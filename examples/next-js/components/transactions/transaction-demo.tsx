@@ -24,7 +24,7 @@ export function TransactionDemo() {
     }
 
     return (
-        <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2">
             <div>
                 <h2 className="text-xl font-semibold mb-4">Gill Approach (Verbose)</h2>
                 <ModernSolTransfer />
