@@ -4,19 +4,28 @@ A comprehensive, Effect-inspired Solana transaction building library that makes 
 
 ## Packages
 
-- `@pipeit/tx-errors` - Typed error definitions and error handling utilities
-- `@pipeit/tx-core` - Core types, utilities, and base transaction builder
-- `@pipeit/tx-builder` - High-level builder API (beginner-friendly layer)
-- `@pipeit/tx-effect` - Effect-based API for advanced users
-- `@pipeit/tx-templates` - Pre-built transaction templates for common operations
-- `@pipeit/tx-middleware` - Composable middleware (retry, simulation, logging)
+- `@pipeit/tx-errors` - Typed error definitions for Solana transaction building
+- `@pipeit/tx-core` - Core types and base transaction builder for Solana transactions
+- `@pipeit/tx-builder` - High-level builder API for Solana transactions (beginner-friendly)
+- `@pipeit/tx-effect` - Effect-based API for Solana transactions (advanced users)
+- `@pipeit/tx-templates` - Pre-built transaction templates for common Solana operations
+- `@pipeit/tx-middleware` - Composable middleware for Solana transactions (retry, simulation, logging)
+- `@pipeit/tx-orchestration` - Transaction orchestration for multi-step Solana transaction flows
 
 ## Installation
 
 ```bash
-pnpm install @pipeit/tx-builder
-# or for Effect-based API
-pnpm install @pipeit/tx-effect effect
+# Core builder API (recommended for most users)
+pnpm install @pipeit/tx-builder gill
+
+# Effect-based API (for advanced users)
+pnpm install @pipeit/tx-effect effect gill
+
+# Transaction templates
+pnpm install @pipeit/tx-templates gill
+
+# Transaction orchestration
+pnpm install @pipeit/tx-orchestration gill
 ```
 
 ## Quick Start
@@ -24,12 +33,40 @@ pnpm install @pipeit/tx-effect effect
 ### Simple API
 
 ```typescript
-import { createTransaction } from '@pipeit/tx-builder'
+import { transaction } from '@pipeit/tx-builder'
+import { createSolanaRpc, createSolanaRpcSubscriptions } from 'gill'
 
-const result = await createTransaction()
-  .transfer({ from: wallet, to: destination, amount: 1_000_000n })
-  .withPriorityFee('high')
-  .send(rpc)
+const rpc = createSolanaRpc('https://api.mainnet-beta.solana.com')
+const rpcSubscriptions = createSolanaRpcSubscriptions('wss://api.mainnet-beta.solana.com')
+
+// Build and execute a transaction
+const signature = await transaction()
+  .addInstruction(yourInstruction)
+  .execute({
+    feePayer: walletSigner,
+    rpc,
+    rpcSubscriptions,
+  })
+```
+
+### With Configuration
+
+```typescript
+import { transaction } from '@pipeit/tx-builder'
+
+const signature = await transaction({
+  autoRetry: true, // Auto-retry failed transactions
+  priorityLevel: 'high', // Set priority fee
+  computeUnitLimit: 200_000, // Set compute unit limit
+  logLevel: 'verbose', // Enable logging
+})
+  .addInstruction(instruction1)
+  .addInstruction(instruction2)
+  .execute({
+    feePayer: walletSigner,
+    rpc,
+    rpcSubscriptions,
+  })
 ```
 
 ### Effect API
@@ -37,10 +74,11 @@ const result = await createTransaction()
 ```typescript
 import { Transaction } from '@pipeit/tx-effect'
 import { Effect } from 'effect'
+import { RpcService, WalletService } from '@pipeit/tx-effect'
 
-const transferEffect = Transaction.transfer({
-  destination: address('...'),
-  amount: 1_000_000n
+const transferEffect = Transaction.build({
+  feePayer: walletAddress,
+  instructions: [yourInstruction],
 }).pipe(
   Effect.retry({ times: 3 }),
   Effect.timeout('30 seconds')
@@ -52,6 +90,49 @@ const result = await Effect.runPromise(
     Effect.provide(WalletService.layer(wallet))
   )
 )
+```
+
+### Transaction Templates
+
+```typescript
+import { transferSol } from '@pipeit/tx-templates/core'
+
+const signature = await transaction()
+  .addInstruction(transferSol({
+    from: senderAddress,
+    to: recipientAddress,
+    amount: 1_000_000n, // 0.001 SOL
+  }))
+  .execute({
+    feePayer: walletSigner,
+    rpc,
+    rpcSubscriptions,
+  })
+```
+
+### Transaction Orchestration
+
+```typescript
+import { createPipeline } from '@pipeit/tx-orchestration'
+
+const pipeline = createPipeline([
+  {
+    name: 'step1',
+    type: 'instruction',
+    instruction: firstInstruction,
+  },
+  {
+    name: 'step2',
+    type: 'instruction',
+    instruction: secondInstruction,
+  },
+])
+
+const results = await pipeline.execute({
+  signer: walletSigner,
+  rpc,
+  rpcSubscriptions,
+})
 ```
 
 ## Development
@@ -76,9 +157,3 @@ pnpm lint
 ## License
 
 MIT
-
-
-
-
-
-
