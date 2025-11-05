@@ -1,4 +1,4 @@
-# @pipeit/solana-transaction-builder
+# 🚰 Pipeit
 
 A comprehensive Solana transaction building library that makes it easier to build transactions on Solana by reducing boilerplate and providing type-safe, composable APIs.
 
