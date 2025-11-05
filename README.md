@@ -7,7 +7,6 @@ A comprehensive, Effect-inspired Solana transaction building library that makes 
 - `@pipeit/tx-errors` - Typed error definitions for Solana transaction building
 - `@pipeit/tx-core` - Core types and base transaction builder for Solana transactions
 - `@pipeit/tx-builder` - High-level builder API for Solana transactions (beginner-friendly)
-- `@pipeit/tx-effect` - Effect-based API for Solana transactions (advanced users)
 - `@pipeit/tx-templates` - Pre-built transaction templates for common Solana operations
 - `@pipeit/tx-middleware` - Composable middleware for Solana transactions (retry, simulation, logging)
 - `@pipeit/tx-orchestration` - Transaction orchestration for multi-step Solana transaction flows
@@ -17,9 +16,6 @@ A comprehensive, Effect-inspired Solana transaction building library that makes 
 ```bash
 # Core builder API (recommended for most users)
 pnpm install @pipeit/tx-builder gill
-
-# Effect-based API (for advanced users)
-pnpm install @pipeit/tx-effect effect gill
 
 # Transaction templates
 pnpm install @pipeit/tx-templates gill
@@ -67,29 +63,6 @@ const signature = await transaction({
     rpc,
     rpcSubscriptions,
   })
-```
-
-### Effect API
-
-```typescript
-import { Transaction } from '@pipeit/tx-effect'
-import { Effect } from 'effect'
-import { RpcService, WalletService } from '@pipeit/tx-effect'
-
-const transferEffect = Transaction.build({
-  feePayer: walletAddress,
-  instructions: [yourInstruction],
-}).pipe(
-  Effect.retry({ times: 3 }),
-  Effect.timeout('30 seconds')
-)
-
-const result = await Effect.runPromise(
-  transferEffect.pipe(
-    Effect.provide(RpcService.layer(rpc)),
-    Effect.provide(WalletService.layer(wallet))
-  )
-)
 ```
 
 ### Transaction Templates
