@@ -178,15 +178,18 @@ function TransactionStepNodeComponent({
       {/* Signature tooltip on hover */}
       <AnimatePresence>
         {isHovering && isConfirmed && state.type === 'confirmed' && (
-          <motion.div
-            className="absolute -top-12 left-1/2 -translate-x-1/2 bg-black/90 text-white px-2 py-1 rounded text-body-md font-berkeley-mono whitespace-nowrap z-10"
+          <motion.a
+            href={`https://solscan.io/tx/${state.signature}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute -top-12 left-1/2 -translate-x-1/2 bg-black/90 text-white px-2 py-1 rounded text-body-md font-berkeley-mono whitespace-nowrap z-10 hover:bg-black cursor-pointer"
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
           >
             {state.signature.slice(0, 8)}...
             <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-black/90" />
-          </motion.div>
+          </motion.a>
         )}
       </AnimatePresence>
 

@@ -7,6 +7,8 @@ import { BatchGroup } from './batch-group';
 import type { VisualPipeline } from '@/lib/visual-pipeline';
 import { usePipelineState } from '@/lib/use-visual-pipeline';
 import { springs } from '@/lib/pipeline-animations';
+import { IconArrowRight } from './icons/arrow-right';
+import { IconArrowUpRight } from './icons/arrow-up-right';
 
 interface PipelineVisualizationProps {
   visualPipeline: VisualPipeline;
@@ -100,6 +102,19 @@ export function PipelineVisualization({
     return totalSteps > 0 ? completedSteps / totalSteps : 0;
   }, [visualPipeline, pipelineState]);
 
+  // Get signature from last completed step
+  const signature = useMemo(() => {
+    // Find the last completed step
+    for (let i = visualPipeline.steps.length - 1; i >= 0; i--) {
+      const step = visualPipeline.steps[i];
+      const state = visualPipeline.getStepState(step.name);
+      if (state.type === 'confirmed') {
+        return state.signature;
+      }
+    }
+    return null;
+  }, [visualPipeline, pipelineState]);
+
   return (
     <div className="w-full flex flex-col items-center justify-center overflow-x-auto py-8">
       {/* Strategy indicator */}
@@ -151,30 +166,23 @@ export function PipelineVisualization({
               : visualPipeline.getStepState(prevItem.stepName).type === 'confirmed');
 
           return (
-            <div key={index} className="flex items-center">
+            <div key={index} className="flex items-center justify-center">
               {/* Arrow from previous item */}
               {index > 0 && (
                 <motion.div
-                  className="relative w-12 h-0.5 mx-4"
-                  initial={{ scaleX: 0 }}
-                  animate={{
-                    scaleX: 1,
-                    backgroundColor: prevCompleted ? 'rgb(74, 222, 128)' : 'rgb(209, 213, 219)',
-                  }}
+                  className="mx-4 mt-[-7px]"
+                  initial={{ opacity: 0, scale: 0 }}
+                  animate={{ opacity: 1, scale: 1 }}
                   transition={{
                     delay: index * 0.1,
                     ...springs.default,
                   }}
                 >
-                  {/* Arrowhead */}
-                  <motion.div
-                    className="absolute right-0 top-1/2 -translate-y-1/2 w-0 h-0 border-t-4 border-b-4 border-l-4 border-transparent"
-                    style={{
-                      borderLeftColor: prevCompleted ? 'rgb(74, 222, 128)' : 'rgb(209, 213, 219)',
-                    }}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: index * 0.1 + 0.2 }}
+                  <IconArrowRight
+                    width={24}
+                    height={24}
+                    fill={prevCompleted ? 'rgb(74, 222, 128)' : 'rgb(156, 160, 165)'}
+                    stroke={prevCompleted ? 'rgb(74, 222, 128)' : 'rgb(156, 160, 165)'}
                   />
                 </motion.div>
               )}
@@ -200,12 +208,25 @@ export function PipelineVisualization({
         </div>
         {/* Pipeline state indicator */}
         <motion.div
-          className="mt-4 text-body-md font-berkeley-mono text-gray-500"
+          className="mt-4 flex items-center gap-2 text-body-md font-berkeley-mono text-gray-500"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
         >
-          Status: <span className="font-inter-semibold">{pipelineState}</span>
+          <span>
+            Status: <span className="font-inter-semibold">{pipelineState}</span>
+          </span>
+          {signature && pipelineState === 'completed' && (
+            <a
+              href={`https://solscan.io/tx/${signature}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-purple-600 hover:text-purple-700 transition-colors"
+            >
+              <span>{signature.slice(0, 8)}...</span>
+              <IconArrowUpRight width={14} height={14} stroke="currentColor" />
+            </a>
+          )}
         </motion.div>
       </div>
     </div>

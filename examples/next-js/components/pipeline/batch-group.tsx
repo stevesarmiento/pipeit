@@ -1,11 +1,9 @@
 'use client';
 
-import { motion, useSpring, useTransform } from 'motion/react';
+import { motion } from 'motion/react';
 import { TransactionStepNode } from './transaction-step-node';
 import type { VisualPipeline } from '@/lib/visual-pipeline';
-import { useStepState } from '@/lib/use-visual-pipeline';
 import { springs } from '@/lib/pipeline-animations';
-import { useMemo } from 'react';
 
 interface BatchGroupProps {
   visualPipeline: VisualPipeline;
@@ -14,12 +12,6 @@ interface BatchGroupProps {
 }
 
 export function BatchGroup({ visualPipeline, stepNames, batchIndex }: BatchGroupProps) {
-  // Get signature from first step (all steps in batch share same signature)
-  const firstStepState = useStepState(visualPipeline, stepNames[0]);
-  const signature = firstStepState.type === 'confirmed' ? firstStepState.signature : null;
-  const cost = firstStepState.type === 'confirmed' ? firstStepState.cost : 0;
-  const sequentialCost = stepNames.length * 0.000005; // Cost if executed sequentially
-  const savings = sequentialCost - cost;
 
   // Check if batch is executing
   const isExecuting = stepNames.some((name) => {
@@ -36,29 +28,16 @@ export function BatchGroup({ visualPipeline, stepNames, batchIndex }: BatchGroup
     return stepState.type === 'confirmed';
   });
 
-  // Animated cost savings counter
-  const animatedSavings = useSpring(0, springs.default);
-  const animatedSavingsPercent = useSpring(0, springs.default);
-
-  useMemo(() => {
-    if (savings > 0) {
-      animatedSavings.set(savings);
-      animatedSavingsPercent.set((savings / sequentialCost) * 100);
-    }
-  }, [savings, sequentialCost, animatedSavings, animatedSavingsPercent]);
-
-  const displaySavings = useTransform(animatedSavings, (v) => v.toFixed(9));
-  const displayPercent = useTransform(animatedSavingsPercent, (v) => v.toFixed(0));
 
   return (
     <motion.div
-      className="relative border-2 border-dashed border-purple-400 rounded-lg p-4 bg-purple-50/50 backdrop-blur-sm min-w-[225px]"
+      className="relative border-2 border-dashed border-purple-400 rounded-lg p-4 bg-purple-0/50 backdrop-blur-sm min-w-[225px]"
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{
         opacity: 1,
         scale: 1,
         borderColor: isExecuting
-          ? 'rgba(147, 51, 234, 0.8)' // purple-600
+          ? 'rgba(146, 51, 234, 0.6)' // purple-600
           : isCompleted
             ? 'rgba(147, 51, 234, 0.6)' // purple-500
             : 'rgba(192, 132, 252, 0.6)', // purple-400
@@ -111,11 +90,11 @@ export function BatchGroup({ visualPipeline, stepNames, batchIndex }: BatchGroup
               />
               {index < stepNames.length - 1 && (
                 <motion.div
-                  className="w-8 h-0.5 bg-purple-400 mx-2"
+                  className="w-6 h-[2.5px] bg-purple-400 ml-3.5 mt-[-15px] rounded-full"
                   initial={{ scaleX: 0 }}
                   animate={{
                     scaleX: 1,
-                    backgroundColor: isStepCompleted ? 'rgba(147, 51, 234, 0.8)' : 'rgba(192, 132, 252, 0.6)',
+                    backgroundColor: isStepCompleted ? 'rgba(147, 51, 234, 0.8)' : 'rgb(156, 160, 165)',
                   }}
                   transition={{
                     delay: index * 0.1 + 0.2,
@@ -128,31 +107,6 @@ export function BatchGroup({ visualPipeline, stepNames, batchIndex }: BatchGroup
         })}
       </div>
 
-      {/* Batch info footer */}
-      {signature && (
-        <motion.div
-          className="mt-4 text-center space-y-1"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, ...springs.default }}
-        >
-          <div className="text-body-md font-berkeley-mono text-gray-600">
-            Signature: {signature.slice(0, 8)}...
-          </div>
-          {savings > 0 && (
-            <motion.div
-              className="text-body-md text-green-600 font-inter-medium"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.7 }}
-            >
-              Saved{' '}
-              <motion.span>{displaySavings}</motion.span> SOL (
-              <motion.span>{displayPercent}</motion.span>%)
-            </motion.div>
-          )}
-        </motion.div>
-      )}
 
       {/* Success shimmer effect */}
       {isCompleted && (
