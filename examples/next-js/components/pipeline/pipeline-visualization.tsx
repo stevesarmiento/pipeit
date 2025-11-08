@@ -116,7 +116,7 @@ export function PipelineVisualization({
   }, [visualPipeline, pipelineState]);
 
   return (
-    <div className="w-full flex flex-col items-center justify-center overflow-x-auto py-8">
+    <div className="w-full h-full flex flex-col items-center justify-center py-12">
       {/* Strategy indicator */}
       <motion.div
         className="mb-4 text-center"

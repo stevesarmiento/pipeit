@@ -17,6 +17,10 @@ import { colors, effects, springs } from '@/lib/pipeline-animations';
 import { GLOW_COLORS } from '@/lib/pipeline-colors';
 import { IconCheckmark } from './icons/checkmark';
 import { IconXmark } from './icons/xmark';
+import { IconDizzyFace } from './icons/dizzy-face';
+import { IconStarFace } from './icons/star-face';
+import { IconExclamationmarkTriangleFill, IconHandThumbsdown, IconHandThumbsdownFill, IconHandThumbsup, IconHandThumbsupFill, IconMinus, IconMinusCircleFill, IconSparkle } from 'symbols-react';
+import { X } from 'lucide-react';
 
 interface TransactionStepNodeProps {
   visualPipeline: VisualPipeline;
@@ -141,7 +145,7 @@ function TransactionStepNodeComponent({
           <motion.div
             className={cn(
               'absolute inset-0 flex items-center justify-center',
-              isInstruction ? '' : '-rotate-45'
+              isInstruction ? '' : ''
             )}
             style={{
               opacity: motionValues.contentOpacity,
@@ -155,11 +159,11 @@ function TransactionStepNodeComponent({
                 transition={{ repeat: Infinity, duration: 0.8 }}
               />
             ) : isConfirmed ? (
-              <IconCheckmark className="h-4 w-4" fill="white" />
+              <IconStarFace className="h-7 w-7 text-white" />
             ) : isFailed ? (
-              <IconXmark className="h-4 w-4" fill="white" />
+              <IconDizzyFace className="h-7 w-7 text-white" />
             ) : (
-              <span className="text-body-md">{stepName.slice(0, 3)}</span>
+              <IconSparkle className="h-6 w-6 fill-sand-1200" />
             )}
           </motion.div>
         </motion.div>

@@ -6,6 +6,7 @@ import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 import { PipelineVisualization } from '@/components/pipeline';
 import {
   useSimpleTransferPipeline,
@@ -15,9 +16,8 @@ import {
   useMixedPipeline,
   mixedPipelineCode,
 } from '@/components/pipeline/examples';
-import { useGillTransactionSigner, useConnectorClient } from '@solana/connector';
-import { createSolanaRpc, createSolanaRpcSubscriptions } from 'gill';
 import { ConnectButton } from '@/components/connector';
+import { PipelineHeaderButton } from '@/components/pipeline/pipeline-header-button';
 
 interface PipelineExampleConfig {
   id: string;
@@ -53,45 +53,8 @@ const pipelineExamples: PipelineExampleConfig[] = [
 
 function PipelineExampleCard({ example }: { example: PipelineExampleConfig }) {
   const [strategy, setStrategy] = useState<'auto' | 'batch' | 'sequential'>('auto');
-  const [isExecuting, setIsExecuting] = useState(false);
 
   const visualPipeline = example.hook();
-
-  const { signer, ready } = useGillTransactionSigner();
-  const client = useConnectorClient();
-
-  const handleExecute = async () => {
-    if (!visualPipeline || !signer || !client) {
-      alert('Please connect your wallet first');
-      return;
-    }
-
-    setIsExecuting(true);
-    visualPipeline.reset();
-
-    try {
-      const rpcUrl = client.getRpcUrl();
-      if (!rpcUrl) {
-        throw new Error('No RPC endpoint configured');
-      }
-
-      const rpc = createSolanaRpc(rpcUrl);
-      const rpcSubscriptions = createSolanaRpcSubscriptions(rpcUrl.replace('http', 'ws'));
-
-      await visualPipeline.execute({
-        signer,
-        rpc,
-        rpcSubscriptions,
-        strategy,
-        commitment: 'confirmed',
-      });
-    } catch (error) {
-      console.error('Pipeline execution failed:', error);
-      alert(`Execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsExecuting(false);
-    }
-  };
 
   return (
     <section className="py-16 border-b border-sand-200 last:border-b-0">
@@ -105,35 +68,47 @@ function PipelineExampleCard({ example }: { example: PipelineExampleConfig }) {
         {/* Right column: Tabs with Visualization and Code */}
         <div className="col-span-8 px-6">
           <Tabs defaultValue="visualization" className="w-full">
-            {/* Strategy buttons and Tabs on same row with justify-between */}
-            <div className="flex justify-between items-center mb-4">
-              {/* Tabs */}
+            {/* Strategy buttons, Execute Button, Connect Button on left; Tabs on right */}
+            <div className="flex flex-row-reverse justify-between items-center mb-4">
+              {/* Tabs on right */}
               <TabsList>
                 <TabsTrigger value="visualization">Visualization</TabsTrigger>
                 <TabsTrigger value="code">Code</TabsTrigger>
               </TabsList>
-            {/* Strategy switcher buttons and Connect Button */}
-            <div className="flex flex-row gap-2 flex-nowrap items-center">
-                {(['auto', 'batch', 'sequential'] as const).map((s) => (
-                  <Button
-                    key={s}
-                    variant={strategy === s ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => {
-                      setStrategy(s);
-                      visualPipeline.reset();
-                    }}
-                  >
-                    {s.charAt(0).toUpperCase() + s.slice(1)}
-                  </Button>
-                ))}
-                <div className="h-12 w-px bg-gradient-to-b from-transparent via-sand-800 to-transparent" />
+              
+              {/* Strategy switcher buttons, Execute Button, and Connect Button on left */}
+              <div className="flex flex-row gap-2 flex-nowrap items-center">
+                {/* Connected strategy buttons */}
+                <div className="flex flex-row">
+                  {(['auto', 'batch', 'sequential'] as const).map((s, index, arr) => (
+                    <Button
+                      key={s}
+                      variant={strategy === s ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => {
+                        setStrategy(s);
+                        visualPipeline.reset();
+                      }}
+                      className={cn(
+                        index === 0 && 'rounded-r-none',
+                        index === arr.length - 1 && 'rounded-l-none',
+                        index > 0 && index < arr.length - 1 && 'rounded-none',
+                        index > 0 && '-ml-px'
+                      )}
+                    >
+                      {s.charAt(0).toUpperCase() + s.slice(1)}
+                    </Button>
+                  ))}
+                </div>
+                <div className="h-8 w-px bg-gradient-to-b from-transparent via-sand-800 to-transparent" />
                 <ConnectButton />
+                <div className="h-8 w-px bg-gradient-to-b from-transparent via-sand-800 to-transparent" />
+                <PipelineHeaderButton visualPipeline={visualPipeline} strategy={strategy} />
               </div>
             </div>
 
             <TabsContent value="visualization" className="">
-              <Card className="border-sand-300 bg-sand-100/30 rounded-xl shadow-sm max-h-[420px] min-h-[420px]"
+              <Card className="border-sand-300 bg-sand-100/30 rounded-xl shadow-sm max-h-[340px] min-h-[340px]"
               style={{
                 backgroundImage: `repeating-linear-gradient(
                   45deg,
@@ -146,23 +121,12 @@ function PipelineExampleCard({ example }: { example: PipelineExampleConfig }) {
               >
                 <CardContent className="">
                   <PipelineVisualization visualPipeline={visualPipeline} strategy={strategy} />
-
-                  {/* Execute button */}
-                  <div className="mt-4">
-                    <Button
-                      onClick={handleExecute}
-                      disabled={!ready || isExecuting}
-                      className="w-full"
-                    >
-                      {isExecuting ? 'Executing...' : 'Execute Pipeline'}
-                    </Button>
-                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
 
             <TabsContent value="code" className="mt-0">
-              <Card className="border-sand-300 bg-white rounded-xl shadow-sm max-h-[405px] min-h-[405px] overflow-y-auto">
+              <Card className="border-sand-300 bg-white rounded-xl shadow-sm max-h-[360px] min-h-[360px] overflow-y-auto">
                 <CardContent className="">
                   <SyntaxHighlighter
                     language="typescript"

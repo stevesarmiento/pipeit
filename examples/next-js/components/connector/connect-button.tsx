@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useState } from 'react';
+import { motion } from 'motion/react';
 import { WalletModal } from './wallet-modal';
 import { Wallet, LogOut, ChevronDown, AlertCircle } from 'lucide-react';
 
@@ -21,6 +22,7 @@ interface ConnectButtonProps {
 
 export function ConnectButton({ className }: ConnectButtonProps) {
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const { connected, connecting, selectedWallet, selectedAccount, disconnect, wallets } = useConnector();
 
     if (connecting) {
@@ -39,7 +41,7 @@ export function ConnectButton({ className }: ConnectButtonProps) {
         const walletIcon = walletWithIcon?.wallet.icon || selectedWallet.icon;
 
         return (
-            <DropdownMenu>
+            <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
                 <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm" className={className}>
                         <Avatar className="h-5 w-5">
@@ -49,10 +51,15 @@ export function ConnectButton({ className }: ConnectButtonProps) {
                             </AvatarFallback>
                         </Avatar>
                         <div className="h-8 w-px bg-sand-200" />
-                        <ChevronDown className="h-4 w-4 opacity-50" />
+                        <motion.div
+                            animate={{ rotate: isDropdownOpen ? -90 : 0 }}
+                            transition={{ duration: 0.2, ease: 'easeInOut' }}
+                        >
+                            <ChevronDown className="h-4 w-4 opacity-50" />
+                        </motion.div>
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-72">
+                <DropdownMenuContent align="start" side="right" className="w-72">
                     <DropdownMenuLabel>
                         <div className="flex flex-col space-y-1">
                             <p className="text-xs font-abc-diatype leading-none"><span className="opacity-50">Connected to</span> {selectedWallet.name}</p>

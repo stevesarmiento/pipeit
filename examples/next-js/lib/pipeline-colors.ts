@@ -5,8 +5,8 @@ export const STEP_COLORS = {
   building: "rgb(192, 132, 252)", // purple-400
   signing: "rgb(251, 146, 60)", // orange-400
   sending: "rgb(96, 165, 250)", // blue-400
-  confirmed: "rgb(74, 222, 128)", // green-400
-  failed: "rgb(248, 113, 113)", // red-400
+  confirmed: "rgb(41, 201, 99)", // green-400
+  failed: "rgb(240, 75, 75)", // red-400
 } as const;
 
 export const GLOW_COLORS = {
