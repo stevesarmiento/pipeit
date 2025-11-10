@@ -81,7 +81,7 @@ function TransactionStepNodeComponent({
         <motion.div
           className={cn(
             'relative flex items-center justify-center font-berkeley-mono text-body-md font-inter-medium border-2 overflow-hidden rounded-full',
-            !isInstruction && 'rotate-45',
+            !isInstruction && '',
             isBatched && 'ring-2 ring-purple-300 ring-offset-2'
           )}
           variants={stepVariants}
