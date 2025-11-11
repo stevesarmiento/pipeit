@@ -10,6 +10,7 @@ import { AccountResolver as AccountResolverClass } from './accounts.js';
 import type { ProgramIdl, IdlInstruction } from './types.js';
 import { encodeInstructionData } from './serializer.js';
 import type { SerializationContext } from './serializer.js';
+import type { AccountDiscoveryRegistry } from './discovery/registry.js';
 
 /**
  * Build context for instruction creation.
@@ -87,7 +88,8 @@ export class IdlInstructionBuilder {
 
   constructor(
     private readonly idl: ProgramIdl,
-    instructionName: string
+    instructionName: string,
+    discoveryRegistry?: AccountDiscoveryRegistry
   ) {
     const instruction = idl.instructions.find((i) => i.name === instructionName);
     if (!instruction) {
@@ -95,7 +97,7 @@ export class IdlInstructionBuilder {
     }
 
     this.instruction = instruction;
-    this.accountResolver = new AccountResolverClass(idl);
+    this.accountResolver = new AccountResolverClass(idl, discoveryRegistry);
   }
 
   /**

@@ -11,6 +11,12 @@ import { parseIdl } from './parser.js';
 import { IdlInstructionBuilder } from './builder.js';
 import type { BuildContext } from './builder.js';
 import type { ProgramIdl, IdlInstruction } from './types.js';
+import { AccountDiscoveryRegistry } from './discovery/registry.js';
+import { WellKnownProgramResolver } from './discovery/strategies/well-known.js';
+import { AssociatedTokenAccountResolver } from './discovery/strategies/ata.js';
+import { ProtocolPluginRegistry } from './discovery/plugins/plugin-registry.js';
+import type { ProtocolAccountPlugin } from './discovery/plugins/plugin.js';
+import type { DiscoveryContext } from './discovery/types.js';
 
 /**
  * Registry for managing program IDLs and building instructions.
@@ -18,6 +24,14 @@ import type { ProgramIdl, IdlInstruction } from './types.js';
 export class IdlProgramRegistry {
   private readonly cache = new Map<string, ProgramIdl>();
   private readonly builders = new Map<string, Map<string, IdlInstructionBuilder>>();
+  private readonly pluginRegistry = new ProtocolPluginRegistry();
+  private readonly discoveryRegistry = new AccountDiscoveryRegistry();
+
+  constructor() {
+    // Register default discovery strategies
+    this.discoveryRegistry.registerStrategy(new WellKnownProgramResolver());
+    this.discoveryRegistry.registerStrategy(new AssociatedTokenAccountResolver());
+  }
 
   /**
    * Register a program by fetching its IDL.
@@ -62,7 +76,7 @@ export class IdlProgramRegistry {
     for (const instruction of idl.instructions) {
       instructionBuilders.set(
         instruction.name,
-        new IdlInstructionBuilder(idl, instruction.name)
+        new IdlInstructionBuilder(idl, instruction.name, this.discoveryRegistry)
       );
     }
     this.builders.set(programId, instructionBuilders);
@@ -100,31 +114,61 @@ export class IdlProgramRegistry {
     for (const instruction of parsedIdl.instructions) {
       instructionBuilders.set(
         instruction.name,
-        new IdlInstructionBuilder(parsedIdl, instruction.name)
+        new IdlInstructionBuilder(parsedIdl, instruction.name, this.discoveryRegistry)
       );
     }
     this.builders.set(programId, instructionBuilders);
   }
 
   /**
+   * Register a protocol-specific account plugin.
+   *
+   * Plugins can automatically resolve accounts for specific programs/instructions
+   * by calling external APIs, querying on-chain data, or using protocol-specific heuristics.
+   *
+   * @param plugin - Protocol plugin to register
+   *
+   * @example
+   * ```ts
+   * import { JupiterSwapPlugin } from '@pipeit/tx-idl/discovery/plugins/jupiter'
+   * registry.use(new JupiterSwapPlugin())
+   * ```
+   */
+  use(plugin: ProtocolAccountPlugin): void {
+    this.pluginRegistry.register(plugin);
+  }
+
+  /**
    * Build an instruction from IDL.
    * Returns a standard Instruction object compatible with all pipeit packages.
+   *
+   * Supports automatic account discovery through plugins and discovery strategies.
    *
    * @param programId - Program address
    * @param instructionName - Instruction name
    * @param params - Instruction parameters
-   * @param accounts - Account addresses keyed by account name
+   * @param accounts - Account addresses keyed by account name (optional - will be auto-discovered if not provided)
    * @param context - Build context (signer, programId, etc.)
    * @returns Built instruction
    * @throws Error if program not registered or instruction not found
    *
    * @example
    * ```ts
+   * // Manual accounts (still works)
    * const instruction = await registry.buildInstruction(
    *   programId,
    *   'swap',
    *   { amountIn: 1000000n, minimumAmountOut: 900000n },
    *   { userSourceAccount, userDestAccount },
+   *   { signer: userAddress, programId, rpc }
+   * );
+   *
+   * // Automatic discovery (new!)
+   * const instruction = await registry.buildInstruction(
+   *   programId,
+   *   'swap',
+   *   { amountIn: 1000000n, inputMint: SOL, outputMint: USDC },
+   *   {}, // Accounts auto-discovered!
    *   { signer: userAddress, programId, rpc }
    * );
    * ```
@@ -133,7 +177,7 @@ export class IdlProgramRegistry {
     programId: Address,
     instructionName: string,
     params: Record<string, unknown>,
-    accounts: Record<string, Address>,
+    accounts: Record<string, Address> = {},
     context: {
       signer: Address;
       programId: Address;
@@ -142,8 +186,8 @@ export class IdlProgramRegistry {
     }
   ): Promise<Instruction> {
     const builder = this.builders.get(programId)?.get(instructionName);
-    if (!builder) {
-      const idl = this.cache.get(programId);
+    const idl = this.cache.get(programId);
+    if (!builder || !idl) {
       if (!idl) {
         throw new Error(`Program ${programId} not registered. Call registerProgram() first.`);
       }
@@ -152,14 +196,51 @@ export class IdlProgramRegistry {
       );
     }
 
-    const idl = this.cache.get(programId)!;
+    const instruction = idl.instructions.find((i) => i.name === instructionName)!;
+
+    // Try protocol-specific plugin first
+    const plugin = this.pluginRegistry.getPlugin(programId, instructionName);
+    let resolvedAccounts = { ...accounts };
+
+    if (plugin) {
+      // Use plugin to discover accounts
+      const discoveryContext: DiscoveryContext = {
+        instruction,
+        params,
+        providedAccounts: accounts,
+        signer: context.signer,
+        programId,
+        rpc: context.rpc!,
+        idl,
+      };
+
+      // Prepare params if plugin has prepareParams hook
+      let finalParams = params;
+      if (plugin.prepareParams) {
+        finalParams = await plugin.prepareParams(params, discoveryContext);
+      }
+
+      // Resolve accounts using plugin
+      const discoveredAccounts = await plugin.resolveAccounts(
+        instruction,
+        finalParams,
+        discoveryContext
+      );
+
+      // Merge discovered accounts with provided (provided overrides discovered)
+      resolvedAccounts = { ...discoveredAccounts, ...accounts };
+
+      // Use prepared params for building
+      params = finalParams;
+    }
+
     const buildContext: BuildContext = {
       ...context,
       idl,
       resolvedTypes: new Map(),
     };
 
-    return builder.buildInstruction(params, accounts, buildContext);
+    return builder.buildInstruction(params, resolvedAccounts, buildContext);
   }
 
   /**

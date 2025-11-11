@@ -8,6 +8,8 @@ import type { Address, Rpc, GetAccountInfoApi } from 'gill';
 import { AccountRole, getProgramDerivedAddress, getAddressEncoder } from 'gill';
 import type { IdlAccountItem, IdlInstruction, ProgramIdl, PdaSeed } from './types.js';
 import { serializeSeedValue } from './seed-serializer.js';
+import type { AccountDiscoveryRegistry } from './discovery/registry.js';
+import type { DiscoveryContext } from './discovery/types.js';
 
 /**
  * Resolved account metadata.
@@ -80,7 +82,10 @@ interface SeedResolutionContext {
  * Account resolver for IDL instructions.
  */
 export class AccountResolver {
-  constructor(_idl: ProgramIdl) {
+  constructor(
+    private readonly _idl: ProgramIdl,
+    private readonly discoveryRegistry?: AccountDiscoveryRegistry
+  ) {
     // IDL stored for potential future use (PDA derivation, account validation)
   }
 
@@ -102,27 +107,45 @@ export class AccountResolver {
     for (const account of instruction.accounts) {
       let address: Address | undefined;
 
-      // Check if account is a PDA
-      if (account.pda) {
+      // 1. Check provided accounts first (user override)
+      address = providedAccounts[account.name];
+
+      // 2. Try PDA derivation
+      if (!address && account.pda) {
         address = await this.derivePda(account.pda, context);
-      } else {
-        // Use provided account
-        address = providedAccounts[account.name];
+      }
 
-        // If account is marked as signer but not provided, use context signer
-        if (!address && account.isSigner) {
-          address = context.signer;
-        }
+      // 3. Try automatic discovery (NEW)
+      if (!address && this.discoveryRegistry && context.rpc) {
+        const discoveryContext: DiscoveryContext = {
+          instruction,
+          params: context.context?.args || {},
+          providedAccounts,
+          signer: context.signer,
+          programId: context.programId,
+          rpc: context.rpc,
+          idl: this._idl,
+        };
+        address = await this.discoveryRegistry.discover(account, discoveryContext);
+      }
 
-        // Check if account is optional
-        if (!address && account.isOptional) {
-          // Skip optional accounts that aren't provided
-          continue;
-        }
+      // 4. Signer fallback
+      if (!address && account.isSigner) {
+        address = context.signer;
+      }
 
-        if (!address) {
-          throw new Error(`Missing required account: ${account.name}`);
-        }
+      // 5. Optional accounts
+      if (!address && account.isOptional) {
+        continue;
+      }
+
+      // 6. Error if still missing
+      if (!address) {
+        throw new Error(
+          `Cannot resolve required account '${account.name}'. ` +
+            `Tried: provided, PDA derivation, auto-discovery. ` +
+            `Please provide the account address manually.`
+        );
       }
 
       // Determine account role

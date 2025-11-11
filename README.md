@@ -121,7 +121,7 @@ import { transaction } from '@pipeit/tx-builder'
 const registry = new IdlProgramRegistry()
 await registry.registerProgram(programId, rpc)
 
-// Build instruction from IDL
+// Build instruction from IDL (manual accounts)
 const instruction = await registry.buildInstruction(
   programId,
   'swap',
@@ -130,9 +130,45 @@ const instruction = await registry.buildInstruction(
   { signer: userAddress, programId, rpc }
 )
 
+// Or with automatic account discovery!
+const instruction = await registry.buildInstruction(
+  programId,
+  'swap',
+  { 
+    amountIn: 1000000n, 
+    inputMint: SOL_MINT,    // Auto-derives userSourceTokenAccount
+    outputMint: USDC_MINT   // Auto-derives userDestTokenAccount
+  },
+  {}, // Accounts auto-discovered!
+  { signer: userAddress, programId, rpc }
+)
+
 const signature = await transaction()
   .addInstruction(instruction)
   .execute({ feePayer: signer, rpc, rpcSubscriptions })
+```
+
+### With Protocol Plugins
+
+```typescript
+import { IdlProgramRegistry, JupiterSwapPlugin } from '@pipeit/tx-idl'
+
+const registry = new IdlProgramRegistry()
+registry.use(new JupiterSwapPlugin()) // Enable automatic Jupiter account resolution
+
+// Jupiter swap with zero manual account setup!
+const instruction = await registry.buildInstruction(
+  JUPITER_V6_PROGRAM,
+  'swap',
+  {
+    inputMint: SOL,
+    outputMint: USDC,
+    amountIn: 1_000_000_000n,
+    slippageBps: 50
+  },
+  {}, // Plugin handles all accounts automatically
+  { signer: userAddress, programId: JUPITER_V6_PROGRAM, rpc }
+)
 ```
 
 ## Development

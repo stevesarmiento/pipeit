@@ -54,6 +54,14 @@ export {
   encodeInstructionData,
 } from './serializer.js';
 
+// Account Discovery
+export * from './discovery/index.js';
+
+// Example Plugins
+export { JupiterSwapPlugin, JUPITER_V6_PROGRAM } from './discovery/plugins/jupiter.js';
+export { MetaplexMetadataPlugin, METAPLEX_PROGRAM } from './discovery/plugins/metaplex.js';
+export { KaminoLendingPlugin, KAMINO_LENDING_PROGRAM } from './discovery/plugins/kamino.js';
+
 // Seed serialization (for PDA derivation)
 export { serializeSeedValue } from './seed-serializer.js';
 
