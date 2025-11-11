@@ -54,3 +54,6 @@ export {
   encodeInstructionData,
 } from './serializer.js';
 
+// Seed serialization (for PDA derivation)
+export { serializeSeedValue } from './seed-serializer.js';
+

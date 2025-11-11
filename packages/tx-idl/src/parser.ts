@@ -323,11 +323,69 @@ function parsePda(pda: unknown, path: string): { seeds: PdaSeed[] } {
     throw new IdlValidationError(`PDA at ${path} must have seeds array`);
   }
 
-  // Simplified PDA parsing - full implementation would parse seed types
-  // For now, cast to PdaSeed[] - proper parsing would validate each seed
+  const seeds = pdaObj.seeds.map((seed, index) =>
+    parsePdaSeed(seed, `${path}.seeds[${index}]`)
+  );
+
   return {
-    seeds: pdaObj.seeds as PdaSeed[],
+    seeds,
   };
+}
+
+/**
+ * Parse a PDA seed definition.
+ */
+function parsePdaSeed(seed: unknown, path: string): PdaSeed {
+  if (!seed || typeof seed !== 'object') {
+    throw new IdlValidationError(`PDA seed at ${path} must be an object`);
+  }
+
+  const seedObj = seed as Record<string, unknown>;
+
+  if (!seedObj.kind || typeof seedObj.kind !== 'string') {
+    throw new IdlValidationError(`PDA seed at ${path} must have a kind`);
+  }
+
+  if (seedObj.kind === 'const') {
+    // Const seed: has type and value
+    const type = seedObj.type ? parseType(seedObj.type, `${path}.type`) : 'string';
+    return {
+      kind: 'const',
+      type,
+      value: seedObj.value,
+    };
+  }
+
+  if (seedObj.kind === 'arg') {
+    // Arg seed: references an instruction argument
+    if (typeof seedObj.path !== 'string') {
+      throw new IdlValidationError(`PDA seed at ${path} must have a path string for arg kind`);
+    }
+    return {
+      kind: 'arg',
+      path: seedObj.path,
+    };
+  }
+
+  if (seedObj.kind === 'account') {
+    // Account seed: references another account
+    if (typeof seedObj.path !== 'string') {
+      throw new IdlValidationError(`PDA seed at ${path} must have a path string for account kind`);
+    }
+    if (seedObj.type) {
+      return {
+        kind: 'account',
+        path: seedObj.path,
+        type: parseType(seedObj.type, `${path}.type`),
+      };
+    }
+    return {
+      kind: 'account',
+      path: seedObj.path,
+    };
+  }
+
+  throw new IdlValidationError(`Unknown PDA seed kind: ${seedObj.kind}`);
 }
 
 /**

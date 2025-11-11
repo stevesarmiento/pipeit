@@ -120,6 +120,95 @@ const idl = JSON.parse(idlJson);
 registry.registerProgramFromJson(programId, idl);
 ```
 
+### Automatic PDA Derivation
+
+PDAs defined in the IDL are automatically derived. You only need to provide the accounts/arguments referenced in the PDA seeds:
+
+```typescript
+import { IdlProgramRegistry } from '@pipeit/tx-idl';
+import { transaction } from '@pipeit/tx-builder';
+import { address } from 'gill';
+
+const registry = new IdlProgramRegistry();
+await registry.registerProgramFromJson(METAPLEX_PROGRAM, metaplexIdl);
+
+// IDL defines metadata PDA with seeds: ["metadata", programId, mint]
+// You only provide the mint - metadata PDA is auto-derived!
+const instruction = await registry.buildInstruction(
+  METAPLEX_PROGRAM,
+  'createMetadataAccountV3',
+  {
+    data: {
+      name: 'My NFT',
+      symbol: 'NFT',
+      uri: 'https://example.com/metadata.json',
+    },
+    isMutable: true,
+  },
+  {
+    // Only provide accounts referenced in PDA seeds or required accounts
+    mint: mintAddress,
+    mintAuthority: signerAddress,
+    payer: signerAddress,
+    updateAuthority: signerAddress,
+    // metadata account is auto-derived from PDA seeds!
+  },
+  {
+    signer: signerAddress,
+    programId: METAPLEX_PROGRAM,
+    rpc,
+  }
+);
+
+// Use with tx-builder
+const signature = await transaction()
+  .addInstruction(instruction)
+  .execute({ feePayer: signer, rpc, rpcSubscriptions });
+```
+
+#### PDA Seed Types
+
+The IDL supports three types of PDA seeds:
+
+1. **Const seeds**: Fixed values (strings, numbers, addresses)
+   ```json
+   { "kind": "const", "type": "string", "value": "metadata" }
+   ```
+
+2. **Arg seeds**: References to instruction arguments
+   ```json
+   { "kind": "arg", "path": "tokenId" }
+   ```
+
+3. **Account seeds**: References to other accounts
+   ```json
+   { "kind": "account", "path": "mint" }
+   ```
+
+Example with arg-based seed:
+
+```typescript
+// IDL defines PDA with seeds: ["data", tokenId]
+// tokenId comes from instruction args
+const instruction = await registry.buildInstruction(
+  programId,
+  'createDataAccount',
+  {
+    tokenId: 12345n, // This is used for PDA seed
+    data: 'some data',
+  },
+  {
+    signer: signerAddress,
+    // dataAccount is auto-derived using tokenId from args!
+  },
+  {
+    signer: signerAddress,
+    programId,
+    rpc,
+  }
+);
+```
+
 ## API Reference
 
 ### `IdlProgramRegistry`
@@ -155,7 +244,7 @@ Builder for a specific instruction.
 - ✅ Type references (`{ defined: "TypeName" }`)
 - ✅ Instruction discriminators
 - ✅ Account requirements (mut, signer, optional)
-- ✅ PDA derivation (basic support)
+- ✅ Automatic PDA derivation (const, arg, and account seeds)
 - ✅ Error code definitions
 
 ## Examples

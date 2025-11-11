@@ -135,9 +135,9 @@ export interface IdlAccountItem {
  * PDA seed definition.
  */
 export type PdaSeed =
-  | { kind: 'const'; value: Uint8Array }
+  | { kind: 'const'; type: IdlType; value: unknown }
   | { kind: 'arg'; path: string }
-  | { kind: 'account'; path: string };
+  | { kind: 'account'; path: string; type?: IdlType };
 
 /**
  * Field definition (for args or struct fields).

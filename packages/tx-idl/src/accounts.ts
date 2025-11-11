@@ -5,8 +5,9 @@
  */
 
 import type { Address, Rpc, GetAccountInfoApi } from 'gill';
-import { AccountRole } from 'gill';
+import { AccountRole, getProgramDerivedAddress, getAddressEncoder } from 'gill';
 import type { IdlAccountItem, IdlInstruction, ProgramIdl, PdaSeed } from './types.js';
+import { serializeSeedValue } from './seed-serializer.js';
 
 /**
  * Resolved account metadata.
@@ -45,7 +46,34 @@ export interface AccountResolutionContext {
   /**
    * Additional context values for PDA seed resolution.
    */
-  context?: Record<string, unknown>;
+  context?: {
+    /**
+     * Instruction arguments for arg-based seed resolution.
+     */
+    args?: Record<string, unknown>;
+    /**
+     * Provided accounts for account-based seed resolution.
+     */
+    accounts?: Record<string, Address>;
+  };
+}
+
+/**
+ * Context for seed resolution during PDA derivation.
+ */
+interface SeedResolutionContext {
+  /**
+   * Instruction arguments (for arg-based seeds).
+   */
+  instructionArgs: Record<string, unknown>;
+  /**
+   * Provided accounts (for account-based seeds).
+   */
+  accounts: Record<string, Address>;
+  /**
+   * Signer address (fallback for account resolution).
+   */
+  signer: Address;
 }
 
 /**
@@ -110,6 +138,51 @@ export class AccountResolver {
   }
 
   /**
+   * Convert a PDA seed to bytes.
+   *
+   * @param seed - PDA seed definition
+   * @param seedContext - Context for resolving seed values
+   * @returns Seed value as bytes
+   */
+  private seedToBytes(seed: PdaSeed, seedContext: SeedResolutionContext): Uint8Array {
+    if (seed.kind === 'const') {
+      // Convert const value to bytes based on type
+      if (typeof seed.value === 'string') {
+        return Buffer.from(seed.value);
+      }
+      if (seed.value instanceof Uint8Array) {
+        return seed.value;
+      }
+      if (seed.value instanceof Buffer) {
+        return seed.value;
+      }
+      // Handle other primitive types using serializer
+      return serializeSeedValue(seed.value, seed.type);
+    }
+
+    if (seed.kind === 'arg') {
+      // Resolve from instruction arguments
+      const argValue = seedContext.instructionArgs[seed.path];
+      if (argValue === undefined) {
+        throw new Error(`Cannot resolve PDA seed: instruction argument '${seed.path}' not found`);
+      }
+      return serializeSeedValue(argValue, 'inferred');
+    }
+
+    if (seed.kind === 'account') {
+      // Resolve from provided accounts and encode address to bytes
+      const accountAddress = seedContext.accounts[seed.path];
+      if (!accountAddress) {
+        throw new Error(`Cannot resolve PDA seed: account '${seed.path}' not found`);
+      }
+      const encoded = getAddressEncoder().encode(accountAddress);
+      return new Uint8Array(encoded);
+    }
+
+    throw new Error(`Unknown PDA seed kind: ${(seed as { kind: string }).kind}`);
+  }
+
+  /**
    * Derive a PDA from seeds.
    *
    * @param pda - PDA definition with seeds
@@ -120,35 +193,27 @@ export class AccountResolver {
     pda: { seeds: PdaSeed[] },
     context: AccountResolutionContext
   ): Promise<Address> {
-    // Simplified PDA derivation
-    // In practice, you'd use proper PDA derivation utilities from gill
-    // This is a placeholder that demonstrates the structure
+    // Convert IDL seeds to byte arrays
+    const seedBytes: Uint8Array[] = [];
 
-    const seeds: Uint8Array[] = [];
+    const seedContext: SeedResolutionContext = {
+      instructionArgs: context.context?.args || {},
+      accounts: context.context?.accounts || {},
+      signer: context.signer,
+    };
 
     for (const seed of pda.seeds) {
-      if (seed.kind === 'const') {
-        seeds.push(seed.value);
-      } else if (seed.kind === 'arg') {
-        // Resolve from instruction args (would need to be passed in)
-        throw new Error('PDA seed resolution from args not yet implemented');
-      } else if (seed.kind === 'account') {
-        // Resolve from provided accounts
-        const accountName = seed.path;
-        const accountAddress = context.context?.[accountName] as Address | undefined;
-        if (!accountAddress) {
-          throw new Error(`Cannot resolve PDA seed: account ${accountName} not found`);
-        }
-        // TODO: Properly decode address to bytes for PDA seeds
-        // For now, this is a placeholder
-        throw new Error('PDA seed resolution from accounts not yet fully implemented');
-      }
+      const bytes = this.seedToBytes(seed, seedContext);
+      seedBytes.push(bytes);
     }
 
-    // TODO: Use proper PDA derivation from gill
-    // For now, return a placeholder
-    // In practice: findProgramDerivedAddress(seeds, programId)
-    throw new Error('PDA derivation not yet fully implemented - requires gill PDA utilities');
+    // Derive PDA using gill's utility
+    const [pdaAddress] = await getProgramDerivedAddress({
+      programAddress: context.programId,
+      seeds: seedBytes,
+    });
+
+    return pdaAddress;
   }
 
   /**

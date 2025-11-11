@@ -24,6 +24,11 @@ export interface BuildContext extends AccountResolutionContext {
    * Resolved type definitions cache.
    */
   resolvedTypes: Map<string, unknown>;
+
+  /**
+   * Instruction arguments for PDA seed resolution.
+   */
+  instructionArgs?: Record<string, unknown>;
 }
 
 /**
@@ -109,11 +114,20 @@ export class IdlInstructionBuilder {
     // Validate accounts
     this.accountResolver.validateAccounts(this.instruction, accounts, context);
 
+    // Create context with instruction args for PDA seed resolution
+    const accountResolutionContext: AccountResolutionContext = {
+      ...context,
+      context: {
+        args: params,
+        accounts: accounts,
+      },
+    };
+
     // Resolve accounts
     const resolvedAccounts = await this.accountResolver.resolveAccounts(
       this.instruction,
       accounts,
-      context
+      accountResolutionContext
     );
 
     // Serialize instruction data
