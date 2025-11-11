@@ -10,6 +10,7 @@ A comprehensive Solana transaction building library that makes it easier to buil
 - `@pipeit/tx-templates` - Pre-built transaction templates for common Solana operations
 - `@pipeit/tx-middleware` - Composable middleware for Solana transactions (retry, simulation, logging)
 - `@pipeit/tx-orchestration` - Transaction orchestration for multi-step Solana transaction flows
+- `@pipeit/tx-idl` - IDL-based transaction builder - automatically build instructions from program IDLs
 
 ## Installation
 
@@ -22,6 +23,9 @@ pnpm install @pipeit/tx-templates gill
 
 # Transaction orchestration
 pnpm install @pipeit/tx-orchestration gill
+
+# IDL-based transaction builder
+pnpm install @pipeit/tx-idl gill
 ```
 
 ## Quick Start
@@ -106,6 +110,29 @@ const results = await pipeline.execute({
   rpc,
   rpcSubscriptions,
 })
+```
+
+### IDL-Based Transactions
+
+```typescript
+import { IdlProgramRegistry } from '@pipeit/tx-idl'
+import { transaction } from '@pipeit/tx-builder'
+
+const registry = new IdlProgramRegistry()
+await registry.registerProgram(programId, rpc)
+
+// Build instruction from IDL
+const instruction = await registry.buildInstruction(
+  programId,
+  'swap',
+  { amountIn: 1000000n, minimumAmountOut: 900000n },
+  { userSourceAccount, userDestAccount },
+  { signer: userAddress, programId, rpc }
+)
+
+const signature = await transaction()
+  .addInstruction(instruction)
+  .execute({ feePayer: signer, rpc, rpcSubscriptions })
 ```
 
 ## Development
