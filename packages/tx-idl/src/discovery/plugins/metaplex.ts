@@ -7,8 +7,7 @@
  * @packageDocumentation
  */
 
-import { address, getProgramDerivedAddress, getAddressEncoder } from 'gill';
-import type { Address } from 'gill';
+import { address, getProgramDerivedAddress, getAddressEncoder, type Address } from '@solana/addresses';
 import type { IdlInstruction } from '../../types.js';
 import type { ProtocolAccountPlugin } from './plugin.js';
 import type { DiscoveryContext } from '../types.js';

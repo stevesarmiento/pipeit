@@ -46,7 +46,7 @@ import {
   type Encoder,
   type Decoder,
 } from '@solana/codecs';
-import { getAddressEncoder, getAddressDecoder } from 'gill';
+import { getAddressEncoder, getAddressDecoder } from '@solana/addresses';
 import type { IdlInstruction, IdlType, IdlTypeDef, ProgramIdl } from './types.js';
 import { resolveTypeReference } from './parser.js';
 

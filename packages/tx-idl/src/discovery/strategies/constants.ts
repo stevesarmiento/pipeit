@@ -4,8 +4,7 @@
  * @packageDocumentation
  */
 
-import { address } from 'gill';
-import type { Address } from 'gill';
+import { address, type Address } from '@solana/addresses';
 
 /**
  * Well-known Solana program addresses.

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AssociatedTokenAccountResolver } from '../strategies/ata.js';
 import type { IdlAccountItem, IdlInstruction } from '../../types.js';
 import type { DiscoveryContext } from '../types.js';
-import { address } from 'gill';
+import { address } from '@solana/addresses';
 
 describe('AssociatedTokenAccountResolver', () => {
   const resolver = new AssociatedTokenAccountResolver();

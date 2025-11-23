@@ -4,7 +4,8 @@
  * @packageDocumentation
  */
 
-import type { Address, Instruction, AccountMeta } from 'gill';
+import type { Address } from '@solana/addresses';
+import type { Instruction, AccountMeta } from '@solana/instructions';
 import type { AccountResolutionContext, AccountResolver } from './accounts.js';
 import { AccountResolver as AccountResolverClass } from './accounts.js';
 import type { ProgramIdl, IdlInstruction } from './types.js';

@@ -14,7 +14,7 @@ import {
   getI32Encoder,
   getI64Encoder,
 } from '@solana/codecs';
-import { getAddressEncoder, type Address } from 'gill';
+import { getAddressEncoder, type Address } from '@solana/addresses';
 import type { IdlType } from './types.js';
 
 /**

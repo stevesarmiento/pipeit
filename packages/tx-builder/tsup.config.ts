@@ -11,6 +11,17 @@ export default defineConfig((options) => ({
   sourcemap: true,
   clean: true,
   treeshake: true,
-  external: ['gill', '@pipeit/tx-core', '@pipeit/tx-errors'],
+  external: [
+    '@solana/kit',
+    '@solana/addresses',
+    '@solana/instructions',
+    '@solana/transaction-messages',
+    '@solana/transactions',
+    '@solana/signers',
+    '@solana/rpc',
+    '@solana/rpc-subscriptions',
+    '@solana/rpc-types',
+    '@solana/functional',
+  ],
 }));
 

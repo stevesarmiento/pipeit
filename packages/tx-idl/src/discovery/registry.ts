@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import type { Address } from 'gill';
+import type { Address } from '@solana/addresses';
 import type { IdlAccountItem } from '../types.js';
 import type { AccountDiscoveryStrategy, DiscoveryContext } from './types.js';
 

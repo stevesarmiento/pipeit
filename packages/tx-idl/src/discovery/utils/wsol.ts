@@ -4,8 +4,8 @@
  * @packageDocumentation
  */
 
-import { address, getProgramDerivedAddress, getAddressEncoder } from 'gill';
-import type { Address, Instruction } from 'gill';
+import { address, getProgramDerivedAddress, getAddressEncoder, type Address } from '@solana/addresses';
+import type { Instruction } from '@solana/instructions';
 import { WELL_KNOWN_PROGRAMS } from '../strategies/constants.js';
 
 /**

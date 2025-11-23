@@ -20,11 +20,9 @@
         ],
         "paths": {
             "@/*": ["./*"],
-            "@pipeit/tx-orchestration": ["../../packages/tx-orchestration/src/pipeline.ts"],
-            "@pipeit/tx-builder": ["../../packages/tx-builder/src/index.ts"],
-            "@pipeit/tx-errors": ["../../packages/tx-errors/src/index.ts"],
-            "@pipeit/tx-middleware": ["../../packages/tx-middleware/src/index.ts"],
-            "@pipeit/tx-templates": ["../../packages/tx-templates/src/index.ts"]
+            "@pipeit/tx-orchestration": ["../../packages/tx-orchestration/src"],
+            "@pipeit/tx-builder": ["../../packages/tx-builder/src"],
+            "@pipeit/tx-idl": ["../../packages/tx-idl/src"]
         }
     },
     "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

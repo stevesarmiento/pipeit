@@ -4,7 +4,7 @@ import { WellKnownProgramResolver } from '../strategies/well-known.js';
 import { AssociatedTokenAccountResolver } from '../strategies/ata.js';
 import type { IdlAccountItem } from '../../types.js';
 import type { DiscoveryContext } from '../types.js';
-import { address } from 'gill';
+import { address } from '@solana/addresses';
 
 describe('AccountDiscoveryRegistry', () => {
   it('should register and discover accounts', async () => {

@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import type { Address } from 'gill';
+import type { Address } from '@solana/addresses';
 import type { ProtocolAccountPlugin } from './plugin.js';
 
 /**

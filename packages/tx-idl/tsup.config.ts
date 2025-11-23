@@ -11,6 +11,14 @@ export default defineConfig((options) => ({
   sourcemap: true,
   clean: true,
   treeshake: true,
-  external: ['gill', '@pipeit/tx-core', '@solana/codecs'],
+  external: [
+    '@solana/kit',
+    '@solana/codecs',
+    '@solana/addresses',
+    '@solana/instructions',
+    '@solana/rpc',
+    '@solana/rpc-types',
+    '@pipeit/tx-builder',
+  ],
 }));
 

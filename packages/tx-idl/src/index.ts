@@ -34,7 +34,7 @@ export type {
   AccountResolutionContext,
 } from './accounts.js';
 // AccountRole is exported from gill, re-export it here for convenience
-export type { AccountRole } from 'gill';
+export type { AccountRole } from '@solana/instructions';
 
 // IDL fetching
 export { fetchIdl, loadIdlFromJson } from './fetcher.js';

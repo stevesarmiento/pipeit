@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ProtocolPluginRegistry } from '../plugins/plugin-registry.js';
 import type { ProtocolAccountPlugin } from '../plugins/plugin.js';
-import { address } from 'gill';
+import { address } from '@solana/addresses';
 
 describe('ProtocolPluginRegistry', () => {
   it('should register and retrieve plugins', () => {

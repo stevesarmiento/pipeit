@@ -1,7 +1,7 @@
 {
   "name": "@pipeit/tx-orchestration",
-  "version": "0.1.0",
-  "description": "Transaction orchestration for multi-step Solana transaction flows",
+  "version": "0.0.1-alpha",
+  "description": "EXPERIMENTAL: Transaction orchestration for multi-step flows",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -25,6 +25,8 @@
     "test": "vitest"
   },
   "keywords": [
+    "experimental",
+    "advanced",
     "solana",
     "transaction",
     "orchestration",
@@ -33,14 +35,18 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "gill": "^0.12.0"
+    "@solana/kit": "^5.0.0",
+    "@solana/addresses": "*",
+    "@solana/instructions": "*",
+    "@solana/rpc": "*",
+    "@solana/rpc-subscriptions": "*",
+    "@solana/signers": "*"
   },
   "dependencies": {
-    "@pipeit/tx-builder": "workspace:*",
-    "@pipeit/tx-errors": "workspace:*"
+    "@pipeit/tx-builder": "workspace:*"
   },
   "devDependencies": {
-    "gill": "^0.12.0",
+    "@solana/kit": "^5.0.0",
     "@types/node": "^24",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",

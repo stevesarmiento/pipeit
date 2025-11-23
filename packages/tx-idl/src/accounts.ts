@@ -4,8 +4,10 @@
  * @packageDocumentation
  */
 
-import type { Address, Rpc, GetAccountInfoApi } from 'gill';
-import { AccountRole, getProgramDerivedAddress, getAddressEncoder } from 'gill';
+import type { Address } from '@solana/addresses';
+import { getProgramDerivedAddress, getAddressEncoder } from '@solana/addresses';
+import type { Rpc, GetAccountInfoApi } from '@solana/rpc';
+import { AccountRole } from '@solana/instructions';
 import type { IdlAccountItem, IdlInstruction, ProgramIdl, PdaSeed } from './types.js';
 import { serializeSeedValue } from './seed-serializer.js';
 import type { AccountDiscoveryRegistry } from './discovery/registry.js';

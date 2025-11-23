@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { AccountResolver } from '../accounts.js';
 import type { ProgramIdl, Address } from '../types.js';
-import { address } from 'gill';
+import { address } from '@solana/addresses';
 
 // Mock IDL with PDA definitions
 const MOCK_IDL_WITH_PDA: ProgramIdl = {

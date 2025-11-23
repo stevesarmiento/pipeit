@@ -4,7 +4,8 @@
  * @packageDocumentation
  */
 
-import type { Address, Rpc, GetAccountInfoApi } from 'gill';
+import type { Address } from '@solana/addresses';
+import type { Rpc, GetAccountInfoApi } from '@solana/rpc';
 import type { IdlAccountItem, IdlInstruction, ProgramIdl } from '../types.js';
 
 /**

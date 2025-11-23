@@ -16,7 +16,7 @@ IDL-based transaction builder for Solana programs. Automatically fetch program I
 ## Installation
 
 ```bash
-pnpm add @pipeit/tx-idl gill
+pnpm add @pipeit/tx-idl @solana/kit
 ```
 
 ## Quick Start
@@ -25,7 +25,7 @@ pnpm add @pipeit/tx-idl gill
 
 ```typescript
 import { IdlProgramRegistry } from '@pipeit/tx-idl';
-import { createSolanaRpc } from 'gill';
+import { createSolanaRpc } from '@solana/kit';
 import { transaction } from '@pipeit/tx-builder';
 
 const rpc = createSolanaRpc('https://api.mainnet-beta.solana.com');
@@ -212,7 +212,7 @@ PDAs defined in the IDL are automatically derived. You only need to provide the 
 ```typescript
 import { IdlProgramRegistry } from '@pipeit/tx-idl';
 import { transaction } from '@pipeit/tx-builder';
-import { address } from 'gill';
+import { address } from '@solana/kit';
 
 const registry = new IdlProgramRegistry();
 await registry.registerProgramFromJson(METAPLEX_PROGRAM, metaplexIdl);

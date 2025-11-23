@@ -7,7 +7,8 @@
  * @packageDocumentation
  */
 
-import type { Address, Instruction } from 'gill';
+import type { Address } from '@solana/addresses';
+import type { Instruction } from '@solana/instructions';
 import type { IdlInstruction } from '../../types.js';
 import type { DiscoveryContext } from '../types.js';
 

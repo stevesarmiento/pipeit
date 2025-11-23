@@ -4,20 +4,21 @@
  * @packageDocumentation
  */
 
-import { transaction } from '@pipeit/tx-builder';
-import { isTransactionTooLargeError } from '@pipeit/tx-errors';
+import { transaction, isTransactionTooLargeError } from '@pipeit/tx-builder';
+import type { TransactionSigner } from '@solana/signers';
+import type { Instruction } from '@solana/instructions';
 import type {
-  TransactionSigner,
-  Instruction,
   Rpc,
-  RpcSubscriptions,
   GetLatestBlockhashApi,
   GetEpochInfoApi,
   GetSignatureStatusesApi,
   SendTransactionApi,
+} from '@solana/rpc';
+import type {
+  RpcSubscriptions,
   SignatureNotificationsApi,
   SlotNotificationsApi,
-} from 'gill';
+} from '@solana/rpc-subscriptions';
 
 /**
  * Context passed to each pipeline step.

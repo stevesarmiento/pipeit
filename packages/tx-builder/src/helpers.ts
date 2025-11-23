@@ -4,19 +4,21 @@
  * @packageDocumentation
  */
 
-import type { 
-  Rpc, 
-  TransactionSigner, 
-  RpcSubscriptions, 
+import type {
+  Rpc,
   GetLatestBlockhashApi,
   GetEpochInfoApi,
   GetSignatureStatusesApi,
   SendTransactionApi,
+} from '@solana/rpc';
+import type { TransactionSigner } from '@solana/signers';
+import type {
+  RpcSubscriptions,
   SignatureNotificationsApi,
   SlotNotificationsApi,
-} from 'gill';
-import { transaction } from './transaction-builder';
-import type { TransactionBuilderConfig } from './transaction-builder';
+} from '@solana/rpc-subscriptions';
+import { transaction } from './builder/opinionated.js';
+import type { TransactionBuilderConfig } from './builder/opinionated.js';
 
 /**
  * Quick transfer SOL between accounts.

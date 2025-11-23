@@ -7,7 +7,7 @@
  * @packageDocumentation
  */
 
-import type { Address } from 'gill';
+import type { Address } from '@solana/addresses';
 import type { IdlAccountItem } from '../../types.js';
 import type { AccountDiscoveryStrategy } from '../types.js';
 import { WELL_KNOWN_PATTERNS } from './constants.js';
