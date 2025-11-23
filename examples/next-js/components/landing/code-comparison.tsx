@@ -30,7 +30,7 @@ export function CodeComparison({ beforeTitle, beforeDescription, beforeCode, aft
                     Write less boilerplate, keep your code simple.
                 </h2>
                 <p className="text-body-xl text-gray-600 mb-12 text-center max-w-2xl mx-auto">
-                    PipeIt simplifies Solana Kit's API, builds on top of gill, and adds opinionated features like automatic retry, priority fees, smart defaults, and more.
+                    PipeIt simplifies Solana Kit's API and adds opinionated features like automatic retry, priority fees, smart defaults, and more.
                 </p>
                 <div className="bg-white grid grid-cols-1 lg:grid-cols-2 border-t border-b border-sand-200">
                     <div className="bg-[var(--color-bg1)] p-6">

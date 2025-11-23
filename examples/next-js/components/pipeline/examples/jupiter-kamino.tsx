@@ -11,7 +11,9 @@ import {
   JUPITER_V6_PROGRAM,
   KAMINO_LENDING_PROGRAM,
 } from '@/lib/idl-registry';
-import { address, AccountRole, type Rpc, type GetAccountInfoApi, type Instruction, type AccountMeta } from 'gill';
+import { address } from '@solana/kit';
+import type { Rpc, GetAccountInfoApi } from '@solana/rpc';
+import type { Instruction, AccountMeta, AccountRole } from '@solana/instructions';
 
 /**
  * Helper to parse Jupiter setup instructions into Instruction objects
@@ -109,7 +111,7 @@ export function useJupiterKaminoPipeline() {
 
 export const jupiterKaminoCode = `import { IdlProgramRegistry, JupiterSwapPlugin, KaminoLendingPlugin } from '@pipeit/tx-idl'
 import { createPipeline } from '@pipeit/tx-orchestration'
-import { address } from 'gill'
+import { address } from '@solana/kit'
 
 // Setup registry with plugins
 const registry = new IdlProgramRegistry()

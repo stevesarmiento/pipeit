@@ -535,7 +535,6 @@ export class RaydiumSwapPlugin implements ProtocolAccountPlugin {
         currentTick,
         tickSpacing,
         sqrtPriceX64: poolStateData.sqrtPriceX64.toString(),
-        liquidity: poolStateData.liquidity?.toString() || 'unknown',
       });
 
       // Use the bitmap from pool state to find initialized tick arrays
@@ -582,7 +581,7 @@ export class RaydiumSwapPlugin implements ProtocolAccountPlugin {
               console.log('[Raydium Plugin] ✓ TickArrayBitmapExtension account EXISTS:', {
                 address: extensionAddress.toString(),
                 owner: extensionInfo.value.owner?.toString(),
-                dataLength: extensionInfo.value.data ? (Array.isArray(extensionInfo.value.data) ? extensionInfo.value.data[0]?.length : extensionInfo.value.data.length) : 0,
+                dataLength: extensionInfo.value.data ? (Array.isArray(extensionInfo.value.data) ? (extensionInfo.value.data[0] as any)?.length || 0 : (extensionInfo.value.data as any).length || 0) : 0,
               });
             } else {
               console.log('[Raydium Plugin] ⚠ TickArrayBitmapExtension account NOT INITIALIZED (will be included anyway):', extensionAddress.toString());

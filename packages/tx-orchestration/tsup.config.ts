@@ -4,7 +4,7 @@ export default defineConfig((options) => ({
   entry: ['src/index.ts'],
   format: ['cjs', 'esm'],
   dts: options.watch ? false : {
-    resolve: true,
+    resolve: false,
   },
   tsconfig: './tsconfig.json',
   splitting: false,

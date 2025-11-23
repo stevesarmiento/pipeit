@@ -10,7 +10,7 @@ import { memo, useCallback, useState } from 'react';
 import type { VisualPipeline } from '@/lib/visual-pipeline';
 import { usePipelineState } from '@/lib/use-visual-pipeline';
 import { useGillTransactionSigner, useConnectorClient } from '@solana/connector';
-import { createSolanaRpc, createSolanaRpcSubscriptions } from 'gill';
+import { createSolanaRpc, createSolanaRpcSubscriptions } from '@solana/kit';
 
 interface PipelineHeaderButtonProps {
   visualPipeline: VisualPipeline;

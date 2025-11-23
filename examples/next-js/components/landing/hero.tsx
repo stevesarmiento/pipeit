@@ -10,7 +10,7 @@ export function Hero() {
                     Build Solana transactions <br />without complexity
                 </h1>
                 <p className="text-body-xl text-gray-600 max-w-xl mx-auto mb-8">
-                    Type-safe, composable transaction builder with automatic retry, priority fees, and smart defaults built on top of gill. 
+                    Type-safe, composable transaction builder with automatic retry, priority fees, and smart defaults built on top of @solana/kit. 
                 </p>
                 <CopyButton 
                     textToCopy="npm install @pipeit/tx-builder"

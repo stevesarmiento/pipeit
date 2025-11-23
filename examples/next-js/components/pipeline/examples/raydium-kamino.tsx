@@ -11,7 +11,8 @@ import {
   RAYDIUM_CLMM_PROGRAM,
   KAMINO_LENDING_PROGRAM,
 } from '@/lib/idl-registry';
-import { address, type Rpc, type GetAccountInfoApi } from 'gill';
+import { address } from '@solana/kit';
+import type { Rpc, GetAccountInfoApi } from '@solana/rpc';
 
 export function useRaydiumKaminoPipeline() {
   const visualPipeline = useMemo(() => {
@@ -124,7 +125,7 @@ export function useRaydiumKaminoPipeline() {
 
 export const raydiumKaminoCode = `import { IdlProgramRegistry, RaydiumSwapPlugin, KaminoLendingPlugin } from '@pipeit/tx-idl'
 import { createPipeline } from '@pipeit/tx-orchestration'
-import { address } from 'gill'
+import { address } from '@solana/kit'
 
 // Setup registry with plugins
 const registry = new IdlProgramRegistry()

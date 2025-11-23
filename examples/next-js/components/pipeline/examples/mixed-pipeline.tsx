@@ -4,8 +4,8 @@ import { useMemo } from 'react';
 import { createPipeline } from '@pipeit/tx-orchestration';
 import type { StepContext } from '@pipeit/tx-orchestration';
 import { VisualPipeline } from '@/lib/visual-pipeline';
-import { getTransferSolInstruction } from 'gill/programs';
-import { lamports } from 'gill';
+import { getTransferSolInstruction } from '@solana-program/system';
+import { lamports } from '@solana/kit';
 
 /**
  * Mixed pipeline example - shows how transaction steps break batching.

@@ -6,9 +6,10 @@ import {
     createSolanaRpc,
     createSolanaRpcSubscriptions,
     lamports,
-    LAMPORTS_PER_SOL,
-} from 'gill';
-import { getTransferSolInstruction } from 'gill/programs';
+} from '@solana/kit';
+import { getTransferSolInstruction } from '@solana-program/system';
+
+const LAMPORTS_PER_SOL = 1_000_000_000n;
 import { transaction } from '@pipeit/tx-builder';
 import { useGillTransactionSigner, useCluster, useConnectorClient } from '@solana/connector';
 import { TransactionForm } from './transaction-form';

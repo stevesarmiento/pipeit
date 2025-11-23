@@ -5,7 +5,7 @@ import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const pipelineExampleCode = `import { createPipeline } from '@pipeit/tx-orchestration';
-import { getCreateAccountInstruction, getCloseAccountInstruction } from 'gill/programs';
+import { getCreateAccountInstruction, getCloseAccountInstruction } from '@solana-program/system';
 
 const pipeline = createPipeline()
   // Transaction 1: Setup - Create temporary token accounts

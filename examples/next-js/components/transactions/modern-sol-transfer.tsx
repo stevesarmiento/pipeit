@@ -6,11 +6,19 @@ import {
     createSolanaRpc,
     createSolanaRpcSubscriptions,
     lamports,
-    LAMPORTS_PER_SOL,
-    createTransaction,
-    sendAndConfirmTransactionWithSignersFactory,
-} from 'gill';
-import { getTransferSolInstruction } from 'gill/programs';
+    sendAndConfirmTransactionFactory,
+} from '@solana/kit';
+import { getTransferSolInstruction } from '@solana-program/system';
+import { pipe } from '@solana/functional';
+import { 
+    createTransactionMessage, 
+    setTransactionMessageFeePayer, 
+    setTransactionMessageLifetimeUsingBlockhash, 
+    appendTransactionMessageInstruction 
+} from '@solana/transaction-messages';
+import { signTransactionMessageWithSigners } from '@solana/signers';
+
+const LAMPORTS_PER_SOL = 1_000_000_000n;
 import { useGillTransactionSigner, useCluster, useConnectorClient } from '@solana/connector';
 import { TransactionForm } from './transaction-form';
 import { TransactionResult } from './transaction-result';

@@ -36,8 +36,10 @@ const signedTransaction = await signTransaction([signer], transactionMessage);
 const signature = await sendTransaction(rpc, signedTransaction).send();`;
 
 const afterCode = `import { transaction } from '@pipeit/tx-builder';
-import { getTransferSolInstruction } from 'gill/programs';
-import { address, lamports, LAMPORTS_PER_SOL } from 'gill';
+import { getTransferSolInstruction } from '@solana-program/system';
+import { address, lamports } from '@solana/kit';
+
+const LAMPORTS_PER_SOL = 1_000_000_000n;
 
 const transferInstruction = getTransferSolInstruction({
   source: signer,
