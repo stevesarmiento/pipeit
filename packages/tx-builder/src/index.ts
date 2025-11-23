@@ -23,8 +23,5 @@ export * from './validation/index.js';
 // Utils
 export * from './utils/index.js';
 
-// Middleware (for advanced use cases)
-export * from './middleware/index.js';
-
 // Helpers (convenience functions)
 export * from './helpers.js';
