@@ -5,7 +5,8 @@
  */
 
 import type { TransactionMessage } from '@solana/transaction-messages';
-import { InvalidTransactionError, TransactionTooLargeError } from '../errors/index.js';
+import { SolanaError, SOLANA_ERROR__TRANSACTION__FEE_PAYER_MISSING } from '@solana/errors';
+import { TransactionTooLargeError } from '../errors/index.js';
 
 /**
  * Maximum transaction size in bytes.
@@ -16,21 +17,14 @@ export const MAX_TRANSACTION_SIZE = 1232;
  * Validate that a transaction message has all required fields.
  */
 export function validateTransaction(message: TransactionMessage): void {
-  const missingFields: string[] = [];
-
+  // Check fee payer
   if (!('feePayer' in message) || !message.feePayer) {
-    missingFields.push('feePayer');
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__FEE_PAYER_MISSING);
   }
 
+  // Check lifetime constraint
   if (!('lifetimeConstraint' in message) || !message.lifetimeConstraint) {
-    missingFields.push('lifetimeConstraint');
-  }
-
-  if (missingFields.length > 0) {
-    throw new InvalidTransactionError(
-      `Transaction is missing required fields: ${missingFields.join(', ')}`,
-      missingFields
-    );
+    throw new Error('Transaction is missing lifetime constraint (blockhash or nonce)');
   }
 }
 

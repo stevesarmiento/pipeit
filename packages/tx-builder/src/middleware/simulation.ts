@@ -6,7 +6,6 @@
 
 import type { TransactionMessage } from '@solana/transaction-messages';
 import type { Middleware } from './types.js';
-import { SimulationFailedError } from '../errors/index.js';
 
 /**
  * Options for simulation middleware.
@@ -65,10 +64,7 @@ export function withSimulation(options: SimulationOptions = {}): Middleware {
       if (result.value.err) {
         return {
           success: false,
-          error: new SimulationFailedError(
-            result.value.logs ?? [],
-            result.value.err as { code: number; message: string }
-          ),
+          error: new Error(`Simulation failed: ${JSON.stringify(result.value.err)}`),
         };
       }
 
@@ -77,10 +73,7 @@ export function withSimulation(options: SimulationOptions = {}): Middleware {
     } catch (error) {
       return {
         success: false,
-        error: new SimulationFailedError(
-          [],
-          { code: -1, message: String(error) }
-        ),
+        error: error instanceof Error ? error : new Error(String(error)),
       };
     }
   };

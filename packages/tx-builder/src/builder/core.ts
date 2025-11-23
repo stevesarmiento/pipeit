@@ -18,7 +18,7 @@ import {
   appendTransactionMessageInstruction,
 } from '@solana/transaction-messages';
 import type { BuilderState, RequiredState, BuilderConfig, LifetimeConstraint } from '../types.js';
-import { InvalidTransactionError } from '../errors/index.js';
+import { SolanaError, SOLANA_ERROR__TRANSACTION__FEE_PAYER_MISSING } from '@solana/errors';
 import { validateTransaction, validateTransactionSize } from '../validation/index.js';
 
 /**
@@ -129,10 +129,8 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
     this: TransactionBuilder<RequiredState>
   ): Promise<TransactionMessage> {
     if (!this.feePayer) {
-      throw new InvalidTransactionError(
-        'Fee payer is required',
-        ['feePayer']
-      );
+      // Use Kit's error for missing fee payer
+      throw new SolanaError(SOLANA_ERROR__TRANSACTION__FEE_PAYER_MISSING);
     }
 
     // AUTO-FETCH: If lifetime not set but RPC available, fetch latest blockhash
@@ -146,9 +144,9 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
     }
 
     if (!this.lifetime) {
-      throw new InvalidTransactionError(
-        'Lifetime required. Provide blockhash or pass rpc to constructor for auto-fetch.',
-        ['lifetime']
+      // Lifetime missing - use descriptive error
+      throw new Error(
+        'Lifetime required. Provide blockhash via setBlockhashLifetime() or pass rpc to constructor for auto-fetch.'
       );
     }
 

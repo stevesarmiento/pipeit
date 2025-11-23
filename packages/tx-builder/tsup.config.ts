@@ -14,14 +14,15 @@ export default defineConfig((options) => ({
   external: [
     '@solana/kit',
     '@solana/addresses',
+    '@solana/errors',
+    '@solana/functional',
     '@solana/instructions',
-    '@solana/transaction-messages',
-    '@solana/transactions',
-    '@solana/signers',
     '@solana/rpc',
     '@solana/rpc-subscriptions',
     '@solana/rpc-types',
-    '@solana/functional',
+    '@solana/signers',
+    '@solana/transaction-messages',
+    '@solana/transactions',
   ],
 }));
 

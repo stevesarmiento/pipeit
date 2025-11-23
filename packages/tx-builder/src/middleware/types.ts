@@ -7,7 +7,6 @@
 import type { TransactionMessage } from '@solana/transaction-messages';
 import type { Transaction } from '@solana/transactions';
 import type { Rpc } from '@solana/rpc';
-import type { TransactionErrorType } from '../errors/index.js';
 
 /**
  * Result of executing a transaction.
@@ -15,7 +14,7 @@ import type { TransactionErrorType } from '../errors/index.js';
 export interface TransactionResult {
   success: boolean;
   signature?: string;
-  error?: TransactionErrorType;
+  error?: unknown;
 }
 
 /**

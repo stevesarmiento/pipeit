@@ -35,6 +35,7 @@
   "peerDependencies": {
     "@solana/kit": "^5.0.0",
     "@solana/addresses": "*",
+    "@solana/errors": "*",
     "@solana/functional": "*",
     "@solana/instructions": "*",
     "@solana/rpc": "*",

@@ -13,7 +13,8 @@ import {
 } from '@/lib/idl-registry';
 import { address } from '@solana/kit';
 import type { Rpc, GetAccountInfoApi } from '@solana/rpc';
-import type { Instruction, AccountMeta, AccountRole } from '@solana/instructions';
+import type { Instruction, AccountMeta } from '@solana/instructions';
+import { AccountRole } from '@solana/instructions';
 
 /**
  * Helper to parse Jupiter setup instructions into Instruction objects

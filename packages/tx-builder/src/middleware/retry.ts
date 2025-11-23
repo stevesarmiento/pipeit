@@ -5,7 +5,7 @@
  */
 
 import type { Middleware } from './types.js';
-import { isNetworkError, isBlockhashExpiredError, type TransactionErrorType } from '../errors/index.js';
+import { isNetworkError, isBlockhashExpiredError } from '../errors/index.js';
 
 /**
  * Options for retry middleware.
@@ -122,7 +122,7 @@ export function withRetry(options: RetryOptions): Middleware {
 
     return {
       success: false,
-      error: lastError as TransactionErrorType,
+      error: lastError as any,
     };
   };
 }
