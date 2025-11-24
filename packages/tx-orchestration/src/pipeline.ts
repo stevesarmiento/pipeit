@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import { transaction, isTransactionTooLargeError } from '@pipeit/tx-builder';
+import { TransactionBuilder, isTransactionTooLargeError } from '@pipeit/tx-builder';
 import type { TransactionSigner } from '@solana/signers';
 import type { Instruction } from '@solana/instructions';
 import type {
@@ -345,11 +345,13 @@ export class TransactionPipeline {
             step.steps.map((s) => s.createInstruction(ctx))
           );
 
-          const signature = await transaction({ logLevel: 'verbose' })
+          const signature = await new TransactionBuilder({ 
+            rpc: params.rpc,
+            logLevel: 'verbose' 
+          })
+            .setFeePayer(params.signer.address)
             .addInstructions(instructions)
             .execute({
-              feePayer: params.signer,
-              rpc: params.rpc,
               rpcSubscriptions: params.rpcSubscriptions,
               commitment: params.commitment ?? 'confirmed',
             });
@@ -388,11 +390,13 @@ export class TransactionPipeline {
     const instructions = batch.map((b) => b.instruction);
 
     try {
-      const signature = await transaction({ logLevel: 'verbose' })
+      const signature = await new TransactionBuilder({ 
+        rpc: params.rpc,
+        logLevel: 'verbose' 
+      })
+        .setFeePayer(params.signer.address)
         .addInstructions(instructions)
         .execute({
-          feePayer: params.signer,
-          rpc: params.rpc,
           rpcSubscriptions: params.rpcSubscriptions,
           commitment: params.commitment ?? 'confirmed',
         });
@@ -439,11 +443,13 @@ export class TransactionPipeline {
         if (step.type === 'instruction') {
           // Execute instruction as individual transaction
           const instruction = await step.createInstruction(ctx);
-          const signature = await transaction({ logLevel: 'verbose' })
+          const signature = await new TransactionBuilder({ 
+            rpc: params.rpc,
+            logLevel: 'verbose' 
+          })
+            .setFeePayer(params.signer.address)
             .addInstruction(instruction)
             .execute({
-              feePayer: params.signer,
-              rpc: params.rpc,
               rpcSubscriptions: params.rpcSubscriptions,
               commitment: params.commitment ?? 'confirmed',
             });
@@ -461,11 +467,10 @@ export class TransactionPipeline {
             step.steps.map((s) => s.createInstruction(ctx))
           );
 
-          const signature = await transaction()
+          const signature = await new TransactionBuilder({ rpc: params.rpc })
+            .setFeePayer(params.signer.address)
             .addInstructions(instructions)
             .execute({
-              feePayer: params.signer,
-              rpc: params.rpc,
               rpcSubscriptions: params.rpcSubscriptions,
               commitment: params.commitment ?? 'confirmed',
             });

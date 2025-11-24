@@ -6,12 +6,11 @@
  * @packageDocumentation
  */
 
-// Main API - Opinionated builder
-export { transaction, OpinionatedTransactionBuilder } from './builder/opinionated.js';
-export type { TransactionBuilderConfig } from './builder/opinionated.js';
+// Main export - unified builder
+export { TransactionBuilder } from './builder/builder.js';
+export type { TransactionBuilderConfig, SimulationResult } from './builder/builder.js';
 
-// Advanced API - Type-safe builder
-export { TransactionBuilder } from './builder/core.js';
+// Type-safety types
 export type { BuilderState, RequiredState, BuilderConfig, LifetimeConstraint } from './types.js';
 
 // Errors
@@ -23,5 +22,5 @@ export * from './validation/index.js';
 // Utils
 export * from './utils/index.js';
 
-// Helpers (convenience functions)
+// Helpers
 export * from './helpers.js';

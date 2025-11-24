@@ -35,7 +35,7 @@ const transactionMessage = pipe(
 const signedTransaction = await signTransaction([signer], transactionMessage);
 const signature = await sendTransaction(rpc, signedTransaction).send();`;
 
-const afterCode = `import { transaction } from '@pipeit/tx-builder';
+const afterCode = `import { TransactionBuilder } from '@pipeit/tx-builder';
 import { getTransferSolInstruction } from '@solana-program/system';
 import { address, lamports } from '@solana/kit';
 
@@ -47,14 +47,14 @@ const transferInstruction = getTransferSolInstruction({
   amount: lamports(BigInt(amount * LAMPORTS_PER_SOL)),
 });
 
-const signature = await transaction({ 
+const signature = await new TransactionBuilder({ 
+  rpc,
   autoRetry: true, 
   priorityLevel: 'medium' 
 })
+  .setFeePayer(signer.address)
   .addInstruction(transferInstruction)
   .execute({
-    feePayer: signer,
-    rpc,
     rpcSubscriptions,
     commitment: 'confirmed',
   });`;

@@ -4,7 +4,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-const featureExampleCode = `import { transaction } from '@pipeit/tx-builder';
+const featureExampleCode = `import { TransactionBuilder } from '@pipeit/tx-builder';
 import { getCreateAccountInstruction } from '@solana-program/system';
 import { address, lamports } from '@solana/kit';
 

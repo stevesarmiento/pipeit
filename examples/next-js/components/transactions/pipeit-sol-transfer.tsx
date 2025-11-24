@@ -10,7 +10,7 @@ import {
 import { getTransferSolInstruction } from '@solana-program/system';
 
 const LAMPORTS_PER_SOL = 1_000_000_000n;
-import { transaction } from '@pipeit/tx-builder';
+import { TransactionBuilder } from '@pipeit/tx-builder';
 import { useGillTransactionSigner, useCluster, useConnectorClient } from '@solana/connector';
 import { TransactionForm } from './transaction-form';
 import { TransactionResult } from './transaction-result';
@@ -57,11 +57,14 @@ export function PipeitSolTransfer() {
 
         try {
             // Pipeit's fluent API handles everything: blockhash fetching, building, signing, and confirmation
-            const transactionSignature = await transaction({ priorityLevel: 'medium', autoRetry: true })
+            const transactionSignature = await new TransactionBuilder({ 
+                rpc,
+                priorityLevel: 'medium', 
+                autoRetry: true 
+            })
+                .setFeePayer(signer.address)
                 .addInstruction(transferInstruction)
                 .execute({
-                    feePayer: signer,
-                    rpc,
                     rpcSubscriptions,
                     commitment: 'confirmed',
                 });
@@ -96,14 +99,17 @@ const transferInstruction = getTransferSolInstruction({
 });
 
 // Send with opinionated API - smart defaults: auto-retry, priority fees
-const signature = await transaction({ priorityLevel: 'medium', autoRetry: true })
-    .addInstruction(transferInstruction)
-    .execute({
-        feePayer: signer,
-        rpc,
-        rpcSubscriptions,
-        commitment: 'confirmed',
-    });`;
+const signature = await new TransactionBuilder({ 
+  rpc,
+  priorityLevel: 'medium', 
+  autoRetry: true 
+})
+  .setFeePayer(signer.address)
+  .addInstruction(transferInstruction)
+  .execute({
+    rpcSubscriptions,
+    commitment: 'confirmed',
+  });`;
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-6 gap-4">

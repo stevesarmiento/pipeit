@@ -1,10 +1,8 @@
 /**
- * Transaction builders.
+ * Transaction builder.
  *
  * @packageDocumentation
  */
 
-export { TransactionBuilder } from './core.js';
-export { OpinionatedTransactionBuilder, transaction } from './opinionated.js';
-export type { TransactionBuilderConfig, SimulationResult } from './opinionated.js';
-
+export { TransactionBuilder } from './builder.js';
+export type { TransactionBuilderConfig, SimulationResult } from './builder.js';

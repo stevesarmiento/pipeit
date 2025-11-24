@@ -4,8 +4,8 @@
  * @packageDocumentation
  */
 
-import type {
-  Rpc,
+import type { 
+  Rpc, 
   GetLatestBlockhashApi,
   GetEpochInfoApi,
   GetSignatureStatusesApi,
@@ -17,8 +17,8 @@ import type {
   SignatureNotificationsApi,
   SlotNotificationsApi,
 } from '@solana/rpc-subscriptions';
-import { transaction } from './builder/opinionated.js';
-import type { TransactionBuilderConfig } from './builder/opinionated.js';
+import { TransactionBuilder } from './builder/builder.js';
+import type { TransactionBuilderConfig } from './builder/builder.js';
 
 /**
  * Quick transfer SOL between accounts.
@@ -30,21 +30,16 @@ export async function quickTransfer(
   rpc: Rpc<GetEpochInfoApi & GetSignatureStatusesApi & SendTransactionApi & GetLatestBlockhashApi>,
   rpcSubscriptions: RpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi>,
   opts: {
-    instruction: Parameters<typeof transaction>[0] extends undefined ? never : any; // Instruction type from Kit
+    instruction: any; // Instruction type from Kit
     feePayer: TransactionSigner;
     config?: TransactionBuilderConfig;
   }
 ): Promise<string> {
-  const builder = transaction(opts.config);
+  const builder = new TransactionBuilder({ rpc, ...opts.config });
   
-  // Note: Users need to add the instruction themselves
-  // This is intentional - keeps the API flexible
   return builder
+    .setFeePayer(opts.feePayer.address)
     .addInstruction(opts.instruction)
-    .execute({
-      feePayer: opts.feePayer,
-      rpc,
-      rpcSubscriptions,
-    });
+    .execute({ rpcSubscriptions });
 }
 
