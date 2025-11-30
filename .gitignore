@@ -50,6 +50,9 @@ Thumbs.db
 
 .pnpm-store/
 
+#cursor
+.cursor/
+
 
 
 
