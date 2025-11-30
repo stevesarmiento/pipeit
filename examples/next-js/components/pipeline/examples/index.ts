@@ -5,6 +5,7 @@ export { useJupiterKaminoPipeline, jupiterKaminoCode } from './jupiter-kamino';
 export { useRaydiumKaminoPipeline, raydiumKaminoCode } from './raydium-kamino';
 export { useInstructionPlanPipeline, instructionPlanCode } from './instruction-plan';
 export { useJupiterSwapPipeline, jupiterSwapCode } from './jupiter-swap';
+export { usePipeMultiSwapPipeline, pipeMultiSwapCode } from './pipe-multi-swap';
 
 
 

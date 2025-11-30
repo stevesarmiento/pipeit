@@ -20,6 +20,37 @@ import type {
   SlotNotificationsApi,
 } from '@solana/rpc-subscriptions';
 
+// =============================================================================
+// Shared RPC Types (used by both tx-builder and actions)
+// =============================================================================
+
+/**
+ * Minimum RPC API required for transaction flows and actions.
+ */
+export type FlowRpcApi = GetAccountInfoApi & GetEpochInfoApi & GetSignatureStatusesApi & SendTransactionApi & GetLatestBlockhashApi;
+
+/**
+ * Minimum RPC subscriptions API required for transaction flows and actions.
+ */
+export type FlowRpcSubscriptionsApi = SignatureNotificationsApi & SlotNotificationsApi;
+
+/**
+ * Base context shared between Flow and Actions.
+ * Contains the core dependencies needed for transaction execution.
+ */
+export interface BaseContext {
+  /** Transaction signer. */
+  signer: TransactionSigner;
+  /** RPC client. */
+  rpc: Rpc<FlowRpcApi>;
+  /** RPC subscriptions client. */
+  rpcSubscriptions: RpcSubscriptions<FlowRpcSubscriptionsApi>;
+}
+
+// =============================================================================
+// Flow-Specific Types
+// =============================================================================
+
 /**
  * Result from a completed flow step.
  */
@@ -37,28 +68,13 @@ export interface FlowStepResult {
 
 /**
  * Context passed to each flow step.
- * Provides access to previous results and execution context.
+ * Extends BaseContext with flow-specific properties for step orchestration.
  */
-export interface FlowContext {
+export interface FlowContext extends BaseContext {
   /**
    * Results from previous steps, keyed by step name.
    */
   results: Map<string, FlowStepResult>;
-
-  /**
-   * Transaction signer.
-   */
-  signer: TransactionSigner;
-
-  /**
-   * RPC client.
-   */
-  rpc: Rpc<GetAccountInfoApi & GetEpochInfoApi & GetSignatureStatusesApi & SendTransactionApi & GetLatestBlockhashApi>;
-
-  /**
-   * RPC subscriptions client.
-   */
-  rpcSubscriptions: RpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi>;
 
   /**
    * Get a previous step's result by name.
@@ -137,23 +153,9 @@ export type ExecutionStrategy = 'auto' | 'batch' | 'sequential';
 
 /**
  * Configuration for creating a flow.
- */
-export interface FlowConfig {
-  /**
-   * RPC client for transactions.
+ * Extends BaseContext with flow-specific configuration options.
    */
-  rpc: Rpc<GetAccountInfoApi & GetEpochInfoApi & GetSignatureStatusesApi & SendTransactionApi & GetLatestBlockhashApi>;
-
-  /**
-   * RPC subscriptions client for confirmations.
-   */
-  rpcSubscriptions: RpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi>;
-
-  /**
-   * Transaction signer.
-   */
-  signer: TransactionSigner;
-
+export interface FlowConfig extends BaseContext {
   /**
    * Execution strategy. Defaults to 'auto'.
    */

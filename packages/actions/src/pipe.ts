@@ -19,12 +19,15 @@
  * @packageDocumentation
  */
 
-import { TransactionBuilder } from '@pipeit/tx-builder';
+import { createFlow, TransactionBuilder } from '@pipeit/tx-builder';
+import type { Instruction } from '@solana/instructions';
 import type {
   ActionContext,
   ActionExecutor,
   ActionResult,
+  ExecuteOptions,
   PipeConfig,
+  PipeHooks,
   PipeResult,
   SwapParams,
 } from './types.js';
@@ -36,6 +39,7 @@ export class Pipe {
   private config: PipeConfig;
   private actions: ActionExecutor[] = [];
   private context: ActionContext;
+  private hooks: PipeHooks = {};
 
   constructor(config: PipeConfig) {
     this.config = config;
@@ -95,52 +99,125 @@ export class Pipe {
   }
 
   /**
-   * Execute all actions in the pipe as a single atomic transaction.
+   * Set a hook called when an action starts executing.
    * 
+   * @param handler - Function called with the action index
+   * @returns The pipe instance for chaining
+   * 
+   * @example
+   * ```ts
+   * pipe
+   *   .swap({ ... })
+   *   .onActionStart((index) => console.log(`Starting action ${index}`))
+   *   .execute()
+   * ```
+   */
+  onActionStart(handler: (index: number) => void): this {
+    this.hooks.onActionStart = handler;
+    return this;
+  }
+
+  /**
+   * Set a hook called when an action completes successfully.
+   * 
+   * @param handler - Function called with the action index and result
+   * @returns The pipe instance for chaining
+   * 
+   * @example
+   * ```ts
+   * pipe
+   *   .swap({ ... })
+   *   .onActionComplete((index, result) => {
+   *     console.log(`Action ${index} completed with ${result.instructions.length} instructions`)
+   *   })
+   *   .execute()
+   * ```
+   */
+  onActionComplete(handler: (index: number, result: ActionResult) => void): this {
+    this.hooks.onActionComplete = handler;
+    return this;
+  }
+
+  /**
+   * Set a hook called when an action fails.
+   * 
+   * @param handler - Function called with the action index and error
+   * @returns The pipe instance for chaining
+   * 
+   * @example
+   * ```ts
+   * pipe
+   *   .swap({ ... })
+   *   .onActionError((index, error) => console.error(`Action ${index} failed:`, error))
+   *   .execute()
+   * ```
+   */
+  onActionError(handler: (index: number, error: Error) => void): this {
+    this.hooks.onActionError = handler;
+    return this;
+  }
+
+  /**
+   * Execute all actions in the pipe as a single atomic transaction.
+   * Uses Flow internally for automatic batching and error handling.
+   * 
+   * @param options - Execution options (strategy, commitment)
    * @returns The transaction signature and action results
    * 
    * @example
    * ```ts
    * const { signature } = await pipe
    *   .swap({ inputMint: SOL, outputMint: USDC, amount: 10_000_000n })
-   *   .execute()
+   *   .execute({ strategy: 'auto', commitment: 'confirmed' })
    * 
    * console.log('Transaction:', signature)
    * ```
    */
-  async execute(): Promise<PipeResult> {
+  async execute(options: ExecuteOptions = {}): Promise<PipeResult> {
+    const { strategy = 'auto', commitment = 'confirmed' } = options;
+
     if (this.actions.length === 0) {
       throw new Error('No actions to execute. Add at least one action to the pipe.');
     }
 
-    // Execute all actions to get their instructions
+    // Execute all actions to get their instructions, with hooks
     const actionResults: ActionResult[] = [];
-    const allInstructions: Array<import('@solana/instructions').Instruction> = [];
-    let totalComputeUnits = 0;
+    const allInstructions: Instruction[] = [];
 
-    for (const action of this.actions) {
-      const result = await action(this.context);
-      actionResults.push(result);
-      allInstructions.push(...result.instructions);
+    for (let i = 0; i < this.actions.length; i++) {
+      const action = this.actions[i];
       
-      if (result.computeUnits) {
-        totalComputeUnits += result.computeUnits;
+      // Call onActionStart hook
+      this.hooks.onActionStart?.(i);
+
+      try {
+        const result = await action(this.context);
+        actionResults.push(result);
+        allInstructions.push(...result.instructions);
+        
+        // Call onActionComplete hook
+        this.hooks.onActionComplete?.(i, result);
+      } catch (error) {
+        // Call onActionError hook
+        this.hooks.onActionError?.(i, error as Error);
+        throw error;
       }
     }
 
-    // Build and execute the transaction using tx-builder
-    const signature = await new TransactionBuilder({
+    // Use Flow for execution (gets automatic batching, hooks, error handling)
+    const flow = createFlow({
       rpc: this.config.rpc,
-      // Use suggested compute units or default high value for DeFi
-      computeUnits: totalComputeUnits > 0 ? totalComputeUnits : 400_000,
-      logLevel: 'verbose',
-    })
-      .setFeePayerSigner(this.config.signer)
-      .addInstructions(allInstructions)
-      .execute({
-        rpcSubscriptions: this.config.rpcSubscriptions,
-        commitment: 'confirmed',
-      });
+      rpcSubscriptions: this.config.rpcSubscriptions,
+      signer: this.config.signer,
+      strategy,
+      commitment,
+    });
+
+    // Add all instructions as an atomic group
+    flow.atomic('pipe', allInstructions.map((ix) => () => ix));
+
+    const results = await flow.execute();
+    const signature = results.get('pipe')?.signature ?? '';
 
     return {
       signature,
@@ -165,7 +242,7 @@ export class Pipe {
     }
 
     // Execute all actions to get their instructions
-    const allInstructions: Array<import('@solana/instructions').Instruction> = [];
+    const allInstructions: Instruction[] = [];
     let totalComputeUnits = 0;
 
     for (const action of this.actions) {
@@ -177,7 +254,7 @@ export class Pipe {
       }
     }
 
-    // Build and simulate using tx-builder
+    // Build and simulate using tx-builder (Flow doesn't have simulate)
     const result = await new TransactionBuilder({
       rpc: this.config.rpc,
       computeUnits: totalComputeUnits > 0 ? totalComputeUnits : 400_000,

@@ -12,30 +12,30 @@
 import type { Address } from '@solana/addresses';
 import type { Instruction } from '@solana/instructions';
 import type {
-  Rpc,
-  GetLatestBlockhashApi,
-  GetAccountInfoApi,
-  GetEpochInfoApi,
-  GetSignatureStatusesApi,
-  SendTransactionApi,
-} from '@solana/rpc';
-import type {
-  RpcSubscriptions,
-  SignatureNotificationsApi,
-  SlotNotificationsApi,
-} from '@solana/rpc-subscriptions';
-import type { TransactionSigner } from '@solana/signers';
+  FlowRpcApi,
+  FlowRpcSubscriptionsApi,
+  BaseContext,
+  ExecutionStrategy,
+} from '@pipeit/tx-builder';
+
+// Re-export ExecutionStrategy for convenience
+export type { ExecutionStrategy } from '@pipeit/tx-builder';
+
+// =============================================================================
+// Re-export shared types from tx-builder with action-specific aliases
+// =============================================================================
 
 /**
  * Minimum RPC API required for actions.
- * This is compatible with FlowContext from tx-builder.
+ * Re-exported from tx-builder for convenience.
  */
-export type ActionsRpcApi = GetAccountInfoApi & GetEpochInfoApi & GetSignatureStatusesApi & SendTransactionApi & GetLatestBlockhashApi;
+export type ActionsRpcApi = FlowRpcApi;
 
 /**
  * Minimum RPC subscriptions API required for actions.
+ * Re-exported from tx-builder for convenience.
  */
-export type ActionsRpcSubscriptionsApi = SignatureNotificationsApi & SlotNotificationsApi;
+export type ActionsRpcSubscriptionsApi = FlowRpcSubscriptionsApi;
 
 // =============================================================================
 // Core Action Types
@@ -44,15 +44,9 @@ export type ActionsRpcSubscriptionsApi = SignatureNotificationsApi & SlotNotific
 /**
  * Context passed to all actions during execution.
  * Contains the RPC clients and signer needed to build instructions.
+ * Extends BaseContext from tx-builder.
  */
-export interface ActionContext {
-  /** The transaction signer (wallet) */
-  signer: TransactionSigner;
-  /** RPC client for querying on-chain data */
-  rpc: Rpc<ActionsRpcApi>;
-  /** RPC subscriptions for confirmations */
-  rpcSubscriptions: RpcSubscriptions<ActionsRpcSubscriptionsApi>;
-}
+export interface ActionContext extends BaseContext {}
 
 /**
  * Result returned by an action.
@@ -145,19 +139,45 @@ export interface SwapAdapter {
 
 /**
  * Configuration for creating a pipe.
+ * Extends BaseContext from tx-builder with action-specific configuration.
  */
-export interface PipeConfig {
-  /** RPC client for querying on-chain data */
-  rpc: Rpc<ActionsRpcApi>;
-  /** RPC subscriptions for confirmations */
-  rpcSubscriptions: RpcSubscriptions<ActionsRpcSubscriptionsApi>;
-  /** The transaction signer (wallet) */
-  signer: TransactionSigner;
+export interface PipeConfig extends BaseContext {
   /** Configured adapters for different action types */
   adapters?: {
     /** Swap adapter (e.g., Jupiter, Raydium API) */
     swap?: SwapAdapter;
   };
+}
+
+/**
+ * Options for executing a pipe.
+ */
+export interface ExecuteOptions {
+  /** 
+   * Execution strategy for handling multiple actions.
+   * - 'auto': Try batching, fallback to sequential if transaction too large
+   * - 'batch': Always batch all instructions into one transaction
+   * - 'sequential': Execute each action as a separate transaction
+   * @default 'auto'
+   */
+  strategy?: ExecutionStrategy;
+  /** 
+   * Commitment level for transaction confirmation.
+   * @default 'confirmed'
+   */
+  commitment?: 'processed' | 'confirmed' | 'finalized';
+}
+
+/**
+ * Hooks for monitoring pipe execution progress.
+ */
+export interface PipeHooks {
+  /** Called when an action starts executing (building instructions) */
+  onActionStart?: (index: number) => void;
+  /** Called when an action completes successfully (instructions built) */
+  onActionComplete?: (index: number, result: ActionResult) => void;
+  /** Called when an action fails */
+  onActionError?: (index: number, error: Error) => void;
 }
 
 /**

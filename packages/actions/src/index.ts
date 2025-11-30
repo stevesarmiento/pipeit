@@ -37,9 +37,13 @@ export type {
   ActionResult,
   ActionsRpcApi,
   ActionsRpcSubscriptionsApi,
+  ExecuteOptions,
   PipeConfig,
+  PipeHooks,
   PipeResult,
   SwapAdapter,
   SwapParams,
   SwapResult,
+  // Re-exported from tx-builder for convenience
+  ExecutionStrategy,
 } from './types.js';

@@ -17,6 +17,8 @@ import {
   mixedPipelineCode,
   jupiterSwapCode,
   useJupiterSwapPipeline,
+  usePipeMultiSwapPipeline,
+  pipeMultiSwapCode,
 } from '@/components/pipeline/examples';
 import { ConnectButton } from '@/components/connector';
 import { PipelineHeaderButton } from '@/components/pipeline/pipeline-header-button';
@@ -57,6 +59,13 @@ const pipelineExamples: PipelineExampleConfig[] = [
     description: 'Swap tokens using Jupiter aggregator',
     hook: useJupiterSwapPipeline,
     code: jupiterSwapCode,
+  },
+  {
+    id: 'pipe-multi-swap',
+    name: 'Pipe Multi-Swap',
+    description: 'SOL → USDC → BONK sequential swaps with Flow orchestration',
+    hook: usePipeMultiSwapPipeline,
+    code: pipeMultiSwapCode,
   },
   // {
   //   id: 'raydium-kamino',
