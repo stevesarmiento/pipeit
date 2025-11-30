@@ -538,7 +538,7 @@ export class RaydiumSwapPlugin implements ProtocolAccountPlugin {
       });
 
       // Use the bitmap from pool state to find initialized tick arrays
-      const initializedStarts = this.findInitializedTickArrays(
+      let initializedStarts = this.findInitializedTickArrays(
         poolStateData.bitmap,
         currentTick,
         tickSpacing,
@@ -552,6 +552,34 @@ export class RaydiumSwapPlugin implements ProtocolAccountPlugin {
         bitmapLength: poolStateData.bitmap.length,
         bitmapSetBits: Array.from(poolStateData.bitmap).reduce((sum, byte) => sum + (byte ? 1 : 0), 0),
       });
+
+      // FALLBACK: If bitmap scan found 0 or 1 tick array, derive tick arrays directly
+      // This handles cases where the bitmap might not be accurate or pool uses extension
+      if (initializedStarts.length < 3) {
+        console.log('[Raydium Plugin] ⚠ Bitmap scan found few tick arrays, using fallback derivation');
+        const TICK_ARRAY_SIZE = 60;
+        const multiplier = tickSpacing * TICK_ARRAY_SIZE;
+        const currentTickArrayStart = Math.floor(currentTick / multiplier) * multiplier;
+        const direction = isZeroForOne ? -1 : 1;
+        
+        // Generate 3 tick arrays: current + 2 in swap direction
+        const fallbackStarts = [
+          currentTickArrayStart,
+          currentTickArrayStart + (direction * multiplier),
+          currentTickArrayStart + (direction * 2 * multiplier),
+        ];
+        
+        // Sort in traversal order
+        fallbackStarts.sort((a, b) => isZeroForOne ? b - a : a - b);
+        
+        console.log('[Raydium Plugin] Using fallback tick arrays:', {
+          currentTickArrayStart,
+          direction: isZeroForOne ? 'down' : 'up',
+          fallbackStarts,
+        });
+        
+        initializedStarts = fallbackStarts;
+      }
 
       if (initializedStarts.length === 0) {
         throw new Error(
@@ -861,6 +889,7 @@ export class RaydiumSwapPlugin implements ProtocolAccountPlugin {
 
   /**
    * Find initialized tick arrays near the current tick
+   * Only includes tick arrays in the DIRECTION of the swap (not both directions)
    */
   private findInitializedTickArrays(
     bitmap: Uint8Array,
@@ -885,21 +914,17 @@ export class RaydiumSwapPlugin implements ProtocolAccountPlugin {
 
     const initializedArrays: number[] = [];
 
-    // For swaps, we need to find tick arrays in the DIRECTION of the swap
-    // For zero-for-one (price down, tick down): we need arrays at or below current tick
-    // For one-for-zero (price up, tick up): we need arrays at or above current tick
-
-    // Start from current and search in the swap direction
-    const direction = isZeroForOne ? -1 : 1;
-
-    // First check current tick array
+    // First check current tick array - ALWAYS include this
     console.log(`[Raydium Plugin] === Checking CURRENT tick array ===`);
     const currentInit = this.isTickArrayInitialized(bitmap, currentTickArrayStart, tickSpacing, true);
     if (currentInit) {
       initializedArrays.push(currentTickArrayStart);
     }
 
-    // Then search in the swap direction
+    // Search in the swap direction for more tick arrays
+    // For zero-for-one: going DOWN (negative direction)
+    // For one-for-zero: going UP (positive direction)
+    const direction = isZeroForOne ? -1 : 1;
     for (let offset = 1; offset <= 20 && initializedArrays.length < limit; offset++) {
       const tickArrayStart = currentTickArrayStart + (direction * offset * multiplier);
       const debug = offset <= 3;
@@ -911,14 +936,14 @@ export class RaydiumSwapPlugin implements ProtocolAccountPlugin {
 
       const isInit = this.isTickArrayInitialized(bitmap, tickArrayStart, tickSpacing, debug);
 
-      if (isInit) {
+      if (isInit && !initializedArrays.includes(tickArrayStart)) {
         initializedArrays.push(tickArrayStart);
       }
     }
 
     // Sort arrays in the direction of swap traversal:
-    // For zero-for-one (tick decreasing): descending order (high to low)
-    // For one-for-zero (tick increasing): ascending order (low to high)
+    // For zero-for-one (tick decreasing): descending order (high to low, current first then lower)
+    // For one-for-zero (tick increasing): ascending order (low to high, current first then higher)
     initializedArrays.sort((a, b) => isZeroForOne ? b - a : a - b);
 
     return initializedArrays;
@@ -1015,14 +1040,13 @@ export class RaydiumSwapPlugin implements ProtocolAccountPlugin {
     }
 
     const ata = await this.deriveAta(mint, owner, rpc);
-    const isPayerOwner = payer.toString() === owner.toString();
   
     const data = new Uint8Array([1]); // CreateIdempotent instruction discriminator
 
     return {
       programAddress: WELL_KNOWN_PROGRAMS.associatedTokenProgram,
       accounts: [
-        { address: payer, role: isPayerOwner ? 3 : 2 }, // payer
+        { address: payer, role: 3 }, // payer: always signer+writable (pays for account creation)
         { address: ata, role: 1 }, // associated token account (writable)
         { address: owner, role: 0 }, // owner (readonly)
         { address: mint, role: 0 }, // mint (readonly)

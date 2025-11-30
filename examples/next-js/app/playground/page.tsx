@@ -53,13 +53,13 @@ const pipelineExamples: PipelineExampleConfig[] = [
     hook: useMixedPipeline,
     code: mixedPipelineCode,
   },
-  // {
-  //   id: 'raydium-kamino',
-  //   name: 'Raydium + Kamino',
-  //   description: 'Raydium CLMM swap + Kamino deposit - pure IDL with auto account discovery',
-  //   hook: useRaydiumKaminoPipeline,
-  //   code: raydiumKaminoCode,
-  // },
+  {
+    id: 'raydium-kamino',
+    name: 'Raydium + Kamino',
+    description: 'Raydium CLMM swap + Kamino deposit - pure IDL with auto account discovery',
+    hook: useRaydiumKaminoPipeline,
+    code: raydiumKaminoCode,
+  },
   // {
   //   id: 'instruction-plan',
   //   name: 'Instruction Plan',

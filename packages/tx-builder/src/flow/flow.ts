@@ -241,8 +241,10 @@ export class TransactionFlow {
           const signature = await new TransactionBuilder({
             rpc: this.config.rpc,
             logLevel: 'verbose',
+            // Set higher compute budget for atomic groups (DeFi swaps can need 300k+ CU)
+            computeUnits: 400_000,
           })
-            .setFeePayer(this.config.signer.address)
+            .setFeePayerSigner(this.config.signer)
             .addInstructions(instructions)
             .execute({
               rpcSubscriptions: this.config.rpcSubscriptions,
@@ -281,7 +283,7 @@ export class TransactionFlow {
         rpc: this.config.rpc,
         logLevel: 'verbose',
       })
-        .setFeePayer(this.config.signer.address)
+        .setFeePayerSigner(this.config.signer)
         .addInstructions(instructions)
         .execute({
           rpcSubscriptions: this.config.rpcSubscriptions,
@@ -326,7 +328,7 @@ export class TransactionFlow {
             rpc: this.config.rpc,
             logLevel: 'verbose',
           })
-            .setFeePayer(this.config.signer.address)
+            .setFeePayerSigner(this.config.signer)
             .addInstruction(instruction)
             .execute({
               rpcSubscriptions: this.config.rpcSubscriptions,
@@ -347,8 +349,10 @@ export class TransactionFlow {
 
           const signature = await new TransactionBuilder({
             rpc: this.config.rpc,
+            // Set higher compute budget for atomic groups (DeFi swaps can need 300k+ CU)
+            computeUnits: 400_000,
           })
-            .setFeePayer(this.config.signer.address)
+            .setFeePayerSigner(this.config.signer)
             .addInstructions(instructions)
             .execute({
               rpcSubscriptions: this.config.rpcSubscriptions,

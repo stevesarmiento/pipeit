@@ -50,8 +50,7 @@ export async function createWsolAtaInstruction(
   const isPayerOwner = payer.toString() === owner.toString();
   
   // For ATA creation:
-  // - Payer must be signer+writable (role 3) to pay for rent
-  // - If payer = owner, we still need owner account but payer should be signer+writable
+  // - Payer must ALWAYS be signer+writable (role 3) to pay for rent (debits lamports)
   // - ATA is writable (role 1)
   // - Other accounts are readonly (role 0)
   const data = new Uint8Array([1]); // CreateIdempotent instruction discriminator
@@ -59,7 +58,7 @@ export async function createWsolAtaInstruction(
   return {
     programAddress: WELL_KNOWN_PROGRAMS.associatedTokenProgram,
     accounts: [
-      { address: payer, role: isPayerOwner ? 3 : 2 }, // payer: signer+writable if payer=owner, else signer
+      { address: payer, role: 3 }, // payer: always signer+writable (pays for account creation)
       { address: wsolAta, role: 1 }, // associatedToken (writable)
       { address: owner, role: 0 }, // owner (readonly)
       { address: SOL_MINT, role: 0 }, // mint (readonly)
@@ -100,7 +99,7 @@ export async function wrapSolInstructions(
   const transferIx: Instruction = {
     programAddress: WELL_KNOWN_PROGRAMS.systemProgram,
     accounts: [
-      { address: payer, role: 2 }, // from (signer)
+      { address: payer, role: 3 }, // from (signer + writable) - System transfer debits this account
       { address: wsolAta, role: 1 }, // to (writable)
     ],
     data: transferData,

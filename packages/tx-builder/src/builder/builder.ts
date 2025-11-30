@@ -67,7 +67,7 @@ import {
   setTransactionMessageLifetimeUsingDurableNonce,
   appendTransactionMessageInstruction,
 } from '@solana/transaction-messages';
-import { signTransactionMessageWithSigners } from '@solana/signers';
+import { signTransactionMessageWithSigners, addSignersToTransactionMessage, type TransactionSigner } from '@solana/signers';
 import { sendAndConfirmTransactionFactory, getSignatureFromTransaction } from '@solana/kit';
 import { 
   getBase64EncodedWireTransaction,
@@ -203,6 +203,7 @@ export interface SimulationResult {
  */
 export class TransactionBuilder<TState extends BuilderState = BuilderState> {
   private feePayer?: Address;
+  private feePayerSigner?: TransactionSigner;
   private lifetime?: LifetimeConstraint;
   private instructions: Instruction[] = [];
   
@@ -272,13 +273,29 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
   }
 
   /**
-   * Set the fee payer for the transaction.
+   * Set the fee payer for the transaction using just an address.
+   * Note: When using execute(), you should use setFeePayerSigner() instead
+   * to properly sign the transaction.
    */
   setFeePayer<TAddress extends string>(
     feePayer: Address<TAddress>
   ): TransactionBuilder<TState & { feePayer: true }> {
     const builder = this.clone();
     builder.feePayer = feePayer;
+    return builder as TransactionBuilder<TState & { feePayer: true }>;
+  }
+
+  /**
+   * Set the fee payer for the transaction using a signer.
+   * This is the recommended method when using execute() as it properly
+   * signs the transaction.
+   */
+  setFeePayerSigner(
+    signer: TransactionSigner
+  ): TransactionBuilder<TState & { feePayer: true }> {
+    const builder = this.clone();
+    builder.feePayer = signer.address;
+    builder.feePayerSigner = signer;
     return builder as TransactionBuilder<TState & { feePayer: true }>;
   }
 
@@ -399,6 +416,11 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
             tx
           )
     );
+    
+    // Attach fee payer signer if available
+    if (this.feePayerSigner) {
+      message = addSignersToTransactionMessage([this.feePayerSigner], message);
+    }
 
     // ADD COMPUTE BUDGET INSTRUCTIONS FIRST (if configured)
     // Order matters: limit first, then price
@@ -875,6 +897,9 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
     });
     if (this.feePayer !== undefined) {
       builder.feePayer = this.feePayer;
+    }
+    if (this.feePayerSigner !== undefined) {
+      builder.feePayerSigner = this.feePayerSigner;
     }
     if (this.lifetime !== undefined) {
       builder.lifetime = this.lifetime;
