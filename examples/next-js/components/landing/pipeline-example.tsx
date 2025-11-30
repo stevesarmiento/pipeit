@@ -4,12 +4,12 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-const pipelineExampleCode = `import { createPipeline } from '@pipeit/tx-orchestration';
-import { getCreateAccountInstruction, getCloseAccountInstruction } from 'gill/programs';
+const pipelineExampleCode = `import { createFlow } from '@pipeit/tx-builder';
+import { getCreateAccountInstruction, getCloseAccountInstruction } from '@solana-program/system';
 
-const pipeline = createPipeline()
+const result = await createFlow({ rpc, rpcSubscriptions, signer })
   // Transaction 1: Setup - Create temporary token accounts
-  .instruction('create-temp-usdc', async (ctx) => 
+  .step('create-temp-usdc', (ctx) => 
     getCreateAccountInstruction({
       payer: ctx.signer,
       newAccount: tempUsdcAccount,
@@ -17,7 +17,7 @@ const pipeline = createPipeline()
       owner: TOKEN_PROGRAM,
     })
   )
-  .instruction('init-temp-usdc', async (ctx) =>
+  .step('init-temp-usdc', (ctx) =>
     getInitializeAccountInstruction({
       account: tempUsdcAccount.address,
       mint: usdcMint,
@@ -26,16 +26,16 @@ const pipeline = createPipeline()
   )
   
   // Transaction 2: Execute trades using created accounts
-  .instruction('swap-sol-to-usdc', async (ctx) => 
+  .step('swap-sol-to-usdc', (ctx) => 
     createSwapInstruction({
       input: solAccount,
-      output: ctx.results['init-temp-usdc'].account,
+      output: ctx.get('init-temp-usdc')?.account,
       amountIn: 1_000_000n,
       pool: dexPoolA,
     })
   )
-  .instruction('swap-usdc-to-token', async (ctx) => {
-    const usdcAmount = ctx.results['swap-sol-to-usdc'].amountOut;
+  .step('swap-usdc-to-token', (ctx) => {
+    const usdcAmount = ctx.get('swap-sol-to-usdc')?.amountOut;
     return createSwapInstruction({
       input: tempUsdcAccount.address,
       output: targetTokenAccount,
@@ -45,20 +45,14 @@ const pipeline = createPipeline()
   })
   
   // Transaction 3: Cleanup - Close temporary accounts
-  .instruction('close-temp', async (ctx) =>
+  .step('close-temp', (ctx) =>
     getCloseAccountInstruction({
       account: tempUsdcAccount.address,
       destination: ctx.signer.address,
       authority: ctx.signer,
     })
-  );
-
-await pipeline.execute({
-  signer,
-  rpc,
-  rpcSubscriptions,
-  strategy: 'auto',
-});`;
+  )
+  .execute();`;
 
 export function PipelineExample() {
     return (
@@ -77,7 +71,7 @@ export function PipelineExample() {
                     Orchestrate multi-transaction flows
                 </h2>
                 <p className="text-body-xl text-gray-600 mb-12 text-center max-w-3xl mx-auto">
-                    Build pipelines that batch instructions across multiple transactions. Automatically groups compatible operations, passes results between transactions, and handles cleanup.
+                    Build flows that batch instructions across multiple transactions. Automatically groups compatible operations, passes results between transactions, and handles cleanup.
                 </p>
                 <Card className="border-sand-300 bg-white">
                     <CardHeader className="pb-3">
@@ -108,4 +102,3 @@ export function PipelineExample() {
         </section>
     );
 }
-

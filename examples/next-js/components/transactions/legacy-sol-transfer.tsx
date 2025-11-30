@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { Connection, Transaction, SystemProgram, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { signature as createSignature, address } from 'gill';
-import { useWalletAdapterCompat } from '@solana/connector/compat';
-import { useTransactionSigner, useConnector, useCluster, useConnectorClient } from '@solana/connector';
+import { address, signature as createSignature } from '@solana/kit';
+import { useWalletAdapterCompat } from '@armadura/connector/compat';
+import { useTransactionSigner, useConnector, useCluster, useConnectorClient } from '@armadura/connector';
 import { TransactionForm } from './transaction-form';
 import { TransactionResult } from './transaction-result';
 import { CodeComparison } from './code-comparison';

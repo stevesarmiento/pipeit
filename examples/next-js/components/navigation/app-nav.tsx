@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { IconLine3Horizontal, IconXmarkCircleFill } from 'symbols-react';
 import { ClusterSelector, AccountSwitcher } from '@/components/connector';
-import { useConnector } from '@solana/connector';
+import { useConnector } from '@armadura/connector';
 import { cn } from '@/lib/utils';
 import { Logo } from './logo';
 

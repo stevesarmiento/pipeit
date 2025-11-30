@@ -1,6 +1,6 @@
 'use client';
 
-import { useConnector } from '@solana/connector';
+import { useConnector } from '@armadura/connector';
 import { Alert } from '@/components/ui/alert';
 import { Info } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';

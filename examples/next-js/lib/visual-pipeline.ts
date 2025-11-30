@@ -1,5 +1,4 @@
-import { TransactionPipeline } from '@pipeit/tx-orchestration';
-import type { ExecuteParams } from '@pipeit/tx-orchestration';
+import { TransactionFlow, type FlowConfig, type FlowStepResult } from '@pipeit/tx-builder';
 
 /**
  * State of an individual pipeline step.
@@ -13,7 +12,20 @@ export type StepState =
   | { type: 'failed'; error: Error };
 
 /**
- * Visual wrapper around TransactionPipeline that tracks execution state.
+ * Factory function that creates a TransactionFlow with the given config.
+ */
+export type FlowFactory = (config: FlowConfig) => TransactionFlow;
+
+/**
+ * Parameters for executing a visual pipeline.
+ */
+export type ExecuteParams = Omit<FlowConfig, 'strategy' | 'commitment'> & {
+  strategy?: FlowConfig['strategy'];
+  commitment?: FlowConfig['commitment'];
+};
+
+/**
+ * Visual wrapper around TransactionFlow that tracks execution state.
  * Similar to VisualEffect in the Visual Effect project.
  */
 export class VisualPipeline {
@@ -27,7 +39,7 @@ export class VisualPipeline {
 
   constructor(
     public name: string,
-    public pipeline: TransactionPipeline,
+    public flowFactory: FlowFactory,
     public steps: Array<{ name: string; type: 'instruction' | 'transaction' }>
   ) {
     // Initialize all steps to idle
@@ -37,22 +49,31 @@ export class VisualPipeline {
   }
 
   /**
-   * Execute the pipeline with visual state tracking.
+   * Execute the flow with visual state tracking.
    */
-  async execute(params: ExecuteParams): Promise<Map<string, any>> {
+  async execute(params: ExecuteParams): Promise<Map<string, FlowStepResult>> {
     this.state = 'executing';
     this.executionStartTime = Date.now();
     this.totalCost = 0;
     this.notifyListeners();
 
-    // Hook into pipeline events to track state
-    this.pipeline
+    // Create the flow with the provided params
+    const flow = this.flowFactory({
+      rpc: params.rpc,
+      rpcSubscriptions: params.rpcSubscriptions,
+      signer: params.signer,
+      strategy: params.strategy ?? 'auto',
+      commitment: params.commitment ?? 'confirmed',
+    });
+
+    // Hook into flow events to track state
+    flow
       .onStepStart((stepName: string) => {
         this.setStepState(stepName, { type: 'building' });
       })
-      .onStepComplete((stepName: string, result: any) => {
+      .onStepComplete((stepName: string, result: FlowStepResult) => {
         // Extract signature and estimate cost
-        const signature = result?.signature || (typeof result === 'string' ? result : '');
+        const signature = result?.signature || '';
         const cost = 0.000005; // Base transaction fee in SOL (estimate)
 
         this.setStepState(stepName, {
@@ -85,13 +106,13 @@ export class VisualPipeline {
         }
       });
 
-      const results = await this.pipeline.execute(params);
+      const results = await flow.execute();
 
       // Mark all completed steps as confirmed if not already
-      results.forEach((result: any, stepName: string) => {
+      results.forEach((result: FlowStepResult, stepName: string) => {
         const currentState = this.getStepState(stepName);
         if (currentState.type !== 'confirmed' && currentState.type !== 'failed') {
-          const signature = result?.signature || (typeof result === 'string' ? result : '');
+          const signature = result?.signature || '';
           this.setStepState(stepName, {
             type: 'confirmed',
             signature,
@@ -182,7 +203,3 @@ export class VisualPipeline {
     this.listeners.forEach((listener) => listener());
   }
 }
-
-
-
-

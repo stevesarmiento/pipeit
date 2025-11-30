@@ -15,6 +15,10 @@ import {
   batchedTransfersCode,
   useMixedPipeline,
   mixedPipelineCode,
+  jupiterSwapCode,
+  useJupiterSwapPipeline,
+  usePipeMultiSwapPipeline,
+  pipeMultiSwapCode,
 } from '@/components/pipeline/examples';
 import { ConnectButton } from '@/components/connector';
 import { PipelineHeaderButton } from '@/components/pipeline/pipeline-header-button';
@@ -49,6 +53,34 @@ const pipelineExamples: PipelineExampleConfig[] = [
     hook: useMixedPipeline,
     code: mixedPipelineCode,
   },
+  {
+    id: 'jupiter-swap',
+    name: 'Jupiter Swap',
+    description: 'Swap tokens using Jupiter aggregator',
+    hook: useJupiterSwapPipeline,
+    code: jupiterSwapCode,
+  },
+  {
+    id: 'pipe-multi-swap',
+    name: 'Pipe Multi-Swap',
+    description: 'SOL → USDC → BONK sequential swaps with Flow orchestration',
+    hook: usePipeMultiSwapPipeline,
+    code: pipeMultiSwapCode,
+  },
+  // {
+  //   id: 'raydium-kamino',
+  //   name: 'Raydium + Kamino',
+  //   description: 'Raydium CLMM swap + Kamino deposit - pure IDL with auto account discovery',
+  //   hook: useRaydiumKaminoPipeline,
+  //   code: raydiumKaminoCode,
+  // },
+  // {
+  //   id: 'instruction-plan',
+  //   name: 'Instruction Plan',
+  //   description: 'Kit instruction-plans with executePlan - static planning with automatic batching',
+  //   hook: useInstructionPlanPipeline,
+  //   code: instructionPlanCode,
+  // },
 ];
 
 function PipelineExampleCard({ example }: { example: PipelineExampleConfig }) {

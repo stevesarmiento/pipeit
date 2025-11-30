@@ -1,112 +1,142 @@
-# 🚰 Pipeit
+# 🚰 Pipeit - Type-Safe Solana Transaction Builder
 
-A comprehensive Solana transaction building library that makes it easier to build transactions on Solana by reducing boilerplate and providing type-safe, composable APIs.
+A comprehensive Solana transaction building library that reduces boilerplate and provides type-safe, composable APIs built on @solana/kit.
 
 ## Packages
 
-- `@pipeit/tx-errors` - Typed error definitions for Solana transaction building
-- `@pipeit/tx-core` - Core types and base transaction builder for Solana transactions
-- `@pipeit/tx-builder` - High-level builder API for Solana transactions (beginner-friendly)
-- `@pipeit/tx-templates` - Pre-built transaction templates for common Solana operations
-- `@pipeit/tx-middleware` - Composable middleware for Solana transactions (retry, simulation, logging)
-- `@pipeit/tx-orchestration` - Transaction orchestration for multi-step Solana transaction flows
+- **@pipeit/tx-builder** - Main transaction builder with smart defaults, multi-step flows, and Kit instruction-plans integration
+- **@pipeit/actions** - High-level DeFi actions with pluggable protocol adapters (Jupiter, Raydium, etc.)
 
 ## Installation
 
 ```bash
-# Core builder API (recommended for most users)
-pnpm install @pipeit/tx-builder gill
+# Main builder package (recommended for most users)
+pnpm install @pipeit/tx-builder @solana/kit
 
-# Transaction templates
-pnpm install @pipeit/tx-templates gill
-
-# Transaction orchestration
-pnpm install @pipeit/tx-orchestration gill
+# High-level DeFi actions
+pnpm install @pipeit/actions @solana/kit
 ```
 
 ## Quick Start
 
-### Simple API
+### Single Transaction
 
 ```typescript
-import { transaction } from '@pipeit/tx-builder'
-import { createSolanaRpc, createSolanaRpcSubscriptions } from 'gill'
+import { TransactionBuilder } from '@pipeit/tx-builder';
+import { createSolanaRpc, createSolanaRpcSubscriptions } from '@solana/kit';
 
-const rpc = createSolanaRpc('https://api.mainnet-beta.solana.com')
-const rpcSubscriptions = createSolanaRpcSubscriptions('wss://api.mainnet-beta.solana.com')
+const rpc = createSolanaRpc('https://api.mainnet-beta.solana.com');
+const rpcSubscriptions = createSolanaRpcSubscriptions('wss://api.mainnet-beta.solana.com');
 
-// Build and execute a transaction
-const signature = await transaction()
+// Auto-retry, auto-blockhash fetch, built-in validation
+const signature = await new TransactionBuilder({ rpc, autoRetry: true, logLevel: 'verbose' })
+  .setFeePayer(signer.address)
   .addInstruction(yourInstruction)
-  .execute({
-    feePayer: walletSigner,
-    rpc,
-    rpcSubscriptions,
-  })
+  .execute({ rpcSubscriptions });
 ```
 
-### With Configuration
+### Multi-Step Flows
+
+For workflows where instructions depend on previous results:
 
 ```typescript
-import { transaction } from '@pipeit/tx-builder'
+import { createFlow } from '@pipeit/tx-builder';
 
-const signature = await transaction({
-  autoRetry: true, // Auto-retry failed transactions
-  priorityLevel: 'high', // Set priority fee
-  computeUnitLimit: 200_000, // Set compute unit limit
-  logLevel: 'verbose', // Enable logging
-})
-  .addInstruction(instruction1)
-  .addInstruction(instruction2)
-  .execute({
-    feePayer: walletSigner,
-    rpc,
-    rpcSubscriptions,
+const result = await createFlow({ rpc, rpcSubscriptions, signer })
+  .step('create-account', (ctx) => createAccountInstruction(...))
+  .step('init-metadata', (ctx) => {
+    // Access previous step results
+    const prevResult = ctx.get('create-account');
+    return initMetadataInstruction(prevResult, ...);
   })
+  .atomic('swap', [
+    (ctx) => wrapSolInstruction(...),
+    (ctx) => swapInstruction(...),
+  ])
+  .onStepComplete((name, result) => console.log(`${name}: ${result.signature}`))
+  .execute();
 ```
 
-### Transaction Templates
+### Static Instruction Plans (Kit Integration)
+
+For advanced users who know all instructions upfront:
 
 ```typescript
-import { transferSol } from '@pipeit/tx-templates/core'
+import { sequentialInstructionPlan, executePlan } from '@pipeit/tx-builder';
 
-const signature = await transaction()
-  .addInstruction(transferSol({
-    from: senderAddress,
-    to: recipientAddress,
-    amount: 1_000_000n, // 0.001 SOL
-  }))
-  .execute({
-    feePayer: walletSigner,
-    rpc,
-    rpcSubscriptions,
-  })
+// Kit's instruction-plans are re-exported for advanced use cases
+const plan = sequentialInstructionPlan([ix1, ix2, ix3, ix4, ix5]);
+const result = await executePlan(plan, { rpc, rpcSubscriptions, signer });
 ```
 
-### Transaction Orchestration
+### Simulation
 
 ```typescript
-import { createPipeline } from '@pipeit/tx-orchestration'
+const result = await new TransactionBuilder({ rpc })
+  .setFeePayer(signer.address)
+  .addInstruction(instruction)
+  .simulate();
 
-const pipeline = createPipeline([
-  {
-    name: 'step1',
-    type: 'instruction',
-    instruction: firstInstruction,
-  },
-  {
-    name: 'step2',
-    type: 'instruction',
-    instruction: secondInstruction,
-  },
-])
+if (result.err) {
+  console.error('Simulation failed:', result.logs);
+} else {
+  console.log('Success! Units consumed:', result.unitsConsumed);
+}
+```
 
-const results = await pipeline.execute({
-  signer: walletSigner,
+### High-Level DeFi Actions
+
+```typescript
+import { pipe, jupiter } from '@pipeit/actions';
+
+// Simple, composable DeFi actions
+const result = await pipe({
   rpc,
   rpcSubscriptions,
+  signer,
+  adapters: { swap: jupiter() }
 })
+  .swap({ 
+    inputMint: SOL_MINT, 
+    outputMint: USDC_MINT, 
+    amount: 100_000_000n  // 0.1 SOL
+  })
+  .execute();
+
+console.log('Swap completed:', result.signature);
 ```
+
+## Features
+
+### @pipeit/tx-builder
+
+**Single Transactions:**
+- **Type-Safe Builder**: Compile-time checks ensure all required fields are set
+- **Auto-Blockhash**: Automatically fetches latest blockhash when RPC provided
+- **Smart Defaults**: Opinionated configuration for common use cases
+- **Auto-Retry**: Configurable retry with exponential backoff
+- **Built-in Validation**: Automatic transaction size and field validation
+- **Simulation**: Test transactions before sending
+- **Comprehensive Logging**: Verbose error logs with simulation details
+
+**Multi-Step Flows:**
+- **Dynamic Context**: Build instructions that depend on previous step results
+- **Automatic Batching**: Intelligently batch instructions into single transactions
+- **Atomic Groups**: Group instructions that must execute together
+- **Size Handling**: Auto-split transactions that exceed size limits
+- **Execution Hooks**: Monitor step lifecycle with onStepStart, onStepComplete, onStepError
+
+**Kit Integration:**
+- **Instruction Plans**: Re-exports `@solana/instruction-plans` for advanced planning
+- **executePlan()**: Execute Kit instruction plans with TransactionBuilder features
+
+### @pipeit/actions
+
+- **High-Level DeFi Actions**: Simple, composable API for swaps, lending, staking
+- **Pluggable Adapters**: Protocol-specific adapters (Jupiter, Raydium, etc.)
+- **API-Centric Design**: Delegates complexity to protocol APIs for reliability
+- **Fluent Builder**: Chain multiple actions with `.swap()`, `.add()`, etc.
+- **Built-in Hooks**: Monitor action progress with `onActionStart`, `onActionComplete`
 
 ## Development
 
@@ -120,7 +150,7 @@ pnpm build
 # Run tests
 pnpm test
 
-# Run type checking
+# Type checking
 pnpm typecheck
 
 # Lint

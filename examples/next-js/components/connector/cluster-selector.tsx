@@ -1,6 +1,6 @@
 'use client';
 
-import { useCluster } from '@solana/connector/react';
+import { useCluster } from '@armadura/connector/react';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Check, ChevronDown, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { SolanaClusterId, SolanaCluster } from '@solana/connector';
+import type { SolanaClusterId, SolanaCluster } from '@armadura/connector';
 
 interface ClusterSelectorProps {
     className?: string;

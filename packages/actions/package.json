@@ -1,0 +1,71 @@
+{
+  "name": "@pipeit/actions",
+  "version": "0.1.0",
+  "description": "High-level DeFi actions for Solana with pluggable protocol adapters",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "typings": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./adapters": {
+      "types": "./dist/adapters/index.d.ts",
+      "import": "./dist/adapters/index.js",
+      "require": "./dist/adapters/index.cjs"
+    },
+    "./adapters/jupiter": {
+      "types": "./dist/adapters/jupiter.d.ts",
+      "import": "./dist/adapters/jupiter.js",
+      "require": "./dist/adapters/jupiter.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "keywords": [
+    "solana",
+    "defi",
+    "swap",
+    "jupiter",
+    "actions",
+    "transaction"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@pipeit/tx-builder": "^0.2.0",
+    "@solana/kit": "^5.0.0",
+    "@solana/addresses": "*",
+    "@solana/instructions": "*",
+    "@solana/rpc": "*",
+    "@solana/rpc-subscriptions": "*",
+    "@solana/signers": "*",
+    "@solana/transactions": "*"
+  },
+  "devDependencies": {
+    "@pipeit/tx-builder": "workspace:*",
+    "@solana/addresses": "*",
+    "@solana/instructions": "*",
+    "@solana/kit": "^5.0.0",
+    "@solana/rpc": "*",
+    "@solana/rpc-subscriptions": "*",
+    "@solana/signers": "*",
+    "@solana/transactions": "*",
+    "@types/node": "^24",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

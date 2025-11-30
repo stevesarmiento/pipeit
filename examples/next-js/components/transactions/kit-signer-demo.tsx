@@ -6,8 +6,8 @@ import {
     createMessageSignerFromWallet, 
     createSignableMessage, 
     address 
-} from '@solana/connector/headless';
-import { useConnector, useConnectorClient } from '@solana/connector';
+} from '@armadura/connector/headless';
+import { useConnector, useConnectorClient } from '@armadura/connector';
 import { Connection } from '@solana/web3.js';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

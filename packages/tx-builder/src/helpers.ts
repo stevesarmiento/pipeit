@@ -6,43 +6,52 @@
 
 import type { 
   Rpc, 
-  TransactionSigner, 
-  RpcSubscriptions, 
   GetLatestBlockhashApi,
+  GetAccountInfoApi,
   GetEpochInfoApi,
   GetSignatureStatusesApi,
   SendTransactionApi,
+} from '@solana/rpc';
+import type { TransactionSigner } from '@solana/signers';
+import type {
+  RpcSubscriptions,
   SignatureNotificationsApi,
   SlotNotificationsApi,
-} from 'gill';
-import { transaction } from './transaction-builder';
-import type { TransactionBuilderConfig } from './transaction-builder';
+} from '@solana/rpc-subscriptions';
+import { TransactionBuilder } from './builder/builder.js';
+import type { TransactionBuilderConfig } from './builder/builder.js';
+
+/**
+ * Combined RPC API type for transaction helpers.
+ */
+type TransactionRpc = Rpc<
+  GetLatestBlockhashApi & 
+  GetAccountInfoApi & 
+  GetEpochInfoApi & 
+  GetSignatureStatusesApi & 
+  SendTransactionApi
+>;
 
 /**
  * Quick transfer SOL between accounts.
  * 
  * Note: This helper requires the instruction to be created separately.
- * Use Gill's getTransferSolInstruction from 'gill/programs' to create the instruction.
+ * Use Kit's getTransferSolInstruction from '@solana-program/system' to create the instruction.
  */
 export async function quickTransfer(
-  rpc: Rpc<GetEpochInfoApi & GetSignatureStatusesApi & SendTransactionApi & GetLatestBlockhashApi>,
+  rpc: TransactionRpc,
   rpcSubscriptions: RpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi>,
   opts: {
-    instruction: Parameters<typeof transaction>[0] extends undefined ? never : any; // Instruction type from gill
+    instruction: any; // Instruction type from Kit
     feePayer: TransactionSigner;
-    config?: TransactionBuilderConfig;
+    config?: Omit<TransactionBuilderConfig, 'rpc'>;
   }
 ): Promise<string> {
-  const builder = transaction(opts.config);
+  const builder = new TransactionBuilder({ rpc, ...opts.config });
   
-  // Note: Users need to add the instruction themselves
-  // This is intentional - keeps the API flexible
   return builder
+    .setFeePayer(opts.feePayer.address)
     .addInstruction(opts.instruction)
-    .execute({
-      feePayer: opts.feePayer,
-      rpc,
-      rpcSubscriptions,
-    });
+    .execute({ rpcSubscriptions });
 }
 

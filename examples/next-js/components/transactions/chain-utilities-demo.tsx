@@ -7,7 +7,7 @@
  * Shows bidirectional conversion between Wallet Standard chain IDs and cluster types.
  */
 
-import { useConnector } from '@solana/connector';
+import { useConnector } from '@armadura/connector';
 import {
     getChainIdFromCluster,
     getChainIdFromClusterId,
@@ -17,7 +17,7 @@ import {
     isSolanaChain,
     isKnownSolanaChain,
     SOLANA_CHAIN_IDS,
-} from '@solana/connector/headless';
+} from '@armadura/connector/headless';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert } from '@/components/ui/alert';

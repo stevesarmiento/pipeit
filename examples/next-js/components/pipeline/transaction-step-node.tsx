@@ -171,7 +171,7 @@ function TransactionStepNodeComponent({
 
       {/* Step name label */}
       <motion.div
-        className="mt-2 text-body-md font-berkeley-mono text-gray-500 text-center max-w-[80px] truncate"
+        className="mt-2 text-xs font-berkeley-mono text-gray-500 text-center w-auto truncate"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}

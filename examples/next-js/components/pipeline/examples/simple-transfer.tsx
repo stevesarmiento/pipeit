@@ -1,32 +1,32 @@
 'use client';
 
 import { useMemo } from 'react';
-import { createPipeline } from '@pipeit/tx-orchestration';
-import type { StepContext } from '@pipeit/tx-orchestration';
+import { createFlow, type FlowConfig } from '@pipeit/tx-builder';
 import { VisualPipeline } from '@/lib/visual-pipeline';
-import { getTransferSolInstruction } from 'gill/programs';
-import { lamports } from 'gill';
+import { getTransferSolInstruction } from '@solana-program/system';
+import { lamports } from '@solana/kit';
 
 /**
  * Simple transfer example - single instruction, single transaction.
- * Baseline example showing basic pipeline usage.
+ * Baseline example showing basic flow usage.
  */
 export function useSimpleTransferPipeline() {
   const visualPipeline = useMemo(() => {
-    const pipeline = createPipeline().instruction('transfer-sol', async (ctx: StepContext) => {
-      // Self-transfer example (transferring to own address) - valid for demos
-      // In real usage, recipient and amount would come from props
-      const recipient = ctx.signer.address; // Self-transfer (always valid)
-      const amount = lamports(BigInt(1_000_000)); // 0.001 SOL
+    const flowFactory = (config: FlowConfig) =>
+      createFlow(config).step('transfer-sol', (ctx) => {
+        // Self-transfer example (transferring to own address) - valid for demos
+        // In real usage, recipient and amount would come from props
+        const recipient = ctx.signer.address; // Self-transfer (always valid)
+        const amount = lamports(BigInt(1_000_000)); // 0.001 SOL
 
-      return getTransferSolInstruction({
-        source: ctx.signer,
-        destination: recipient,
-        amount,
+        return getTransferSolInstruction({
+          source: ctx.signer,
+          destination: recipient,
+          amount,
+        });
       });
-    });
 
-    return new VisualPipeline('simple-transfer', pipeline, [
+    return new VisualPipeline('simple-transfer', flowFactory, [
       { name: 'transfer-sol', type: 'instruction' },
     ]);
   }, []);
@@ -34,23 +34,18 @@ export function useSimpleTransferPipeline() {
   return visualPipeline;
 }
 
-export const simpleTransferCode = `import { createPipeline } from '@pipeit/tx-orchestration';
-import { getTransferSolInstruction } from 'gill/programs';
-import { address, lamports } from 'gill';
+export const simpleTransferCode = `import { createFlow } from '@pipeit/tx-builder';
+import { getTransferSolInstruction } from '@solana-program/system';
+import { address, lamports } from '@solana/kit';
 
-const pipeline = createPipeline()
-  .instruction('transfer-sol', async (ctx) => {
+const result = await createFlow({ rpc, rpcSubscriptions, signer })
+  .step('transfer-sol', (ctx) => {
     return getTransferSolInstruction({
       source: ctx.signer,
       destination: address(recipientAddress),
       amount: lamports(BigInt(amount * LAMPORTS_PER_SOL)),
     });
-  });
+  })
+  .execute();
 
-await pipeline.execute({
-  signer,
-  rpc,
-  rpcSubscriptions,
-  strategy: 'auto'
-});`;
-
+console.log('Signature:', result.get('transfer-sol')?.signature);`;

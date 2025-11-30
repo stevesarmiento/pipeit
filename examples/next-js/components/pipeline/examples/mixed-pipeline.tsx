@@ -1,11 +1,10 @@
 'use client';
 
 import { useMemo } from 'react';
-import { createPipeline } from '@pipeit/tx-orchestration';
-import type { StepContext } from '@pipeit/tx-orchestration';
+import { createFlow, type FlowConfig } from '@pipeit/tx-builder';
 import { VisualPipeline } from '@/lib/visual-pipeline';
-import { getTransferSolInstruction } from 'gill/programs';
-import { lamports } from 'gill';
+import { getTransferSolInstruction } from '@solana-program/system';
+import { lamports } from '@solana/kit';
 
 /**
  * Mixed pipeline example - shows how transaction steps break batching.
@@ -13,47 +12,50 @@ import { lamports } from 'gill';
  */
 export function useMixedPipeline() {
   const visualPipeline = useMemo(() => {
-    const pipeline = createPipeline()
-      .instruction('setup-1', async (ctx: StepContext) => {
-        // First batch group - self-transfer for demo
-        return getTransferSolInstruction({
-          source: ctx.signer,
-          destination: ctx.signer.address,
-          amount: lamports(BigInt(1_000_000)),
+    const flowFactory = (config: FlowConfig) =>
+      createFlow(config)
+        .step('setup-1', (ctx) => {
+          // First batch group - self-transfer for demo
+          return getTransferSolInstruction({
+            source: ctx.signer,
+            destination: ctx.signer.address,
+            amount: lamports(BigInt(1_000_000)),
+          });
+        })
+        .step('setup-2', (ctx) => {
+          // Part of first batch - self-transfer for demo
+          return getTransferSolInstruction({
+            source: ctx.signer,
+            destination: ctx.signer.address,
+            amount: lamports(BigInt(1_000_000)),
+          });
+        })
+        .transaction('verify-state', async (ctx) => {
+          // Breaks batching - executes separately
+          // In real usage, this would check on-chain state
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          // Return a FlowStepResult with the previous step's signature
+          const prevResult = ctx.get('setup-2');
+          return { signature: prevResult?.signature ?? 'verified' };
+        })
+        .step('finalize-1', (ctx) => {
+          // Second batch group (after transaction step) - self-transfer for demo
+          return getTransferSolInstruction({
+            source: ctx.signer,
+            destination: ctx.signer.address,
+            amount: lamports(BigInt(1_000_000)),
+          });
+        })
+        .step('finalize-2', (ctx) => {
+          // Part of second batch - self-transfer for demo
+          return getTransferSolInstruction({
+            source: ctx.signer,
+            destination: ctx.signer.address,
+            amount: lamports(BigInt(1_000_000)),
+          });
         });
-      })
-      .instruction('setup-2', async (ctx: StepContext) => {
-        // Part of first batch - self-transfer for demo
-        return getTransferSolInstruction({
-          source: ctx.signer,
-          destination: ctx.signer.address,
-          amount: lamports(BigInt(1_000_000)),
-        });
-      })
-      .transaction('verify-state', async (ctx: StepContext) => {
-        // Breaks batching - executes separately
-        // In real usage, this would check on-chain state
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        return { verified: true };
-      })
-      .instruction('finalize-1', async (ctx: StepContext) => {
-        // Second batch group (after transaction step) - self-transfer for demo
-        return getTransferSolInstruction({
-          source: ctx.signer,
-          destination: ctx.signer.address,
-          amount: lamports(BigInt(1_000_000)),
-        });
-      })
-      .instruction('finalize-2', async (ctx: StepContext) => {
-        // Part of second batch - self-transfer for demo
-        return getTransferSolInstruction({
-          source: ctx.signer,
-          destination: ctx.signer.address,
-          amount: lamports(BigInt(1_000_000)),
-        });
-      });
 
-    return new VisualPipeline('mixed-pipeline', pipeline, [
+    return new VisualPipeline('mixed-pipeline', flowFactory, [
       { name: 'setup-1', type: 'instruction' },
       { name: 'setup-2', type: 'instruction' },
       { name: 'verify-state', type: 'transaction' },
@@ -65,27 +67,22 @@ export function useMixedPipeline() {
   return visualPipeline;
 }
 
-export const mixedPipelineCode = `import { createPipeline } from '@pipeit/tx-orchestration';
+export const mixedPipelineCode = `import { createFlow } from '@pipeit/tx-builder';
 
-const pipeline = createPipeline()
-  .instruction('setup-1', async (ctx) => createSetupInstruction1())
-  .instruction('setup-2', async (ctx) => createSetupInstruction2())
+const result = await createFlow({ rpc, rpcSubscriptions, signer })
+  .step('setup-1', (ctx) => createSetupInstruction1())
+  .step('setup-2', (ctx) => createSetupInstruction2())
   .transaction('verify-state', async (ctx) => {
     // Transaction step breaks batching
     // Must execute separately to check on-chain state
-    return await verifyOnChainState();
+    const verified = await verifyOnChainState();
+    return { signature: ctx.get('setup-2')?.signature ?? '' };
   })
-  .instruction('finalize-1', async (ctx) => createFinalizeInstruction1())
-  .instruction('finalize-2', async (ctx) => createFinalizeInstruction2());
+  .step('finalize-1', (ctx) => createFinalizeInstruction1())
+  .step('finalize-2', (ctx) => createFinalizeInstruction2())
+  .execute();
 
 // Results in 3 transactions:
 // 1. Batch: setup-1 + setup-2
 // 2. Transaction: verify-state
-// 3. Batch: finalize-1 + finalize-2
-await pipeline.execute({
-  signer,
-  rpc,
-  rpcSubscriptions,
-  strategy: 'auto'
-});`;
-
+// 3. Batch: finalize-1 + finalize-2`;

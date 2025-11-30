@@ -133,7 +133,7 @@ These components are meant to be **copied and customized**:
 
 These components use:
 
-- `@solana/connector` - Headless wallet connection logic
+- `@armadura/connector` - Headless wallet connection logic
 - `shadcn/ui` - UI components (Button, Dialog, Dropdown, etc.)
 - `lucide-react` - Icons
 - `tailwindcss` - Styling
@@ -162,7 +162,7 @@ components/
 1. Install dependencies:
 
     ```bash
-    npm install @solana/connector
+    npm install @armadura/connector
     npx shadcn@latest init
     npx shadcn@latest add button dialog dropdown-menu avatar badge card
     ```
@@ -216,6 +216,51 @@ See `app/page.tsx` for a complete example showing:
 - **Conditional Rendering**: AccountSwitcher automatically hides when not needed
 - **Persistence**: ClusterSelector remembers the selected network across sessions
 - **Styling**: All components accept `className` prop for easy customization
+
+## 🔄 Pipeline Examples
+
+The playground (`/playground`) demonstrates various transaction pipeline patterns:
+
+### Simple Transfer
+Single instruction, single transaction - baseline example showing basic pipeline usage.
+
+### Batched Transfers
+Multiple transfer instructions batched into one atomic transaction, demonstrating cost savings.
+
+### Mixed Pipeline
+Shows how transaction steps break batching - instruction steps batch together, but transaction steps execute separately.
+
+### DeFi Composition (Jupiter → Kamino)
+A complex multi-protocol DeFi transaction demonstrating:
+1. **Jupiter Swap**: Swap SOL to USDC on Jupiter aggregator
+2. **Kamino Deposit**: Deposit USDC into Kamino lending vault
+
+**Features Showcased:**
+- ✅ IDL-based instruction building
+- ✅ Automatic account discovery (no manual account management!)
+- ✅ Protocol plugins (Jupiter, Kamino)
+- ✅ Multi-step orchestration with dependencies
+- ✅ Visual execution tracking
+
+**How It Works:**
+The pipeline uses protocol-specific plugins that:
+- Call Jupiter's quote API to get optimal swap route and accounts
+- Derive Kamino PDAs (lending market, reserve, user ATAs)
+- Resolve all required accounts automatically
+- Handle complex account structures without user intervention
+
+**Batching Strategy:**
+- Uses `strategy: 'auto'` (default)
+- Jupiter swap executes in transaction 1
+- Kamino deposit executes in transaction 2
+- Cannot batch because deposit depends on swap's on-chain result
+- Total: 2 transactions, ~0.00001 SOL in fees
+
+**Technical Details:**
+- IDL files stored in `lib/idls/`
+- Registry setup in `lib/idl-registry.ts`
+- Pipeline hook in `components/pipeline/examples/jupiter-kamino.tsx`
+- Plugins automatically discover accounts via Jupiter/Kamino APIs
 
 ## 🤝 Contributing
 

@@ -1,11 +1,12 @@
 {
   "name": "@pipeit/tx-builder",
-  "version": "0.1.0",
-  "description": "High-level builder API for Solana transactions (beginner-friendly)",
+  "version": "0.2.0",
+  "description": "Type-safe transaction builder for Solana with smart defaults",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "typings": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -32,14 +33,72 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "gill": "^0.12.0"
+    "@solana/kit": "^5.0.0",
+    "@solana/addresses": "*",
+    "@solana/codecs-strings": "*",
+    "@solana/errors": "*",
+    "@solana/functional": "*",
+    "@solana/instruction-plans": "*",
+    "@solana/instructions": "*",
+    "@solana/programs": "*",
+    "@solana/rpc": "*",
+    "@solana/rpc-subscriptions": "*",
+    "@solana/rpc-types": "*",
+    "@solana/signers": "*",
+    "@solana/transaction-messages": "*",
+    "@solana/transactions": "*"
   },
-  "dependencies": {
-    "@pipeit/tx-core": "workspace:*",
-    "@pipeit/tx-errors": "workspace:*"
+  "peerDependenciesMeta": {
+    "@solana/addresses": {
+      "optional": false
+    },
+    "@solana/functional": {
+      "optional": false
+    },
+    "@solana/instruction-plans": {
+      "optional": false
+    },
+    "@solana/instructions": {
+      "optional": false
+    },
+    "@solana/programs": {
+      "optional": false
+    },
+    "@solana/rpc": {
+      "optional": false
+    },
+    "@solana/rpc-subscriptions": {
+      "optional": false
+    },
+    "@solana/rpc-types": {
+      "optional": false
+    },
+    "@solana/signers": {
+      "optional": false
+    },
+    "@solana/transaction-messages": {
+      "optional": false
+    },
+    "@solana/transactions": {
+      "optional": false
+    }
   },
+  "dependencies": {},
   "devDependencies": {
-    "gill": "^0.12.0",
+    "@solana/addresses": "*",
+    "@solana/codecs-strings": "*",
+    "@solana/errors": "*",
+    "@solana/functional": "*",
+    "@solana/instruction-plans": "*",
+    "@solana/instructions": "*",
+    "@solana/kit": "^5.0.0",
+    "@solana/programs": "*",
+    "@solana/rpc": "*",
+    "@solana/rpc-subscriptions": "*",
+    "@solana/rpc-types": "*",
+    "@solana/signers": "*",
+    "@solana/transaction-messages": "*",
+    "@solana/transactions": "*",
     "@types/node": "^24",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
