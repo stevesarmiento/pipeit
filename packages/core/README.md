@@ -8,39 +8,27 @@ Type-safe transaction builder for Solana with smart defaults, multi-step flows, 
 pnpm install @pipeit/core @solana/kit
 ```
 
-## Features
-
-- Type-safe builder with compile-time validation
-- Auto-blockhash fetching
-- Built-in transaction validation
-- Simulation support
-- Export in multiple formats (base64, base58, bytes)
-- Compute budget (priority fees & compute limits)
-- Auto-retry with exponential backoff
-- Comprehensive error handling
-- **Multi-step flows** with context passing between steps
-- **Kit integration** - re-exports `@solana/instruction-plans` for advanced planning
-
 ## Quick Start
 
 ### Single Transaction
 
 ```typescript
 import { TransactionBuilder } from '@pipeit/core';
-import { createSolanaRpc, createSolanaRpcSubscriptions, address } from '@solana/kit';
+import { createSolanaRpc, createSolanaRpcSubscriptions } from '@solana/kit';
 
 const rpc = createSolanaRpc('https://api.mainnet-beta.solana.com');
-const rpcSubs = createSolanaRpcSubscriptions('wss://api.mainnet-beta.solana.com');
+const rpcSubscriptions = createSolanaRpcSubscriptions('wss://api.mainnet-beta.solana.com');
 
-// Build and execute
+// Build and execute with auto-blockhash, auto-retry, and priority fees
 const signature = await new TransactionBuilder({ 
   rpc,
   autoRetry: true,
-  priorityLevel: 'high' 
+  priorityFee: 'high',
+  logLevel: 'verbose'
 })
-  .setFeePayer(address('...'))
+  .setFeePayerSigner(signer)
   .addInstruction(instruction)
-  .execute({ rpcSubscriptions: rpcSubs });
+  .execute({ rpcSubscriptions });
 ```
 
 ### Multi-Step Flows
@@ -76,24 +64,76 @@ const plan = sequentialInstructionPlan([ix1, ix2, ix3, ix4, ix5]);
 const result = await executePlan(plan, { rpc, rpcSubscriptions, signer });
 ```
 
-## TransactionBuilder Usage
+## TransactionBuilder API
 
-### Build Message Only
+### Configuration
 
 ```typescript
-const message = await new TransactionBuilder({ rpc })
-  .setFeePayer(address('...'))
-  .addInstruction(instruction)
-  .build(); // Blockhash automatically fetched!
+interface TransactionBuilderConfig {
+  version?: 0 | 'legacy';
+  rpc?: Rpc<GetLatestBlockhashApi & GetAccountInfoApi>;
+  autoRetry?: boolean | { maxAttempts: number; backoff: 'linear' | 'exponential' };
+  logLevel?: 'silent' | 'minimal' | 'verbose';
+  priorityFee?: PriorityFeeLevel | PriorityFeeConfig;
+  computeUnits?: 'auto' | number | ComputeUnitConfig;
+  lookupTableAddresses?: Address[];
+  addressesByLookupTable?: AddressesByLookupTableAddress;
+}
 ```
 
-### Simulate Before Sending
+### Methods
+
+#### Setting Fee Payer
 
 ```typescript
-const result = await new TransactionBuilder({ rpc })
-  .setFeePayer(address('...'))
-  .addInstruction(instruction)
-  .simulate();
+// Use setFeePayerSigner when executing (recommended)
+builder.setFeePayerSigner(signer)
+
+// Use setFeePayer when only building/exporting
+builder.setFeePayer(address('...'))
+```
+
+#### Setting Lifetime
+
+```typescript
+// Blockhash lifetime (auto-fetched if RPC provided)
+builder.setBlockhashLifetime(blockhash, lastValidBlockHeight)
+
+// Durable nonce lifetime
+builder.setDurableNonceLifetime(nonce, nonceAccountAddress, nonceAuthorityAddress)
+
+// Static factory for durable nonce (auto-fetches nonce)
+const builder = await TransactionBuilder.withDurableNonce({
+  rpc,
+  nonceAccountAddress: address('...'),
+  nonceAuthorityAddress: address('...'),
+});
+```
+
+#### Adding Instructions
+
+```typescript
+// Single instruction
+builder.addInstruction(instruction)
+
+// Multiple instructions
+builder.addInstructions([ix1, ix2, ix3])
+
+// With auto-packing (returns overflow instructions)
+const { builder: packed, overflow } = await builder.addInstructionsWithPacking(manyInstructions);
+```
+
+#### Building
+
+```typescript
+// Build transaction message (auto-fetches blockhash if RPC provided)
+const message = await builder.build();
+```
+
+#### Simulating
+
+```typescript
+const result = await builder.simulate();
 
 if (result.err) {
   console.error('Simulation failed:', result.logs);
@@ -102,21 +142,112 @@ if (result.err) {
 }
 ```
 
-### Execute with Auto-Retry
+#### Executing
 
 ```typescript
-const signature = await new TransactionBuilder({ 
-  rpc,
-  autoRetry: { maxAttempts: 5, backoff: 'exponential' }
+// Basic execution
+const signature = await builder.execute({ rpcSubscriptions });
+
+// With execution options
+const signature = await builder.execute({
+  rpcSubscriptions,
+  commitment: 'confirmed',
+  skipPreflight: false,
+  skipPreflightOnRetry: true,
+  maxRetries: 5,
+  preflightCommitment: 'confirmed',
+});
+```
+
+#### Exporting
+
+```typescript
+// Export as base64 (default, for RPC)
+const { data: base64Tx } = await builder.export('base64');
+
+// Export as base58 (human-readable, for QR codes)
+const { data: base58Tx } = await builder.export('base58');
+
+// Export as bytes (for hardware wallets)
+const { data: bytes } = await builder.export('bytes');
+```
+
+#### Size Information
+
+```typescript
+const info = await builder.getSizeInfo();
+console.log(`Using ${info.percentUsed.toFixed(1)}% of transaction space`);
+console.log(`${info.remaining} bytes remaining`);
+```
+
+### Priority Fees
+
+Priority fees can be configured using preset levels or custom strategies:
+
+```typescript
+// Preset levels
+new TransactionBuilder({ priorityFee: 'none' })    // 0 micro-lamports/CU
+new TransactionBuilder({ priorityFee: 'low' })     // 1,000 micro-lamports/CU
+new TransactionBuilder({ priorityFee: 'medium' })  // 10,000 micro-lamports/CU (default)
+new TransactionBuilder({ priorityFee: 'high' })     // 50,000 micro-lamports/CU
+new TransactionBuilder({ priorityFee: 'veryHigh' }) // 100,000 micro-lamports/CU
+
+// Custom fixed fee
+new TransactionBuilder({ 
+  priorityFee: { 
+    strategy: 'fixed', 
+    microLamports: 25_000 
+  } 
 })
-  .setFeePayer(address('...'))
-  .addInstruction(instruction)
-  .execute({ rpcSubscriptions });
+
+// Percentile-based estimation (requires RPC)
+new TransactionBuilder({ 
+  priorityFee: { 
+    strategy: 'percentile', 
+    percentile: 75  // Use 75th percentile of recent fees
+  } 
+})
+```
+
+### Compute Units
+
+```typescript
+// Auto (no explicit instruction, uses default)
+new TransactionBuilder({ computeUnits: 'auto' })
+
+// Fixed limit
+new TransactionBuilder({ computeUnits: 300_000 })
+
+// Custom strategy
+new TransactionBuilder({ 
+  computeUnits: { 
+    strategy: 'fixed', 
+    units: 400_000 
+  } 
+})
+```
+
+### Address Lookup Tables
+
+Address lookup tables automatically compress transactions for version 0 transactions:
+
+```typescript
+// Provide ALT addresses (will be fetched automatically)
+new TransactionBuilder({ 
+  version: 0,
+  lookupTableAddresses: [address('...'), address('...')]
+})
+
+// Or provide pre-fetched ALT data
+new TransactionBuilder({ 
+  version: 0,
+  addressesByLookupTable: { /* pre-fetched data */ }
+})
 ```
 
 ## Flow API
 
-The Flow API is designed for multi-step transaction workflows where later instructions may depend on the results of earlier ones.
+The Flow API orchestrates multi-step transaction workflows where later instructions may depend on previous results.
 
 ### Creating a Flow
 
@@ -132,23 +263,19 @@ const result = await createFlow({ rpc, rpcSubscriptions, signer })
   .execute();
 ```
 
-### Flow Context
+### Step Types
 
-Each step receives a `FlowContext` with:
+**Instruction Steps** - Automatically batched into single transactions:
 
 ```typescript
-interface FlowContext {
-  results: Map<string, FlowStepResult>;  // All previous results
-  signer: TransactionSigner;              // The transaction signer
-  rpc: Rpc<...>;                          // RPC client
-  rpcSubscriptions: RpcSubscriptions<...>;
-  get: (stepName: string) => FlowStepResult | undefined;  // Convenience method
-}
+flow.step('transfer', (ctx) => getTransferSolInstruction({
+  source: ctx.signer,
+  destination: recipient,
+  amount: lamports(1_000_000n),
+}));
 ```
 
-### Atomic Groups
-
-Group instructions that must execute together in one transaction:
+**Atomic Groups** - Instructions that must execute together:
 
 ```typescript
 flow.atomic('swap', [
@@ -158,9 +285,45 @@ flow.atomic('swap', [
 ]);
 ```
 
-### Lifecycle Hooks
+**Transaction Steps** - Custom async operations that break batching:
 
-Monitor flow execution:
+```typescript
+flow.transaction('verify-state', async (ctx) => {
+  const prevResult = ctx.get('create-account');
+  // Custom logic that needs the previous transaction confirmed
+  const accountInfo = await ctx.rpc.getAccountInfo(accountAddress).send();
+  return { signature: prevResult?.signature ?? '', verified: !!accountInfo };
+});
+```
+
+### Flow Context
+
+Each step receives a `FlowContext`:
+
+```typescript
+interface FlowContext {
+  results: Map<string, FlowStepResult>;  // All previous results
+  signer: TransactionSigner;             // The transaction signer
+  rpc: Rpc<FlowRpcApi>;                  // RPC client
+  rpcSubscriptions: RpcSubscriptions<FlowRpcSubscriptionsApi>;
+  get: (stepName: string) => FlowStepResult | undefined;  // Convenience method
+}
+```
+
+### Execution Strategies
+
+```typescript
+// Auto: Try batching, fallback to sequential if too large (default)
+createFlow({ rpc, rpcSubscriptions, signer, strategy: 'auto' })
+
+// Batch: Always batch consecutive instruction steps
+createFlow({ rpc, rpcSubscriptions, signer, strategy: 'batch' })
+
+// Sequential: Execute each step as separate transaction
+createFlow({ rpc, rpcSubscriptions, signer, strategy: 'sequential' })
+```
+
+### Lifecycle Hooks
 
 ```typescript
 createFlow({ rpc, rpcSubscriptions, signer })
@@ -171,71 +334,34 @@ createFlow({ rpc, rpcSubscriptions, signer })
   .execute();
 ```
 
-### Transaction Steps
+## Plans API
 
-Break out of batching for custom async operations:
-
-```typescript
-flow
-  .step('create', (ctx) => createInstruction)
-  .transaction('verify', async (ctx) => {
-    // Custom async operation between batches
-    const accountInfo = await ctx.rpc.getAccountInfo(address).send();
-    return { signature: ctx.get('create')?.signature ?? '' };
-  })
-  .step('finalize', (ctx) => finalizeInstruction);
-```
-
-## Exporting Transactions
-
-Sign and serialize transactions without sending:
+For advanced users who know all instructions upfront, Pipeit re-exports Kit's instruction-plans and provides a convenience helper:
 
 ```typescript
-// Export for custom RPC (base64 is default)
-const { data: base64Tx } = await new TransactionBuilder({ rpc })
-  .setFeePayer(address('...'))
-  .addInstruction(instruction)
-  .export('base64');
+import { 
+  sequentialInstructionPlan, 
+  parallelInstructionPlan,
+  executePlan 
+} from '@pipeit/core';
 
-// Export for QR code (human-readable)
-const { data: base58Tx } = await builder.export('base58');
+// Create a plan
+const plan = sequentialInstructionPlan([
+  parallelInstructionPlan([depositA, depositB]),
+  activateVault,
+  parallelInstructionPlan([withdrawA, withdrawB]),
+]);
 
-// Export raw bytes (hardware wallets)
-const { data: bytes } = await builder.export('bytes');
-```
-
-## Compute Budget & Priority Fees
-
-```typescript
-const builder = new TransactionBuilder({ 
+// Execute with TransactionBuilder features
+const result = await executePlan(plan, {
   rpc,
-  priorityLevel: 'high',      // 50,000 micro-lamports per CU
-  computeUnitLimit: 300_000   // Allow up to 300k compute units
+  rpcSubscriptions,
+  signer,
+  commitment: 'confirmed',
 });
 ```
 
-### Priority Levels
-
-| Level | Micro-lamports per CU |
-|-------|----------------------|
-| `none` | 0 |
-| `low` | 1,000 |
-| `medium` | 10,000 (default) |
-| `high` | 50,000 |
-| `veryHigh` | 100,000 |
-
-## Configuration
-
-```typescript
-interface TransactionBuilderConfig {
-  version?: 0 | 'legacy';
-  rpc?: Rpc<GetLatestBlockhashApi>;
-  autoRetry?: boolean | { maxAttempts: number; backoff: 'linear' | 'exponential' };
-  priorityLevel?: 'none' | 'low' | 'medium' | 'high' | 'veryHigh';
-  computeUnitLimit?: 'auto' | number;
-  logLevel?: 'silent' | 'minimal' | 'verbose';
-}
-```
+All Kit instruction-plans types and functions are re-exported. See [@solana/instruction-plans](https://github.com/solana-labs/solana-web3.js/tree/master/packages/instruction-plans) for full documentation.
 
 ## Error Handling
 
@@ -243,6 +369,8 @@ interface TransactionBuilderConfig {
 import { 
   isBlockhashExpiredError,
   isSimulationFailedError,
+  isTransactionTooLargeError,
+  TransactionTooLargeError,
   InsufficientFundsError
 } from '@pipeit/core';
 
@@ -253,19 +381,27 @@ try {
     console.error('Blockhash expired, retry with fresh blockhash');
   } else if (isSimulationFailedError(error)) {
     console.error('Simulation failed');
+  } else if (isTransactionTooLargeError(error)) {
+    console.error('Transaction too large, split into multiple transactions');
   } else if (error instanceof InsufficientFundsError) {
     console.error(`Need ${error.required} lamports, have ${error.available}`);
+  } else if (error instanceof TransactionTooLargeError) {
+    console.error(`Transaction size: ${error.size}, limit: ${error.limit}`);
   }
 }
 ```
 
-## API Reference
+## Type Exports
 
-### Main Exports
+### Main Classes
 
 - `TransactionBuilder` - Type-safe builder class
-- `createFlow` - Create multi-step transaction flows
 - `TransactionFlow` - Flow class for chaining
+
+### Functions
+
+- `createFlow` - Create multi-step transaction flows
+- `executePlan` - Execute Kit instruction plans with TransactionBuilder features
 
 ### Flow Types
 
@@ -274,27 +410,56 @@ try {
 - `FlowStepResult` - Result from a completed step
 - `FlowHooks` - Lifecycle hooks
 - `StepCreator` - Function that creates an instruction
+- `ExecutionStrategy` - 'auto' | 'batch' | 'sequential'
+
+### TransactionBuilder Types
+
+- `TransactionBuilderConfig` - Builder configuration
+- `SimulationResult` - Result from simulation
+- `ExportFormat` - 'base64' | 'base58' | 'bytes'
+- `ExportedTransaction` - Exported transaction data
+- `ExecuteConfig` - Execution options
+- `SendingConfig` - Sending options
+
+### Compute Budget Types
+
+- `PriorityFeeLevel` - 'none' | 'low' | 'medium' | 'high' | 'veryHigh'
+- `PriorityFeeConfig` - Custom priority fee configuration
+- `ComputeUnitConfig` - Compute unit configuration
+- `PriorityFeeEstimate` - Result from fee estimation
+
+### Nonce Types
+
+- `DurableNonceConfig` - Configuration for durable nonce
+- `NonceAccountData` - Parsed nonce account data
+- `FetchNonceResult` - Result from fetching nonce
+
+### Lookup Table Types
+
+- `AddressesByLookupTableAddress` - Lookup table data structure
+
+### Validation
+
+- `validateTransaction(message)` - Validate transaction has required fields
+- `validateTransactionSize(message)` - Validate transaction size
+- `getTransactionSizeInfo(message)` - Get size information
+- `TRANSACTION_SIZE_LIMIT` - Maximum transaction size constant
+
+### Errors
+
+- `TransactionTooLargeError` - Transaction exceeds size limit
+- `InsufficientFundsError` - Insufficient funds for transaction
+- `isBlockhashExpiredError(error)` - Check if error is blockhash expiration
+- `isSimulationFailedError(error)` - Check if error is simulation failure
+- `isTransactionTooLargeError(error)` - Check if error is transaction too large
 
 ### Kit Integration
 
-Re-exports from `@solana/instruction-plans`:
+All types and functions from `@solana/instruction-plans` are re-exported:
+- `InstructionPlan`, `TransactionPlan`, `TransactionPlanResult`
 - `sequentialInstructionPlan`, `parallelInstructionPlan`, `nonDivisibleSequentialInstructionPlan`
 - `createTransactionPlanner`, `createTransactionPlanExecutor`
-- `executePlan` - Helper to execute plans with TransactionBuilder features
-
-### Error Exports
-
-- Error classes and predicates
-- `isBlockhashExpiredError(error)`
-- `isSimulationFailedError(error)`
-- `isTransactionTooLargeError(error)`
-
-### Validation Exports
-
-- `validateTransaction(message)`
-- `validateTransactionSize(message)`
-- `estimateTransactionSize(message)`
-- `MAX_TRANSACTION_SIZE`
+- And more...
 
 ## License
 

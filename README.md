@@ -4,7 +4,7 @@ A comprehensive Solana transaction building library that reduces boilerplate and
 
 ## Packages
 
-- **@pipeit/tx-builder** - Main transaction builder with smart defaults, multi-step flows, and Kit instruction-plans integration
+- **@pipeit/core** - Main transaction builder with smart defaults, multi-step flows, and Kit instruction-plans integration
 - **@pipeit/actions** - High-level DeFi actions with pluggable protocol adapters (Jupiter, Raydium, etc.)
 
 ## Installation
@@ -22,15 +22,20 @@ pnpm install @pipeit/actions @solana/kit
 ### Single Transaction
 
 ```typescript
-import { TransactionBuilder } from '@pipeit/tx-builder';
+import { TransactionBuilder } from '@pipeit/core';
 import { createSolanaRpc, createSolanaRpcSubscriptions } from '@solana/kit';
 
 const rpc = createSolanaRpc('https://api.mainnet-beta.solana.com');
 const rpcSubscriptions = createSolanaRpcSubscriptions('wss://api.mainnet-beta.solana.com');
 
 // Auto-retry, auto-blockhash fetch, built-in validation
-const signature = await new TransactionBuilder({ rpc, autoRetry: true, logLevel: 'verbose' })
-  .setFeePayer(signer.address)
+const signature = await new TransactionBuilder({ 
+  rpc, 
+  autoRetry: true, 
+  priorityFee: 'high',
+  logLevel: 'verbose' 
+})
+  .setFeePayerSigner(signer)
   .addInstruction(yourInstruction)
   .execute({ rpcSubscriptions });
 ```
@@ -73,7 +78,7 @@ const result = await executePlan(plan, { rpc, rpcSubscriptions, signer });
 
 ```typescript
 const result = await new TransactionBuilder({ rpc })
-  .setFeePayer(signer.address)
+  .setFeePayerSigner(signer)
   .addInstruction(instruction)
   .simulate();
 
@@ -87,7 +92,8 @@ if (result.err) {
 ### High-Level DeFi Actions
 
 ```typescript
-import { pipe, jupiter } from '@pipeit/actions';
+import { pipe } from '@pipeit/actions';
+import { jupiter } from '@pipeit/actions/adapters';
 
 // Simple, composable DeFi actions
 const result = await pipe({
@@ -97,13 +103,27 @@ const result = await pipe({
   adapters: { swap: jupiter() }
 })
   .swap({ 
-    inputMint: SOL_MINT, 
-    outputMint: USDC_MINT, 
-    amount: 100_000_000n  // 0.1 SOL
+    inputMint: 'So11111111111111111111111111111111111111112', // SOL
+    outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
+    amount: 100_000_000n,  // 0.1 SOL
+    slippageBps: 50  // 0.5%
   })
   .execute();
 
 console.log('Swap completed:', result.signature);
+
+// Simulate before executing
+const simulation = await pipe({ rpc, rpcSubscriptions, signer, adapters: { swap: jupiter() } })
+  .swap({ 
+    inputMint: 'So11111111111111111111111111111111111111112', 
+    outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 
+    amount: 100_000_000n 
+  })
+  .simulate();
+
+if (simulation.success) {
+  console.log('Estimated compute units:', simulation.unitsConsumed);
+}
 ```
 
 ## Features
@@ -114,9 +134,14 @@ console.log('Swap completed:', result.signature);
 - **Type-Safe Builder**: Compile-time checks ensure all required fields are set
 - **Auto-Blockhash**: Automatically fetches latest blockhash when RPC provided
 - **Smart Defaults**: Opinionated configuration for common use cases
+- **Priority Fees**: Configurable priority fee levels (none, low, medium, high, veryHigh) or custom percentile-based estimation
+- **Compute Budget**: Automatic or custom compute unit limits
+- **Address Lookup Tables**: Automatic compression for versioned transactions
+- **Durable Nonce**: Built-in support for nonce-based transactions
 - **Auto-Retry**: Configurable retry with exponential backoff
 - **Built-in Validation**: Automatic transaction size and field validation
 - **Simulation**: Test transactions before sending
+- **Export Formats**: Export transactions as base64, base58, or raw bytes
 - **Comprehensive Logging**: Verbose error logs with simulation details
 
 **Multi-Step Flows:**
@@ -136,7 +161,10 @@ console.log('Swap completed:', result.signature);
 - **Pluggable Adapters**: Protocol-specific adapters (Jupiter, Raydium, etc.)
 - **API-Centric Design**: Delegates complexity to protocol APIs for reliability
 - **Fluent Builder**: Chain multiple actions with `.swap()`, `.add()`, etc.
-- **Built-in Hooks**: Monitor action progress with `onActionStart`, `onActionComplete`
+- **Simulation Support**: Test action sequences before execution
+- **Lifecycle Hooks**: Monitor action progress with `onActionStart`, `onActionComplete`, `onActionError`
+- **Abort Signal**: Cancel execution with AbortController
+- **Address Lookup Tables**: Automatic ALT handling for compressed transactions
 
 ## Development
 
