@@ -39,15 +39,17 @@ export function useJupiterSwapPipeline() {
 
         // Use TransactionBuilder to execute all Jupiter instructions
         const { TransactionBuilder } = await import('@pipeit/core');
+        const { address } = await import('@solana/kit');
         
-        // Get lookup table addresses from Jupiter response
-        const lookupTableAddresses = result.addressLookupTableAddresses ?? [];
+        // Get lookup table addresses from Jupiter response and convert to Address types
+        const lookupTables = result.addressLookupTableAddresses ?? [];
+        const lookupTableAddrs = lookupTables.map(addr => address(addr));
         
         const signature = await new TransactionBuilder({
           rpc: ctx.rpc as any,
-          computeUnits: (result as any).computeUnits ?? 400_000,
+          computeUnits: result.computeUnits ?? 400_000,
           // Use lookup tables to compress the transaction
-          lookupTableAddresses: lookupTableAddresses.length > 0 ? lookupTableAddresses as any : undefined,
+          lookupTableAddresses: lookupTableAddrs.length > 0 ? lookupTableAddrs : undefined,
         })
           .setFeePayerSigner(ctx.signer)
           .addInstructions(result.instructions)

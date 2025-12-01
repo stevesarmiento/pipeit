@@ -50,9 +50,9 @@ const transferInstruction = getTransferSolInstruction({
 const signature = await new TransactionBuilder({ 
   rpc,
   autoRetry: true, 
-  priorityLevel: 'medium' 
+  priorityFee: 'medium' 
 })
-  .setFeePayer(signer.address)
+  .setFeePayerSigner(signer)
   .addInstruction(transferInstruction)
   .execute({
     rpcSubscriptions,

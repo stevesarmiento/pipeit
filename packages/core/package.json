@@ -32,6 +32,15 @@
     "simplified"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stevesarmiento/pipeit.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/stevesarmiento/pipeit#readme",
+  "bugs": {
+    "url": "https://github.com/stevesarmiento/pipeit/issues"
+  },
   "peerDependencies": {
     "@solana/kit": "^5.0.0",
     "@solana/addresses": "*",

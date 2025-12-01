@@ -62,7 +62,7 @@ export function PipeitSolTransfer() {
                 priorityFee: 'medium', 
                 autoRetry: true 
             })
-                .setFeePayer(signer.address)
+                .setFeePayerSigner(signer)
                 .addInstruction(transferInstruction)
                 .execute({
                     rpcSubscriptions,
@@ -101,10 +101,10 @@ const transferInstruction = getTransferSolInstruction({
 // Send with opinionated API - smart defaults: auto-retry, priority fees
 const signature = await new TransactionBuilder({ 
   rpc,
-  priorityLevel: 'medium', 
+  priorityFee: 'medium', 
   autoRetry: true 
 })
-  .setFeePayer(signer.address)
+  .setFeePayerSigner(signer)
   .addInstruction(transferInstruction)
   .execute({
     rpcSubscriptions,

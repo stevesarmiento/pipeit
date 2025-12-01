@@ -14,7 +14,7 @@ export function Hero() {
                 </p>
                 <CopyButton 
                     textToCopy="npm install @pipeit/core"
-                    displayText={<code>npm i @pipeit/tx-core</code>}
+                    displayText={<code>npm i @pipeit/core</code>}
                     className="inline-flex items-center gap-2 bg-sand-100 rounded-lg px-4 py-2 font-berkeley-mono text-sm text-gray-900 hover:bg-sand-100/50 border border-sand-200 transition-colors"
                     iconClassName="text-gray-600"
                     iconClassNameCheck="text-gray-900"

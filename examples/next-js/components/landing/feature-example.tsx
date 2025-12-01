@@ -8,10 +8,12 @@ const featureExampleCode = `import { TransactionBuilder } from '@pipeit/core';
 import { getCreateAccountInstruction } from '@solana-program/system';
 import { address, lamports } from '@solana/kit';
 
-const signature = await transaction({
+const signature = await new TransactionBuilder({
+  rpc,
   autoRetry: true,
-  priorityLevel: 'high',
+  priorityFee: 'high',
 })
+  .setFeePayerSigner(signer)
   .addInstruction(getCreateAccountInstruction({
     payer: signer,
     newAccount: newAccountSigner,
@@ -31,9 +33,8 @@ const signature = await transaction({
     owner: signer,
   }))
   .execute({
-    feePayer: signer,
-    rpc,
     rpcSubscriptions,
+    commitment: 'confirmed',
   });`;
 
 export function FeatureExample() {
