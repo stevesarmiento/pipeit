@@ -61,8 +61,8 @@ const inter = localFont({
 });
 
 export const metadata: Metadata = {
-    title: 'ConnectorKit Example',
-    description: 'Example implementation of ConnectorKit React components',
+    title: 'Pipeit Example',
+    description: 'Example implementations of Pipeit core and actions',
 };
 
 export default function RootLayout({
