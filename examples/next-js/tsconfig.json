@@ -20,7 +20,7 @@
         ],
         "paths": {
             "@/*": ["./*"],
-            "@pipeit/tx-builder": ["../../packages/tx-builder/dist"]
+            "@pipeit/core": ["../../packages/core/dist"]
         }
     },
     "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

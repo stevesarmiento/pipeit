@@ -21,7 +21,7 @@ import type {
 } from '@solana/rpc-subscriptions';
 
 // =============================================================================
-// Shared RPC Types (used by both tx-builder and actions)
+// Shared RPC Types (used by both core and actions)
 // =============================================================================
 
 /**

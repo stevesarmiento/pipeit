@@ -1,5 +1,5 @@
 /**
- * @pipeit/tx-builder
+ * @pipeit/core
  *
  * Type-safe transaction builder for Solana with smart defaults.
  *

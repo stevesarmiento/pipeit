@@ -4,7 +4,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-const pipelineExampleCode = `import { createFlow } from '@pipeit/tx-builder';
+const pipelineExampleCode = `import { createFlow } from '@pipeit/core';
 import { getCreateAccountInstruction, getCloseAccountInstruction } from '@solana-program/system';
 
 const result = await createFlow({ rpc, rpcSubscriptions, signer })

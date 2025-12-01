@@ -35,7 +35,7 @@ const transactionMessage = pipe(
 const signedTransaction = await signTransaction([signer], transactionMessage);
 const signature = await sendTransaction(rpc, signedTransaction).send();`;
 
-const afterCode = `import { TransactionBuilder } from '@pipeit/tx-builder';
+const afterCode = `import { TransactionBuilder } from '@pipeit/core';
 import { getTransferSolInstruction } from '@solana-program/system';
 import { address, lamports } from '@solana/kit';
 

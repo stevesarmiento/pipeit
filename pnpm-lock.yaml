@@ -38,9 +38,9 @@ importers:
       '@pipeit/actions':
         specifier: workspace:*
         version: link:../../packages/actions
-      '@pipeit/tx-builder':
+      '@pipeit/core':
         specifier: workspace:*
-        version: link:../../packages/tx-builder
+        version: link:../../packages/core
       '@radix-ui/react-avatar':
         specifier: ^1.1.10
         version: 1.1.10(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -153,9 +153,9 @@ importers:
 
   packages/actions:
     devDependencies:
-      '@pipeit/tx-builder':
+      '@pipeit/core':
         specifier: workspace:*
-        version: link:../tx-builder
+        version: link:../core
       '@solana/addresses':
         specifier: '*'
         version: 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
@@ -190,7 +190,7 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@24.10.0)(@vitest/ui@3.2.4)(happy-dom@20.0.10)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(yaml@2.8.1)
 
-  packages/tx-builder:
+  packages/core:
     devDependencies:
       '@solana/addresses':
         specifier: '*'

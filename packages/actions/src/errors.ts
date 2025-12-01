@@ -2,7 +2,7 @@
  * Error types for @pipeit/actions.
  * 
  * These are actions-specific errors for common failure cases.
- * For general Solana/transaction errors, use @solana/errors or @pipeit/tx-builder.
+ * For general Solana/transaction errors, use @solana/errors or @pipeit/core.
  * 
  * @packageDocumentation
  */

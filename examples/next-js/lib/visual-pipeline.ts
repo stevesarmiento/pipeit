@@ -1,4 +1,4 @@
-import { TransactionFlow, type FlowConfig, type FlowStepResult } from '@pipeit/tx-builder';
+import { TransactionFlow, type FlowConfig, type FlowStepResult } from '@pipeit/core';
 
 /**
  * State of an individual pipeline step.

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { createFlow, type FlowConfig } from '@pipeit/tx-builder';
+import { createFlow, type FlowConfig } from '@pipeit/core';
 import { VisualPipeline } from '@/lib/visual-pipeline';
 import { getTransferSolInstruction } from '@solana-program/system';
 import { lamports } from '@solana/kit';
@@ -48,7 +48,7 @@ export function useBatchedTransfersPipeline() {
   return visualPipeline;
 }
 
-export const batchedTransfersCode = `import { createFlow } from '@pipeit/tx-builder';
+export const batchedTransfersCode = `import { createFlow } from '@pipeit/core';
 import { getTransferSolInstruction } from '@solana-program/system';
 import { address, lamports } from '@solana/kit';
 

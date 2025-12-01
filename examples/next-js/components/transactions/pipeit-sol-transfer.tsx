@@ -10,7 +10,7 @@ import {
 import { getTransferSolInstruction } from '@solana-program/system';
 
 const LAMPORTS_PER_SOL = 1_000_000_000n;
-import { TransactionBuilder } from '@pipeit/tx-builder';
+import { TransactionBuilder } from '@pipeit/core';
 import { useGillTransactionSigner, useCluster, useConnectorClient } from '@armadura/connector';
 import { TransactionForm } from './transaction-form';
 import { TransactionResult } from './transaction-result';
@@ -19,7 +19,7 @@ import { CodeComparison } from './code-comparison';
 /**
  * Pipeit SOL Transfer Component
  *
- * Demonstrates using @pipeit/tx-builder for simplified transaction creation.
+ * Demonstrates using @pipeit/core for simplified transaction creation.
  * This shows how pipeit reduces boilerplate compared to the manual Gill approach.
  */
 export function PipeitSolTransfer() {

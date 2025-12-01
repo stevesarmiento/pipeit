@@ -16,7 +16,7 @@ export default defineConfig((options) => ({
   clean: true,
   treeshake: true,
   external: [
-    '@pipeit/tx-builder',
+    '@pipeit/core',
     '@solana/kit',
     '@solana/addresses',
     '@solana/instructions',

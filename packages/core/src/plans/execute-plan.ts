@@ -78,7 +78,7 @@ export interface ExecutePlanConfig {
  * 
  * @example
  * ```ts
- * import { sequentialInstructionPlan, executePlan } from '@pipeit/tx-builder';
+ * import { sequentialInstructionPlan, executePlan } from '@pipeit/core';
  * 
  * // Create a plan with multiple instructions
  * const plan = sequentialInstructionPlan([
@@ -103,7 +103,7 @@ export interface ExecutePlanConfig {
  *   sequentialInstructionPlan, 
  *   parallelInstructionPlan,
  *   executePlan,
- * } from '@pipeit/tx-builder';
+ * } from '@pipeit/core';
  * 
  * const plan = sequentialInstructionPlan([
  *   parallelInstructionPlan([depositA, depositB]),

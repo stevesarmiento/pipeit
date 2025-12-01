@@ -23,7 +23,7 @@ import {
   TransactionBuilder,
   fetchAddressLookupTables,
   type AddressesByLookupTableAddress,
-} from '@pipeit/tx-builder';
+} from '@pipeit/core';
 import { address } from '@solana/addresses';
 import type { Instruction } from '@solana/instructions';
 import type {
@@ -333,7 +333,7 @@ export class Pipe {
       ? (totalComputeUnits > 0 ? totalComputeUnits : 400_000)
       : (this.config.computeUnits ?? (totalComputeUnits > 0 ? totalComputeUnits : 400_000));
 
-    // Build and simulate using tx-builder with config options
+    // Build and simulate using core with config options
     const result = await new TransactionBuilder({
       rpc: this.config.rpc,
       computeUnits,

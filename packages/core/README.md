@@ -1,11 +1,11 @@
-# @pipeit/tx-builder
+# @pipeit/core
 
 Type-safe transaction builder for Solana with smart defaults, multi-step flows, and Kit instruction-plans integration.
 
 ## Installation
 
 ```bash
-pnpm install @pipeit/tx-builder @solana/kit
+pnpm install @pipeit/core @solana/kit
 ```
 
 ## Features
@@ -26,7 +26,7 @@ pnpm install @pipeit/tx-builder @solana/kit
 ### Single Transaction
 
 ```typescript
-import { TransactionBuilder } from '@pipeit/tx-builder';
+import { TransactionBuilder } from '@pipeit/core';
 import { createSolanaRpc, createSolanaRpcSubscriptions, address } from '@solana/kit';
 
 const rpc = createSolanaRpc('https://api.mainnet-beta.solana.com');
@@ -48,7 +48,7 @@ const signature = await new TransactionBuilder({
 For workflows where instructions depend on previous results:
 
 ```typescript
-import { createFlow } from '@pipeit/tx-builder';
+import { createFlow } from '@pipeit/core';
 
 const result = await createFlow({ rpc, rpcSubscriptions, signer })
   .step('create-account', (ctx) => createAccountInstruction(...))
@@ -70,7 +70,7 @@ const result = await createFlow({ rpc, rpcSubscriptions, signer })
 For advanced users who know all instructions upfront:
 
 ```typescript
-import { sequentialInstructionPlan, executePlan } from '@pipeit/tx-builder';
+import { sequentialInstructionPlan, executePlan } from '@pipeit/core';
 
 const plan = sequentialInstructionPlan([ix1, ix2, ix3, ix4, ix5]);
 const result = await executePlan(plan, { rpc, rpcSubscriptions, signer });
@@ -121,7 +121,7 @@ The Flow API is designed for multi-step transaction workflows where later instru
 ### Creating a Flow
 
 ```typescript
-import { createFlow } from '@pipeit/tx-builder';
+import { createFlow } from '@pipeit/core';
 
 const result = await createFlow({ rpc, rpcSubscriptions, signer })
   .step('step1', (ctx) => instruction1)
@@ -244,7 +244,7 @@ import {
   isBlockhashExpiredError,
   isSimulationFailedError,
   InsufficientFundsError
-} from '@pipeit/tx-builder';
+} from '@pipeit/core';
 
 try {
   const sig = await builder.execute({ rpcSubscriptions });

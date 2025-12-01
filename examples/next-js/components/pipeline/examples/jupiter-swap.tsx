@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { createFlow, type FlowConfig } from '@pipeit/tx-builder';
+import { createFlow, type FlowConfig } from '@pipeit/core';
 import { VisualPipeline } from '@/lib/visual-pipeline';
 import { jupiter } from '@pipeit/actions/adapters';
 
@@ -38,7 +38,7 @@ export function useJupiterSwapPipeline() {
         });
 
         // Use TransactionBuilder to execute all Jupiter instructions
-        const { TransactionBuilder } = await import('@pipeit/tx-builder');
+        const { TransactionBuilder } = await import('@pipeit/core');
         
         // Get lookup table addresses from Jupiter response
         const lookupTableAddresses = result.addressLookupTableAddresses ?? [];

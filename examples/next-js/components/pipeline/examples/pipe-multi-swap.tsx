@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { createFlow, type FlowConfig } from '@pipeit/tx-builder';
+import { createFlow, type FlowConfig } from '@pipeit/core';
 import { VisualPipeline } from '@/lib/visual-pipeline';
 import { jupiter } from '@pipeit/actions/adapters';
 
@@ -42,7 +42,7 @@ export function usePipeMultiSwapPipeline() {
             rpcSubscriptions: ctx.rpcSubscriptions as any,
           });
 
-          const { TransactionBuilder } = await import('@pipeit/tx-builder');
+          const { TransactionBuilder } = await import('@pipeit/core');
           const { address } = await import('@solana/kit');
           
           const lookupTables = result.addressLookupTableAddresses ?? [];
@@ -84,7 +84,7 @@ export function usePipeMultiSwapPipeline() {
             rpcSubscriptions: ctx.rpcSubscriptions as any,
           });
 
-          const { TransactionBuilder } = await import('@pipeit/tx-builder');
+          const { TransactionBuilder } = await import('@pipeit/core');
           const { address } = await import('@solana/kit');
           
           const lookupTables = result.addressLookupTableAddresses ?? [];

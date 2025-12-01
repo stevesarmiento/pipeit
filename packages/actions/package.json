@@ -45,7 +45,7 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@pipeit/tx-builder": "^0.2.0",
+    "@pipeit/core": "^0.2.0",
     "@solana/kit": "^5.0.0",
     "@solana/addresses": "*",
     "@solana/instructions": "*",
@@ -55,7 +55,7 @@
     "@solana/transactions": "*"
   },
   "devDependencies": {
-    "@pipeit/tx-builder": "workspace:*",
+    "@pipeit/core": "workspace:*",
     "@solana/addresses": "*",
     "@solana/instructions": "*",
     "@solana/kit": "^5.0.0",

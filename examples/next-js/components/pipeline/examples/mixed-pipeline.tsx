@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { createFlow, type FlowConfig } from '@pipeit/tx-builder';
+import { createFlow, type FlowConfig } from '@pipeit/core';
 import { VisualPipeline } from '@/lib/visual-pipeline';
 import { getTransferSolInstruction } from '@solana-program/system';
 import { lamports } from '@solana/kit';
@@ -67,7 +67,7 @@ export function useMixedPipeline() {
   return visualPipeline;
 }
 
-export const mixedPipelineCode = `import { createFlow } from '@pipeit/tx-builder';
+export const mixedPipelineCode = `import { createFlow } from '@pipeit/core';
 
 const result = await createFlow({ rpc, rpcSubscriptions, signer })
   .step('setup-1', (ctx) => createSetupInstruction1())

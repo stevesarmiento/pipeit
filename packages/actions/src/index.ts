@@ -54,7 +54,7 @@ export type {
   SwapAdapter,
   SwapParams,
   SwapResult,
-  // Re-exported from tx-builder for convenience
+  // Re-exported from core for convenience
   PriorityFeeLevel,
   PriorityFeeConfig,
 } from './types.js';

@@ -13,7 +13,7 @@ export function Hero() {
                     Type-safe, composable transaction builder with automatic retry, priority fees, and smart defaults built on top of @solana/kit. 
                 </p>
                 <CopyButton 
-                    textToCopy="npm install @pipeit/tx-builder"
+                    textToCopy="npm install @pipeit/core"
                     displayText={<code>npm i @pipeit/tx-core</code>}
                     className="inline-flex items-center gap-2 bg-sand-100 rounded-lg px-4 py-2 font-berkeley-mono text-sm text-gray-900 hover:bg-sand-100/50 border border-sand-200 transition-colors"
                     iconClassName="text-gray-600"

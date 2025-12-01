@@ -7,7 +7,7 @@ import {
   createFlow,
   type FlowConfig,
   type TransactionFlow,
-} from '@pipeit/tx-builder';
+} from '@pipeit/core';
 import { VisualPipeline } from '@/lib/visual-pipeline';
 import { getTransferSolInstruction } from '@solana-program/system';
 import { lamports } from '@solana/kit';
@@ -68,7 +68,7 @@ export function useInstructionPlanPipeline() {
 export const instructionPlanCode = `import { 
   executePlan, 
   sequentialInstructionPlan 
-} from '@pipeit/tx-builder';
+} from '@pipeit/core';
 import { getTransferSolInstruction } from '@solana-program/system';
 import { address, lamports } from '@solana/kit';
 

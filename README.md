@@ -11,7 +11,7 @@ A comprehensive Solana transaction building library that reduces boilerplate and
 
 ```bash
 # Main builder package (recommended for most users)
-pnpm install @pipeit/tx-builder @solana/kit
+pnpm install @pipeit/core @solana/kit
 
 # High-level DeFi actions
 pnpm install @pipeit/actions @solana/kit
@@ -40,7 +40,7 @@ const signature = await new TransactionBuilder({ rpc, autoRetry: true, logLevel:
 For workflows where instructions depend on previous results:
 
 ```typescript
-import { createFlow } from '@pipeit/tx-builder';
+import { createFlow } from '@pipeit/core';
 
 const result = await createFlow({ rpc, rpcSubscriptions, signer })
   .step('create-account', (ctx) => createAccountInstruction(...))
@@ -62,7 +62,7 @@ const result = await createFlow({ rpc, rpcSubscriptions, signer })
 For advanced users who know all instructions upfront:
 
 ```typescript
-import { sequentialInstructionPlan, executePlan } from '@pipeit/tx-builder';
+import { sequentialInstructionPlan, executePlan } from '@pipeit/core';
 
 // Kit's instruction-plans are re-exported for advanced use cases
 const plan = sequentialInstructionPlan([ix1, ix2, ix3, ix4, ix5]);
@@ -108,7 +108,7 @@ console.log('Swap completed:', result.signature);
 
 ## Features
 
-### @pipeit/tx-builder
+### @pipeit/core
 
 **Single Transactions:**
 - **Type-Safe Builder**: Compile-time checks ensure all required fields are set

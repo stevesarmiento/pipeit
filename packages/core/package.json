@@ -1,5 +1,5 @@
 {
-  "name": "@pipeit/tx-builder",
+  "name": "@pipeit/core",
   "version": "0.2.0",
   "description": "Type-safe transaction builder for Solana with smart defaults",
   "type": "module",

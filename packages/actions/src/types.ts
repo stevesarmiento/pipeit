@@ -17,24 +17,24 @@ import type {
   BaseContext,
   PriorityFeeLevel,
   PriorityFeeConfig,
-} from '@pipeit/tx-builder';
+} from '@pipeit/core';
 
-// Re-export tx-builder types for convenience
-export type { PriorityFeeLevel, PriorityFeeConfig } from '@pipeit/tx-builder';
+// Re-export core types for convenience
+export type { PriorityFeeLevel, PriorityFeeConfig } from '@pipeit/core';
 
 // =============================================================================
-// Re-export shared types from tx-builder with action-specific aliases
+// Re-export shared types from core with action-specific aliases
 // =============================================================================
 
 /**
  * Minimum RPC API required for actions.
- * Re-exported from tx-builder for convenience.
+ * Re-exported from core for convenience.
  */
 export type ActionsRpcApi = FlowRpcApi;
 
 /**
  * Minimum RPC subscriptions API required for actions.
- * Re-exported from tx-builder for convenience.
+ * Re-exported from core for convenience.
  */
 export type ActionsRpcSubscriptionsApi = FlowRpcSubscriptionsApi;
 
@@ -45,7 +45,7 @@ export type ActionsRpcSubscriptionsApi = FlowRpcSubscriptionsApi;
 /**
  * Context passed to all actions during execution.
  * Contains the RPC clients and signer needed to build instructions.
- * Extends BaseContext from tx-builder.
+ * Extends BaseContext from core.
  */
 export interface ActionContext extends BaseContext {}
 
@@ -142,7 +142,7 @@ export interface SwapAdapter {
 
 /**
  * Configuration for creating a pipe.
- * Extends BaseContext from tx-builder with action-specific configuration.
+ * Extends BaseContext from core with action-specific configuration.
  */
 export interface PipeConfig extends BaseContext {
   /** Configured adapters for different action types */

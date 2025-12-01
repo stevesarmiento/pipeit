@@ -11,7 +11,7 @@
     "dependencies": {
         "@phosphor-icons/react": "^2.1.10",
         "@pipeit/actions": "workspace:*",
-        "@pipeit/tx-builder": "workspace:*",
+        "@pipeit/core": "workspace:*",
         "@radix-ui/react-avatar": "^1.1.10",
         "@radix-ui/react-dialog": "^1.1.15",
         "@radix-ui/react-dropdown-menu": "^2.1.16",
