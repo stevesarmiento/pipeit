@@ -43,10 +43,7 @@ Thumbs.db
 .changeset/*.md
 
 # research
-/kit-main 3/
-/effect-main 2/
-/gill-master 2/
-/visual-effect-main/
+/references/
 
 .pnpm-store/
 
