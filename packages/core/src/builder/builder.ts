@@ -853,18 +853,67 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
   /**
    * Verify that a transaction executed successfully (no program errors).
    * This catches false positives where a transaction is confirmed but failed execution.
+   * 
+   * Uses `searchTransactionHistory: true` to perform a ledger lookup instead of relying
+   * on the RPC's in-memory cache. Retries with exponential backoff if the status is null
+   * (not yet available), throwing only after all attempts are exhausted.
    */
   private async verifyTransactionSuccess(
     rpc: Rpc<GetSignatureStatusesApi>,
-    signature: string
+    signature: string,
+    options?: {
+      /** Maximum number of retry attempts (default: 5) */
+      maxAttempts?: number;
+      /** Initial delay in milliseconds before first retry (default: 500) */
+      initialDelayMs?: number;
+      /** Maximum delay in milliseconds between retries (default: 4000) */
+      maxDelayMs?: number;
+    }
   ): Promise<void> {
-    const { value: statuses } = await rpc
-      .getSignatureStatuses([signature as any])
-      .send();
+    const {
+      maxAttempts = 5,
+      initialDelayMs = 500,
+      maxDelayMs = 4000,
+    } = options ?? {};
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const { value: statuses } = await rpc
+        .getSignatureStatuses([signature as any], {
+          searchTransactionHistory: true,
+        })
+        .send();
 
-    const status = statuses[0];
-    if (status?.err) {
-      throw new TransactionExecutionError(signature, status.err);
+      const status = statuses[0];
+      
+      // If we got a definitive status, check for errors
+      if (status !== null) {
+        if (status.err) {
+          throw new TransactionExecutionError(signature, status.err);
+        }
+        // Transaction executed successfully
+        return;
+      }
+      
+      // Status is null - not yet available in ledger
+      if (attempt === maxAttempts) {
+        // Exhausted all attempts without getting a definitive status
+        throw new Error(
+          `Unable to verify transaction status after ${maxAttempts} attempts. ` +
+          `Signature: ${signature}. The transaction may have landed but status could not be confirmed.`
+        );
+      }
+      
+      // Calculate delay with exponential backoff, capped at maxDelayMs
+      const delay = Math.min(
+        initialDelayMs * Math.pow(2, attempt - 1),
+        maxDelayMs
+      );
+      
+      if (this.config.logLevel === 'verbose') {
+        console.log(`[Pipeit] Transaction status not yet available, retrying in ${delay}ms (attempt ${attempt}/${maxAttempts})`);
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 
