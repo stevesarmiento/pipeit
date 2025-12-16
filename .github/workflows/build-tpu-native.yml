@@ -71,7 +71,7 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       - name: Build
-        run: pnpm build --target ${{ matrix.settings.target }}
+        run: pnpm exec napi build --platform --release --target ${{ matrix.settings.target }}
         shell: bash
         working-directory: packages/fastlane
 
