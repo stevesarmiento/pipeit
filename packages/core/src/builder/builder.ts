@@ -776,10 +776,14 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         console.log(`[Pipeit] Transaction landed via ${result.landedVia}${result.latencyMs ? ` in ${result.latencyMs}ms` : ''}`);
       }
       
-      // Now confirm the transaction using standard confirmation
-      await this.confirmTransaction(result.signature, rpcSubscriptions, commitment);
+      // For TPU submissions, skip confirmation - transaction was delivered directly to validators.
+      // RPC/WebSocket may not see it immediately (TPU bypasses RPC), so we return immediately.
+      if (result.landedVia === 'tpu') {
+        return result.signature;
+      }
       
-      // Verify transaction execution status (catch false positives)
+      // For Jito/parallel, use WebSocket confirmation + verification
+      await this.confirmTransaction(result.signature, rpcSubscriptions, commitment);
       await this.verifyTransactionSuccess(rpc, result.signature);
       
       return result.signature;
