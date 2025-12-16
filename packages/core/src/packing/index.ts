@@ -23,18 +23,18 @@ export type SizeableTransactionMessage = TransactionMessage & TransactionMessage
  * Result of packing instructions into a transaction message.
  */
 export interface PackResult<T extends SizeableTransactionMessage = SizeableTransactionMessage> {
-  /** Instructions that fit in the message */
-  packed: Instruction[];
-  /** Instructions that did not fit (overflow) */
-  overflow: Instruction[];
-  /** The message with packed instructions */
-  message: T;
-  /** Size information */
-  sizeInfo: {
-    size: number;
-    limit: number;
-    remaining: number;
-  };
+    /** Instructions that fit in the message */
+    packed: Instruction[];
+    /** Instructions that did not fit (overflow) */
+    overflow: Instruction[];
+    /** The message with packed instructions */
+    message: T;
+    /** Size information */
+    sizeInfo: {
+        size: number;
+        limit: number;
+        remaining: number;
+    };
 }
 
 /**
@@ -64,45 +64,45 @@ export interface PackResult<T extends SizeableTransactionMessage = SizeableTrans
  * ```
  */
 export function packInstructions<T extends SizeableTransactionMessage>(
-  baseMessage: T,
-  instructions: Instruction[],
-  options?: {
-    /** Reserve bytes for future instructions (default: 0) */
-    reserveBytes?: number;
-  }
-): PackResult<T> {
-  const reserveBytes = options?.reserveBytes ?? 0;
-  const effectiveLimit = TRANSACTION_SIZE_LIMIT - reserveBytes;
-
-  const packed: Instruction[] = [];
-  let message = baseMessage as SizeableTransactionMessage;
-
-  for (const instruction of instructions) {
-    const testMessage = appendTransactionMessageInstruction(instruction, message);
-    const testSize = getTransactionMessageSize(testMessage as SizeableTransactionMessage);
-
-    if (testSize <= effectiveLimit) {
-      packed.push(instruction);
-      message = testMessage as SizeableTransactionMessage;
-    } else {
-      // This instruction doesn't fit, stop here
-      break;
-    }
-  }
-
-  const overflow = instructions.slice(packed.length);
-  const size = getTransactionMessageSize(message);
-
-  return {
-    packed,
-    overflow,
-    message: message as T,
-    sizeInfo: {
-      size,
-      limit: TRANSACTION_SIZE_LIMIT,
-      remaining: TRANSACTION_SIZE_LIMIT - size,
+    baseMessage: T,
+    instructions: Instruction[],
+    options?: {
+        /** Reserve bytes for future instructions (default: 0) */
+        reserveBytes?: number;
     },
-  };
+): PackResult<T> {
+    const reserveBytes = options?.reserveBytes ?? 0;
+    const effectiveLimit = TRANSACTION_SIZE_LIMIT - reserveBytes;
+
+    const packed: Instruction[] = [];
+    let message = baseMessage as SizeableTransactionMessage;
+
+    for (const instruction of instructions) {
+        const testMessage = appendTransactionMessageInstruction(instruction, message);
+        const testSize = getTransactionMessageSize(testMessage as SizeableTransactionMessage);
+
+        if (testSize <= effectiveLimit) {
+            packed.push(instruction);
+            message = testMessage as SizeableTransactionMessage;
+        } else {
+            // This instruction doesn't fit, stop here
+            break;
+        }
+    }
+
+    const overflow = instructions.slice(packed.length);
+    const size = getTransactionMessageSize(message);
+
+    return {
+        packed,
+        overflow,
+        message: message as T,
+        sizeInfo: {
+            size,
+            limit: TRANSACTION_SIZE_LIMIT,
+            remaining: TRANSACTION_SIZE_LIMIT - size,
+        },
+    };
 }
 
 /**
@@ -121,12 +121,9 @@ export function packInstructions<T extends SizeableTransactionMessage>(
  * }
  * ```
  */
-export function canFitInstruction(
-  message: SizeableTransactionMessage,
-  instruction: Instruction
-): boolean {
-  const testMessage = appendTransactionMessageInstruction(instruction, message);
-  return getTransactionMessageSize(testMessage as SizeableTransactionMessage) <= TRANSACTION_SIZE_LIMIT;
+export function canFitInstruction(message: SizeableTransactionMessage, instruction: Instruction): boolean {
+    const testMessage = appendTransactionMessageInstruction(instruction, message);
+    return getTransactionMessageSize(testMessage as SizeableTransactionMessage) <= TRANSACTION_SIZE_LIMIT;
 }
 
 /**
@@ -142,7 +139,7 @@ export function canFitInstruction(
  * ```
  */
 export function getRemainingBytes(message: SizeableTransactionMessage): number {
-  return TRANSACTION_SIZE_LIMIT - getTransactionMessageSize(message);
+    return TRANSACTION_SIZE_LIMIT - getTransactionMessageSize(message);
 }
 
 /**
@@ -173,26 +170,26 @@ export function getRemainingBytes(message: SizeableTransactionMessage): number {
  * ```
  */
 export function splitInstructionsIntoChunks<T extends SizeableTransactionMessage>(
-  createBaseMessage: () => T,
-  instructions: Instruction[]
+    createBaseMessage: () => T,
+    instructions: Instruction[],
 ): Instruction[][] {
-  const chunks: Instruction[][] = [];
-  let remaining = [...instructions];
+    const chunks: Instruction[][] = [];
+    let remaining = [...instructions];
 
-  while (remaining.length > 0) {
-    const baseMessage = createBaseMessage();
-    const result = packInstructions(baseMessage, remaining);
+    while (remaining.length > 0) {
+        const baseMessage = createBaseMessage();
+        const result = packInstructions(baseMessage, remaining);
 
-    if (result.packed.length === 0) {
-      // Single instruction is too large to fit
-      throw new Error(
-        `Instruction at index ${instructions.length - remaining.length} is too large to fit in a transaction`
-      );
+        if (result.packed.length === 0) {
+            // Single instruction is too large to fit
+            throw new Error(
+                `Instruction at index ${instructions.length - remaining.length} is too large to fit in a transaction`,
+            );
+        }
+
+        chunks.push(result.packed);
+        remaining = result.overflow;
     }
 
-    chunks.push(result.packed);
-    remaining = result.overflow;
-  }
-
-  return chunks;
+    return chunks;
 }

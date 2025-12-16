@@ -42,7 +42,7 @@ export const AppNav = React.memo(() => {
 
                             {/* Desktop Navigation */}
                             <div className="hidden md:flex items-center gap-6">
-                                {navItems.map((item) => {
+                                {navItems.map(item => {
                                     const isActive =
                                         pathname === item.href ||
                                         (item.href !== '/' && pathname?.startsWith(item.href));
@@ -52,9 +52,7 @@ export const AppNav = React.memo(() => {
                                             href={item.href}
                                             className={cn(
                                                 'text-body-md font-inter-medium transition-colors',
-                                                isActive
-                                                    ? 'text-gray-900'
-                                                    : 'text-gray-600 hover:text-gray-900'
+                                                isActive ? 'text-gray-900' : 'text-gray-600 hover:text-gray-900',
                                             )}
                                         >
                                             {item.label}
@@ -126,7 +124,7 @@ export const AppNav = React.memo(() => {
                                                         'block px-3 py-2 font-inter-medium rounded-lg transition-all duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] animate-in slide-in-from-left-2 fade-in-0',
                                                         isActive
                                                             ? 'bg-sand-100 text-gray-900'
-                                                            : 'text-gray-600 hover:bg-sand-100 hover:text-gray-900'
+                                                            : 'text-gray-600 hover:bg-sand-100 hover:text-gray-900',
                                                     )}
                                                     style={{
                                                         animationDelay: `${100 + index * 50}ms`,

@@ -11,41 +11,41 @@ import { lamports } from '@solana/kit';
  * Shows the cost savings and atomicity benefits of batching.
  */
 export function useBatchedTransfersPipeline() {
-  const visualPipeline = useMemo(() => {
-    // Use self-transfers (to signer's own address) for demo purposes
-    // In real usage, these would be different recipient addresses
-    const flowFactory = (config: FlowConfig) =>
-      createFlow(config)
-        .step('transfer-1', (ctx) => {
-          return getTransferSolInstruction({
-            source: ctx.signer,
-            destination: ctx.signer.address, // Self-transfer
-            amount: lamports(BigInt(1_000_000)),
-          });
-        })
-        .step('transfer-2', (ctx) => {
-          return getTransferSolInstruction({
-            source: ctx.signer,
-            destination: ctx.signer.address, // Self-transfer
-            amount: lamports(BigInt(2_000_000)),
-          });
-        })
-        .step('transfer-3', (ctx) => {
-          return getTransferSolInstruction({
-            source: ctx.signer,
-            destination: ctx.signer.address, // Self-transfer
-            amount: lamports(BigInt(3_000_000)),
-          });
-        });
+    const visualPipeline = useMemo(() => {
+        // Use self-transfers (to signer's own address) for demo purposes
+        // In real usage, these would be different recipient addresses
+        const flowFactory = (config: FlowConfig) =>
+            createFlow(config)
+                .step('transfer-1', ctx => {
+                    return getTransferSolInstruction({
+                        source: ctx.signer,
+                        destination: ctx.signer.address, // Self-transfer
+                        amount: lamports(BigInt(1_000_000)),
+                    });
+                })
+                .step('transfer-2', ctx => {
+                    return getTransferSolInstruction({
+                        source: ctx.signer,
+                        destination: ctx.signer.address, // Self-transfer
+                        amount: lamports(BigInt(2_000_000)),
+                    });
+                })
+                .step('transfer-3', ctx => {
+                    return getTransferSolInstruction({
+                        source: ctx.signer,
+                        destination: ctx.signer.address, // Self-transfer
+                        amount: lamports(BigInt(3_000_000)),
+                    });
+                });
 
-    return new VisualPipeline('batched-transfers', flowFactory, [
-      { name: 'transfer-1', type: 'instruction' },
-      { name: 'transfer-2', type: 'instruction' },
-      { name: 'transfer-3', type: 'instruction' },
-    ]);
-  }, []);
+        return new VisualPipeline('batched-transfers', flowFactory, [
+            { name: 'transfer-1', type: 'instruction' },
+            { name: 'transfer-2', type: 'instruction' },
+            { name: 'transfer-3', type: 'instruction' },
+        ]);
+    }, []);
 
-  return visualPipeline;
+    return visualPipeline;
 }
 
 export const batchedTransfersCode = `import { createFlow } from '@pipeit/core';

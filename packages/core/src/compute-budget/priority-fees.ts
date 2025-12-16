@@ -8,11 +8,7 @@ import type { Address } from '@solana/addresses';
 import type { Instruction } from '@solana/instructions';
 import type { Rpc } from '@solana/rpc';
 import { address } from '@solana/addresses';
-import type {
-  PriorityFeeConfig,
-  PriorityFeeEstimate,
-  PrioritizationFeeEntry,
-} from './types.js';
+import type { PriorityFeeConfig, PriorityFeeEstimate, PrioritizationFeeEntry } from './types.js';
 
 /**
  * Compute Budget program address.
@@ -23,11 +19,11 @@ export const COMPUTE_BUDGET_PROGRAM = address('ComputeBudget11111111111111111111
  * Predefined priority fee levels in micro-lamports per compute unit.
  */
 export const PRIORITY_FEE_LEVELS = {
-  none: 0,
-  low: 1_000,        // 0.001 lamports per CU
-  medium: 10_000,    // 0.01 lamports per CU
-  high: 50_000,      // 0.05 lamports per CU
-  veryHigh: 100_000, // 0.1 lamports per CU
+    none: 0,
+    low: 1_000, // 0.001 lamports per CU
+    medium: 10_000, // 0.01 lamports per CU
+    high: 50_000, // 0.05 lamports per CU
+    veryHigh: 100_000, // 0.1 lamports per CU
 } as const;
 
 export type PriorityFeeLevel = keyof typeof PRIORITY_FEE_LEVELS;
@@ -36,12 +32,10 @@ export type PriorityFeeLevel = keyof typeof PRIORITY_FEE_LEVELS;
  * RPC API for getting recent prioritization fees.
  */
 interface GetRecentPrioritizationFeesApi {
-  getRecentPrioritizationFees(
-    addresses?: Address[]
-  ): {
-    slot: bigint;
-    prioritizationFee: bigint;
-  }[];
+    getRecentPrioritizationFees(addresses?: Address[]): {
+        slot: bigint;
+        prioritizationFee: bigint;
+    }[];
 }
 
 /**
@@ -58,16 +52,16 @@ interface GetRecentPrioritizationFeesApi {
  * ```
  */
 export function createSetComputeUnitPriceInstruction(microLamports: number): Instruction {
-  // Instruction data: [3, microLamports as u64 LE]
-  const data = new Uint8Array(9);
-  data[0] = 3; // SetComputeUnitPrice discriminator
-  new DataView(data.buffer).setBigUint64(1, BigInt(microLamports), true);
+    // Instruction data: [3, microLamports as u64 LE]
+    const data = new Uint8Array(9);
+    data[0] = 3; // SetComputeUnitPrice discriminator
+    new DataView(data.buffer).setBigUint64(1, BigInt(microLamports), true);
 
-  return {
-    programAddress: COMPUTE_BUDGET_PROGRAM,
-    accounts: [],
-    data,
-  };
+    return {
+        programAddress: COMPUTE_BUDGET_PROGRAM,
+        accounts: [],
+        data,
+    };
 }
 
 /**
@@ -87,67 +81,65 @@ export function createSetComputeUnitPriceInstruction(microLamports: number): Ins
  * ```
  */
 export async function estimatePriorityFee(
-  rpc: Rpc<GetRecentPrioritizationFeesApi>,
-  config: PriorityFeeConfig
+    rpc: Rpc<GetRecentPrioritizationFeesApi>,
+    config: PriorityFeeConfig,
 ): Promise<PriorityFeeEstimate> {
-  const { strategy, percentile = 50, microLamports, lockedWritableAccounts } = config;
+    const { strategy, percentile = 50, microLamports, lockedWritableAccounts } = config;
 
-  // For fixed strategy, just return the configured value
-  if (strategy === 'fixed') {
+    // For fixed strategy, just return the configured value
+    if (strategy === 'fixed') {
+        return {
+            microLamports: microLamports ?? 0,
+            percentile: 0,
+            recentFees: [],
+        };
+    }
+
+    // For 'none' strategy, return 0
+    if (strategy === 'none') {
+        return {
+            microLamports: 0,
+            percentile: 0,
+            recentFees: [],
+        };
+    }
+
+    // For percentile strategy, fetch recent fees
+    const recentFees = await rpc.getRecentPrioritizationFees(lockedWritableAccounts).send();
+
+    if (!recentFees || recentFees.length === 0) {
+        // No recent fee data, use a sensible default
+        return {
+            microLamports: PRIORITY_FEE_LEVELS.low,
+            percentile,
+            recentFees: [],
+        };
+    }
+
+    // Calculate percentile
+    const fees = recentFees
+        .map(entry => Number(entry.prioritizationFee))
+        .filter(fee => fee > 0)
+        .sort((a, b) => a - b);
+
+    if (fees.length === 0) {
+        return {
+            microLamports: PRIORITY_FEE_LEVELS.low,
+            percentile,
+            recentFees: recentFees as PrioritizationFeeEntry[],
+        };
+    }
+
+    // Calculate the percentile value
+    const index = Math.ceil((percentile / 100) * fees.length) - 1;
+    const clampedIndex = Math.max(0, Math.min(index, fees.length - 1));
+    const estimatedFee = fees[clampedIndex];
+
     return {
-      microLamports: microLamports ?? 0,
-      percentile: 0,
-      recentFees: [],
+        microLamports: estimatedFee,
+        percentile,
+        recentFees: recentFees as PrioritizationFeeEntry[],
     };
-  }
-
-  // For 'none' strategy, return 0
-  if (strategy === 'none') {
-    return {
-      microLamports: 0,
-      percentile: 0,
-      recentFees: [],
-    };
-  }
-
-  // For percentile strategy, fetch recent fees
-  const recentFees = await rpc
-    .getRecentPrioritizationFees(lockedWritableAccounts)
-    .send();
-
-  if (!recentFees || recentFees.length === 0) {
-    // No recent fee data, use a sensible default
-    return {
-      microLamports: PRIORITY_FEE_LEVELS.low,
-      percentile,
-      recentFees: [],
-    };
-  }
-
-  // Calculate percentile
-  const fees = recentFees
-    .map((entry) => Number(entry.prioritizationFee))
-    .filter((fee) => fee > 0)
-    .sort((a, b) => a - b);
-
-  if (fees.length === 0) {
-    return {
-      microLamports: PRIORITY_FEE_LEVELS.low,
-      percentile,
-      recentFees: recentFees as PrioritizationFeeEntry[],
-    };
-  }
-
-  // Calculate the percentile value
-  const index = Math.ceil((percentile / 100) * fees.length) - 1;
-  const clampedIndex = Math.max(0, Math.min(index, fees.length - 1));
-  const estimatedFee = fees[clampedIndex];
-
-  return {
-    microLamports: estimatedFee,
-    percentile,
-    recentFees: recentFees as PrioritizationFeeEntry[],
-  };
 }
 
 /**
@@ -157,7 +149,7 @@ export async function estimatePriorityFee(
  * @returns Micro-lamports per compute unit
  */
 export function getPriorityFeeFromLevel(level: PriorityFeeLevel): number {
-  return PRIORITY_FEE_LEVELS[level];
+    return PRIORITY_FEE_LEVELS[level];
 }
 
 /**
@@ -173,10 +165,7 @@ export function getPriorityFeeFromLevel(level: PriorityFeeLevel): number {
  * // 10_000 * 200_000 / 1_000_000 = 2000 lamports = 0.000002 SOL
  * ```
  */
-export function calculatePriorityFeeCost(
-  microLamportsPerCU: number,
-  computeUnits: number
-): number {
-  // micro-lamports to lamports: divide by 1_000_000
-  return (microLamportsPerCU * computeUnits) / 1_000_000;
+export function calculatePriorityFeeCost(microLamportsPerCU: number, computeUnits: number): number {
+    // micro-lamports to lamports: divide by 1_000_000
+    return (microLamportsPerCU * computeUnits) / 1_000_000;
 }

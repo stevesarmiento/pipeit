@@ -32,35 +32,35 @@ jobs:
           - host: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             build: pnpm build --target x86_64-unknown-linux-gnu
-            
+
           # Linux x64 (musl)
           - host: ubuntu-latest
             target: x86_64-unknown-linux-musl
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
             build: set -e && pnpm build --target x86_64-unknown-linux-musl && llvm-strip *.node
-            
+
           # Linux ARM64 (GNU)
           - host: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian-aarch64
             build: set -e && pnpm build --target aarch64-unknown-linux-gnu && aarch64-unknown-linux-gnu-strip *.node
-            
+
           # Linux ARM64 (musl)
           - host: ubuntu-latest
             target: aarch64-unknown-linux-musl
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
             build: set -e && rustup target add aarch64-unknown-linux-musl && pnpm build --target aarch64-unknown-linux-musl && /aarch64-linux-musl-cross/bin/aarch64-linux-musl-strip *.node
-            
+
           # macOS x64
           - host: macos-13
             target: x86_64-apple-darwin
             build: pnpm build --target x86_64-apple-darwin
-            
+
           # macOS ARM64
           - host: macos-latest
             target: aarch64-apple-darwin
             build: pnpm build --target aarch64-apple-darwin
-            
+
           # Windows x64
           - host: windows-latest
             target: x86_64-pc-windows-msvc
@@ -68,7 +68,7 @@ jobs:
 
     name: stable - ${{ matrix.settings.target }} - node@20
     runs-on: ${{ matrix.settings.host }}
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -152,7 +152,7 @@ jobs:
           - '20'
           - '22'
     runs-on: ${{ matrix.settings.host }}
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -282,4 +282,3 @@ jobs:
         working-directory: packages/fastlane
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-

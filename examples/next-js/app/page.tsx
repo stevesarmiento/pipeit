@@ -65,7 +65,7 @@ export default function Home() {
             <main className="container mx-auto">
                 <Hero />
                 <Benefits />
-                <CodeComparison 
+                <CodeComparison
                     beforeTitle="SolanaKit"
                     beforeDescription="Transfer SOL using Solana Kit - manual blockhash, signing, and sending"
                     beforeCode={beforeCode}

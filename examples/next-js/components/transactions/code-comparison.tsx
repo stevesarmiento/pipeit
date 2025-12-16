@@ -33,6 +33,3 @@ export function CodeComparison({ title, code }: CodeComparisonProps) {
         </Card>
     );
 }
-
-
-

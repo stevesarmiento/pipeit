@@ -8,9 +8,9 @@ import {
     lamports,
     sendAndConfirmTransactionFactory,
     pipe,
-    createTransactionMessage, 
-    setTransactionMessageFeePayer, 
-    setTransactionMessageLifetimeUsingBlockhash, 
+    createTransactionMessage,
+    setTransactionMessageFeePayer,
+    setTransactionMessageLifetimeUsingBlockhash,
     appendTransactionMessageInstruction,
     signTransactionMessageWithSigners,
     getSignatureFromTransaction,
@@ -73,9 +73,9 @@ export function ModernSolTransfer() {
             // Build transaction message using Kit's pipe pattern
             const transactionMessage = pipe(
                 createTransactionMessage({ version: 0 }),
-                (msg) => setTransactionMessageFeePayer(signer.address, msg),
-                (msg) => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, msg),
-                (msg) => appendTransactionMessageInstruction(transferInstruction, msg),
+                msg => setTransactionMessageFeePayer(signer.address, msg),
+                msg => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, msg),
+                msg => appendTransactionMessageInstruction(transferInstruction, msg),
             );
 
             // Sign and send using Kit's standard approach
@@ -90,12 +90,12 @@ export function ModernSolTransfer() {
             setSignature(transactionSignature);
             console.log('🎉 Kit SOL Transfer: Transaction complete!', { signature: transactionSignature });
 
-        // Track transaction in debugger
-        if (client) {
-            client.trackTransaction({
+            // Track transaction in debugger
+            if (client) {
+                client.trackTransaction({
                     signature: transactionSignature as any,
-                status: 'confirmed',
-                method: 'signAndSendTransaction',
+                    status: 'confirmed',
+                    method: 'signAndSendTransaction',
                     feePayer: signer.address,
                 });
             }
@@ -133,17 +133,17 @@ const signature = await sendAndConfirm(signedTransaction, { commitment: 'confirm
     return (
         <div className="grid grid-cols-1 lg:grid-cols-6 gap-4">
             <div className="col-span-2">
-            <TransactionForm
-                title="Kit SOL Transfer"
-                description="Modern @solana/kit approach with full control"
-                onSubmit={handleTransfer}
-                disabled={!ready}
-                defaultRecipient="DemoWa11et1111111111111111111111111111111111"
-            />
+                <TransactionForm
+                    title="Kit SOL Transfer"
+                    description="Modern @solana/kit approach with full control"
+                    onSubmit={handleTransfer}
+                    disabled={!ready}
+                    defaultRecipient="DemoWa11et1111111111111111111111111111111111"
+                />
             </div>
             <div className="col-span-4">
-            {signature && <TransactionResult signature={signature} cluster={cluster?.id || 'devnet'} />}
-            <CodeComparison title="Transaction Code (Kit Approach)" code={kitCode} />
+                {signature && <TransactionResult signature={signature} cluster={cluster?.id || 'devnet'} />}
+                <CodeComparison title="Transaction Code (Kit Approach)" code={kitCode} />
             </div>
         </div>
     );

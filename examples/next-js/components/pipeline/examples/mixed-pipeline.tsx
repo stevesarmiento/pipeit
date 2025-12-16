@@ -11,60 +11,60 @@ import { lamports } from '@solana/kit';
  * Instruction steps batch together, but transaction steps execute separately.
  */
 export function useMixedPipeline() {
-  const visualPipeline = useMemo(() => {
-    const flowFactory = (config: FlowConfig) =>
-      createFlow(config)
-        .step('setup-1', (ctx) => {
-          // First batch group - self-transfer for demo
-          return getTransferSolInstruction({
-            source: ctx.signer,
-            destination: ctx.signer.address,
-            amount: lamports(BigInt(1_000_000)),
-          });
-        })
-        .step('setup-2', (ctx) => {
-          // Part of first batch - self-transfer for demo
-          return getTransferSolInstruction({
-            source: ctx.signer,
-            destination: ctx.signer.address,
-            amount: lamports(BigInt(1_000_000)),
-          });
-        })
-        .transaction('verify-state', async (ctx) => {
-          // Breaks batching - executes separately
-          // In real usage, this would check on-chain state
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          // Return a FlowStepResult with the previous step's signature
-          const prevResult = ctx.get('setup-2');
-          return { signature: prevResult?.signature ?? 'verified' };
-        })
-        .step('finalize-1', (ctx) => {
-          // Second batch group (after transaction step) - self-transfer for demo
-          return getTransferSolInstruction({
-            source: ctx.signer,
-            destination: ctx.signer.address,
-            amount: lamports(BigInt(1_000_000)),
-          });
-        })
-        .step('finalize-2', (ctx) => {
-          // Part of second batch - self-transfer for demo
-          return getTransferSolInstruction({
-            source: ctx.signer,
-            destination: ctx.signer.address,
-            amount: lamports(BigInt(1_000_000)),
-          });
-        });
+    const visualPipeline = useMemo(() => {
+        const flowFactory = (config: FlowConfig) =>
+            createFlow(config)
+                .step('setup-1', ctx => {
+                    // First batch group - self-transfer for demo
+                    return getTransferSolInstruction({
+                        source: ctx.signer,
+                        destination: ctx.signer.address,
+                        amount: lamports(BigInt(1_000_000)),
+                    });
+                })
+                .step('setup-2', ctx => {
+                    // Part of first batch - self-transfer for demo
+                    return getTransferSolInstruction({
+                        source: ctx.signer,
+                        destination: ctx.signer.address,
+                        amount: lamports(BigInt(1_000_000)),
+                    });
+                })
+                .transaction('verify-state', async ctx => {
+                    // Breaks batching - executes separately
+                    // In real usage, this would check on-chain state
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    // Return a FlowStepResult with the previous step's signature
+                    const prevResult = ctx.get('setup-2');
+                    return { signature: prevResult?.signature ?? 'verified' };
+                })
+                .step('finalize-1', ctx => {
+                    // Second batch group (after transaction step) - self-transfer for demo
+                    return getTransferSolInstruction({
+                        source: ctx.signer,
+                        destination: ctx.signer.address,
+                        amount: lamports(BigInt(1_000_000)),
+                    });
+                })
+                .step('finalize-2', ctx => {
+                    // Part of second batch - self-transfer for demo
+                    return getTransferSolInstruction({
+                        source: ctx.signer,
+                        destination: ctx.signer.address,
+                        amount: lamports(BigInt(1_000_000)),
+                    });
+                });
 
-    return new VisualPipeline('mixed-pipeline', flowFactory, [
-      { name: 'setup-1', type: 'instruction' },
-      { name: 'setup-2', type: 'instruction' },
-      { name: 'verify-state', type: 'transaction' },
-      { name: 'finalize-1', type: 'instruction' },
-      { name: 'finalize-2', type: 'instruction' },
-    ]);
-  }, []);
+        return new VisualPipeline('mixed-pipeline', flowFactory, [
+            { name: 'setup-1', type: 'instruction' },
+            { name: 'setup-2', type: 'instruction' },
+            { name: 'verify-state', type: 'transaction' },
+            { name: 'finalize-1', type: 'instruction' },
+            { name: 'finalize-2', type: 'instruction' },
+        ]);
+    }, []);
 
-  return visualPipeline;
+    return visualPipeline;
 }
 
 export const mixedPipelineCode = `import { createFlow } from '@pipeit/core';

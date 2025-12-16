@@ -1,64 +1,62 @@
 {
-  "name": "@pipeit/fastlane",
-  "version": "0.1.0",
-  "description": "Native QUIC client for direct Solana TPU transaction submission",
-  "main": "index.js",
-  "types": "index.d.ts",
-  "exports": {
-    ".": {
-      "browser": "./browser.js",
-      "default": "./index.js"
+    "name": "@pipeit/fastlane",
+    "version": "0.1.0",
+    "description": "Native QUIC client for direct Solana TPU transaction submission",
+    "main": "index.js",
+    "types": "index.d.ts",
+    "exports": {
+        ".": {
+            "browser": "./browser.js",
+            "default": "./index.js"
+        },
+        "./browser": "./browser.js"
     },
-    "./browser": "./browser.js"
-  },
-  "browser": "./browser.js",
-  "napi": {
-    "name": "fastlane",
-    "triples": {
-      "defaults": true,
-      "additional": [
-        "aarch64-apple-darwin",
-        "aarch64-unknown-linux-gnu",
-        "aarch64-unknown-linux-musl"
-      ]
+    "browser": "./browser.js",
+    "napi": {
+        "name": "fastlane",
+        "triples": {
+            "defaults": true,
+            "additional": [
+                "aarch64-apple-darwin",
+                "aarch64-unknown-linux-gnu",
+                "aarch64-unknown-linux-musl"
+            ]
+        }
+    },
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/stevesarmiento/pipeit.git",
+        "directory": "packages/fastlane"
+    },
+    "files": [
+        "index.js",
+        "index.d.ts",
+        "browser.js",
+        "*.node"
+    ],
+    "scripts": {
+        "artifacts": "napi artifacts",
+        "build": "napi build --platform --release",
+        "build:debug": "napi build --platform",
+        "prepublishOnly": "napi prepublish -t npm",
+        "test": "node --test test.mjs",
+        "universal": "napi universal",
+        "version": "napi version"
+    },
+    "devDependencies": {
+        "@napi-rs/cli": "^2.18.0"
+    },
+    "engines": {
+        "node": ">= 18"
+    },
+    "optionalDependencies": {
+        "@pipeit/fastlane-win32-x64-msvc": "0.1.0",
+        "@pipeit/fastlane-darwin-x64": "0.1.0",
+        "@pipeit/fastlane-darwin-arm64": "0.1.0",
+        "@pipeit/fastlane-linux-x64-gnu": "0.1.0",
+        "@pipeit/fastlane-linux-x64-musl": "0.1.0",
+        "@pipeit/fastlane-linux-arm64-gnu": "0.1.0",
+        "@pipeit/fastlane-linux-arm64-musl": "0.1.0"
     }
-  },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/stevesarmiento/pipeit.git",
-    "directory": "packages/fastlane"
-  },
-  "files": [
-    "index.js",
-    "index.d.ts",
-    "browser.js",
-    "*.node"
-  ],
-  "scripts": {
-    "artifacts": "napi artifacts",
-    "build": "napi build --platform --release",
-    "build:debug": "napi build --platform",
-    "prepublishOnly": "napi prepublish -t npm",
-    "test": "node --test test.mjs",
-    "universal": "napi universal",
-    "version": "napi version"
-  },
-  "devDependencies": {
-    "@napi-rs/cli": "^2.18.0"
-  },
-  "engines": {
-    "node": ">= 18"
-  },
-  "optionalDependencies": {
-    "@pipeit/fastlane-win32-x64-msvc": "0.1.0",
-    "@pipeit/fastlane-darwin-x64": "0.1.0",
-    "@pipeit/fastlane-darwin-arm64": "0.1.0",
-    "@pipeit/fastlane-linux-x64-gnu": "0.1.0",
-    "@pipeit/fastlane-linux-x64-musl": "0.1.0",
-    "@pipeit/fastlane-linux-arm64-gnu": "0.1.0",
-    "@pipeit/fastlane-linux-arm64-musl": "0.1.0"
-  }
 }
-
-

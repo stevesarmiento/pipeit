@@ -45,7 +45,8 @@ export function FeatureExample() {
                     Build atomic transactions easily
                 </h2>
                 <p className="text-body-xl text-gray-600 mb-12 text-center max-w-3xl mx-auto">
-                    Combine multiple instructions into single or multi-step transactions. All operations succeed together or fail together—no partial state changes.
+                    Combine multiple instructions into single or multi-step transactions. All operations succeed
+                    together or fail together—no partial state changes.
                 </p>
                 <Card className="border-sand-300">
                     <CardHeader className="pb-3">
@@ -76,4 +77,3 @@ export function FeatureExample() {
         </section>
     );
 }
-

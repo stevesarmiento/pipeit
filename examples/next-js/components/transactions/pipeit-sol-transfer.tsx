@@ -1,12 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import {
-    address,
-    createSolanaRpc,
-    createSolanaRpcSubscriptions,
-    lamports,
-} from '@solana/kit';
+import { address, createSolanaRpc, createSolanaRpcSubscriptions, lamports } from '@solana/kit';
 import { getTransferSolInstruction } from '@solana-program/system';
 
 const LAMPORTS_PER_SOL = 1_000_000_000n;
@@ -57,10 +52,10 @@ export function PipeitSolTransfer() {
 
         try {
             // Pipeit's fluent API handles everything: blockhash fetching, building, signing, and confirmation
-            const transactionSignature = await new TransactionBuilder({ 
+            const transactionSignature = await new TransactionBuilder({
                 rpc,
-                priorityFee: 'medium', 
-                autoRetry: true 
+                priorityFee: 'medium',
+                autoRetry: true,
             })
                 .setFeePayerSigner(signer)
                 .addInstruction(transferInstruction)
@@ -114,19 +109,18 @@ const signature = await new TransactionBuilder({
     return (
         <div className="grid grid-cols-1 lg:grid-cols-6 gap-4">
             <div className="col-span-2">
-            <TransactionForm
-                title="Pipeit SOL Transfer"
-                description="Simplified with fluent builder API"
-                onSubmit={handleTransfer}
-                disabled={!ready}
-                defaultRecipient="DemoWa11et1111111111111111111111111111111111"
-            />
+                <TransactionForm
+                    title="Pipeit SOL Transfer"
+                    description="Simplified with fluent builder API"
+                    onSubmit={handleTransfer}
+                    disabled={!ready}
+                    defaultRecipient="DemoWa11et1111111111111111111111111111111111"
+                />
             </div>
             <div className="col-span-4">
-            {signature && <TransactionResult signature={signature} cluster={cluster?.id || 'devnet'} />}
-            <CodeComparison title="Transaction Code (Pipeit Approach)" code={pipeitCode} />
+                {signature && <TransactionResult signature={signature} cluster={cluster?.id || 'devnet'} />}
+                <CodeComparison title="Transaction Code (Pipeit Approach)" code={pipeitCode} />
             </div>
         </div>
     );
 }
-

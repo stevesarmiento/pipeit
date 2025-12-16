@@ -18,23 +18,23 @@ Builds the `@pipeit/fastlane` package for multiple platforms using NAPI-RS.
 ### Workflow Stages
 
 1. **Build**: Compiles native binaries for each platform
-   - Uses Docker for Linux cross-compilation
-   - Native runners for macOS and Windows
-   - Uploads artifacts for each platform
+    - Uses Docker for Linux cross-compilation
+    - Native runners for macOS and Windows
+    - Uploads artifacts for each platform
 
 2. **Test**: Tests bindings on actual hardware
-   - Tests on macOS (ARM64), Linux (x64), and Windows (x64)
-   - Runs on Node.js 18, 20, and 22
-   - Verifies the native module loads correctly
+    - Tests on macOS (ARM64), Linux (x64), and Windows (x64)
+    - Runs on Node.js 18, 20, and 22
+    - Verifies the native module loads correctly
 
 3. **Universal macOS**: Creates universal macOS binary
-   - Combines x64 and ARM64 binaries
-   - Single binary works on both architectures
+    - Combines x64 and ARM64 binaries
+    - Single binary works on both architectures
 
 4. **Publish**: Publishes to npm (only on main branch)
-   - Automatic publishing when commit message is a version number (e.g., `1.0.0`)
-   - Publishes main package and platform-specific packages
-   - Uses npm provenance for supply chain security
+    - Automatic publishing when commit message is a version number (e.g., `1.0.0`)
+    - Publishes main package and platform-specific packages
+    - Uses npm provenance for supply chain security
 
 ### Triggers
 
@@ -75,4 +75,3 @@ pnpm test
 - **Build fails on Linux**: Ensure Docker images are up to date
 - **Tests fail on specific platform**: Check artifact upload/download steps
 - **Publish fails**: Verify NPM_TOKEN is set and has publish permissions
-

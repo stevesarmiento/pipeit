@@ -5,36 +5,36 @@
 
 /** Configuration for the TPU client. */
 export interface TpuClientConfig {
-  /** RPC URL for fetching leader schedule and cluster info. */
-  rpcUrl: string
-  /** WebSocket URL for slot update subscriptions. */
-  wsUrl: string
-  /** Number of upcoming leaders to send transactions to (default: 2). */
-  fanout?: number
-  /** Whether to pre-warm connections to upcoming leaders (default: true). */
-  prewarmConnections?: boolean
+    /** RPC URL for fetching leader schedule and cluster info. */
+    rpcUrl: string;
+    /** WebSocket URL for slot update subscriptions. */
+    wsUrl: string;
+    /** Number of upcoming leaders to send transactions to (default: 2). */
+    fanout?: number;
+    /** Whether to pre-warm connections to upcoming leaders (default: true). */
+    prewarmConnections?: boolean;
 }
 /** Result from sending a transaction. */
 export interface SendResult {
-  /** Whether the transaction was successfully delivered. */
-  delivered: boolean
-  /** Latency in milliseconds. */
-  latencyMs: number
-  /** Number of leaders the transaction was sent to. */
-  leaderCount: number
+    /** Whether the transaction was successfully delivered. */
+    delivered: boolean;
+    /** Latency in milliseconds. */
+    latencyMs: number;
+    /** Number of leaders the transaction was sent to. */
+    leaderCount: number;
 }
 /** Native QUIC client for direct Solana TPU transaction submission. */
 export declare class TpuClient {
-  /** Creates a new TPU client instance. */
-  constructor(config: TpuClientConfig)
-  /** Sends a serialized transaction to TPU endpoints. */
-  sendTransaction(transaction: Buffer): Promise<SendResult>
-  /** Gets the current estimated slot number. */
-  getCurrentSlot(): number
-  /** Gets the number of active QUIC connections. */
-  getConnectionCount(): Promise<number>
-  /** Waits for the client to be fully initialized. */
-  waitReady(): Promise<void>
-  /** Shuts down the client and closes all connections. */
-  shutdown(): void
+    /** Creates a new TPU client instance. */
+    constructor(config: TpuClientConfig);
+    /** Sends a serialized transaction to TPU endpoints. */
+    sendTransaction(transaction: Buffer): Promise<SendResult>;
+    /** Gets the current estimated slot number. */
+    getCurrentSlot(): number;
+    /** Gets the number of active QUIC connections. */
+    getConnectionCount(): Promise<number>;
+    /** Waits for the client to be fully initialized. */
+    waitReady(): Promise<void>;
+    /** Shuts down the client and closes all connections. */
+    shutdown(): void;
 }

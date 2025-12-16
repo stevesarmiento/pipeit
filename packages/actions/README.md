@@ -20,18 +20,18 @@ const rpcSubscriptions = createSolanaRpcSubscriptions('wss://api.mainnet-beta.so
 
 // Swap SOL for USDC using Jupiter
 const result = await pipe({
-  rpc,
-  rpcSubscriptions,
-  signer,
-  adapters: { swap: jupiter() }
+    rpc,
+    rpcSubscriptions,
+    signer,
+    adapters: { swap: jupiter() },
 })
-  .swap({ 
-    inputMint: 'So11111111111111111111111111111111111111112', // SOL
-    outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
-    amount: 10_000_000n,  // 0.1 SOL
-    slippageBps: 50  // 0.5%
-  })
-  .execute();
+    .swap({
+        inputMint: 'So11111111111111111111111111111111111111112', // SOL
+        outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
+        amount: 10_000_000n, // 0.1 SOL
+        slippageBps: 50, // 0.5%
+    })
+    .execute();
 
 console.log('Transaction:', result.signature);
 ```
@@ -44,16 +44,16 @@ The `pipe()` function creates a fluent builder for composing DeFi actions into a
 
 ```typescript
 interface PipeConfig {
-  rpc: Rpc<ActionsRpcApi>;
-  rpcSubscriptions: RpcSubscriptions<ActionsRpcSubscriptionsApi>;
-  signer: TransactionSigner;
-  adapters?: {
-    swap?: SwapAdapter;
-  };
-  priorityFee?: PriorityFeeLevel | PriorityFeeConfig;
-  computeUnits?: 'auto' | number;
-  autoRetry?: boolean | { maxAttempts: number; backoff: 'linear' | 'exponential' };
-  logLevel?: 'silent' | 'minimal' | 'verbose';
+    rpc: Rpc<ActionsRpcApi>;
+    rpcSubscriptions: RpcSubscriptions<ActionsRpcSubscriptionsApi>;
+    signer: TransactionSigner;
+    adapters?: {
+        swap?: SwapAdapter;
+    };
+    priorityFee?: PriorityFeeLevel | PriorityFeeConfig;
+    computeUnits?: 'auto' | number;
+    autoRetry?: boolean | { maxAttempts: number; backoff: 'linear' | 'exponential' };
+    logLevel?: 'silent' | 'minimal' | 'verbose';
 }
 ```
 
@@ -62,25 +62,23 @@ interface PipeConfig {
 #### Swap Action
 
 ```typescript
-pipe({ rpc, rpcSubscriptions, signer, adapters: { swap: jupiter() } })
-  .swap({
+pipe({ rpc, rpcSubscriptions, signer, adapters: { swap: jupiter() } }).swap({
     inputMint: 'So11111111111111111111111111111111111111112',
     outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
     amount: 10_000_000n,
-    slippageBps: 50  // Optional, default: 50 (0.5%)
-  })
+    slippageBps: 50, // Optional, default: 50 (0.5%)
+});
 ```
 
 #### Custom Actions
 
 ```typescript
-pipe({ rpc, rpcSubscriptions, signer })
-  .add(async (ctx) => ({
+pipe({ rpc, rpcSubscriptions, signer }).add(async ctx => ({
     instructions: [myCustomInstruction],
-    computeUnits: 200_000,  // Optional hint
-    addressLookupTableAddresses: ['...'],  // Optional ALT addresses
-    data: { custom: 'data' }  // Optional metadata
-  }))
+    computeUnits: 200_000, // Optional hint
+    addressLookupTableAddresses: ['...'], // Optional ALT addresses
+    data: { custom: 'data' }, // Optional metadata
+}));
 ```
 
 ### Executing
@@ -143,12 +141,12 @@ All actions in a pipe execute atomically in a single transaction:
 
 ```typescript
 const result = await pipe({ rpc, rpcSubscriptions, signer, adapters: { swap: jupiter() } })
-  .swap({ inputMint: SOL, outputMint: USDC, amount: 10_000_000n })
-  .add(async (ctx) => ({
-    instructions: [transferInstruction],
-  }))
-  .swap({ inputMint: USDC, outputMint: BONK, amount: 5_000_000n })
-  .execute();
+    .swap({ inputMint: SOL, outputMint: USDC, amount: 10_000_000n })
+    .add(async ctx => ({
+        instructions: [transferInstruction],
+    }))
+    .swap({ inputMint: USDC, outputMint: BONK, amount: 5_000_000n })
+    .execute();
 ```
 
 ## Adapters
@@ -167,10 +165,10 @@ const adapter = jupiter();
 
 // Custom configuration
 const adapter = jupiter({
-  apiUrl: 'https://lite-api.jup.ag/swap/v1',  // Default
-  wrapAndUnwrapSol: true,  // Default: auto-wrap/unwrap SOL
-  dynamicComputeUnitLimit: true,  // Default: use Jupiter's CU estimate
-  prioritizationFeeLamports: 'auto'  // Default: use Jupiter's fee estimate
+    apiUrl: 'https://lite-api.jup.ag/swap/v1', // Default
+    wrapAndUnwrapSol: true, // Default: auto-wrap/unwrap SOL
+    dynamicComputeUnitLimit: true, // Default: use Jupiter's CU estimate
+    prioritizationFeeLamports: 'auto', // Default: use Jupiter's fee estimate
 });
 ```
 
@@ -193,7 +191,7 @@ const mySwapAdapter: SwapAdapter = {
     // Call your DEX API
     const quote = await fetchQuote(params);
     const instructions = await buildSwapInstructions(quote, ctx.signer.address);
-    
+
     return {
       instructions,
       computeUnits: 300_000,  // Optional
@@ -219,93 +217,93 @@ pipe({ rpc, rpcSubscriptions, signer, adapters: { swap: mySwapAdapter } })
 
 ```typescript
 // Preset levels
-pipe({ 
-  rpc, 
-  rpcSubscriptions, 
-  signer, 
-  adapters: { swap: jupiter() },
-  priorityFee: 'high'  // none | low | medium | high | veryHigh
-})
+pipe({
+    rpc,
+    rpcSubscriptions,
+    signer,
+    adapters: { swap: jupiter() },
+    priorityFee: 'high', // none | low | medium | high | veryHigh
+});
 
 // Custom configuration
-pipe({ 
-  rpc, 
-  rpcSubscriptions, 
-  signer, 
-  adapters: { swap: jupiter() },
-  priorityFee: {
-    strategy: 'percentile',
-    percentile: 75
-  }
-})
+pipe({
+    rpc,
+    rpcSubscriptions,
+    signer,
+    adapters: { swap: jupiter() },
+    priorityFee: {
+        strategy: 'percentile',
+        percentile: 75,
+    },
+});
 ```
 
 ### Compute Units
 
 ```typescript
 // Auto (collects from actions or uses default)
-pipe({ 
-  rpc, 
-  rpcSubscriptions, 
-  signer, 
-  adapters: { swap: jupiter() },
-  computeUnits: 'auto'
-})
+pipe({
+    rpc,
+    rpcSubscriptions,
+    signer,
+    adapters: { swap: jupiter() },
+    computeUnits: 'auto',
+});
 
 // Fixed limit
-pipe({ 
-  rpc, 
-  rpcSubscriptions, 
-  signer, 
-  adapters: { swap: jupiter() },
-  computeUnits: 400_000
-})
+pipe({
+    rpc,
+    rpcSubscriptions,
+    signer,
+    adapters: { swap: jupiter() },
+    computeUnits: 400_000,
+});
 ```
 
 ### Auto-Retry
 
 ```typescript
 // Default retry (3 attempts, exponential backoff)
-pipe({ 
-  rpc, 
-  rpcSubscriptions, 
-  signer, 
-  adapters: { swap: jupiter() },
-  autoRetry: true
-})
+pipe({
+    rpc,
+    rpcSubscriptions,
+    signer,
+    adapters: { swap: jupiter() },
+    autoRetry: true,
+});
 
 // Custom retry configuration
-pipe({ 
-  rpc, 
-  rpcSubscriptions, 
-  signer, 
-  adapters: { swap: jupiter() },
-  autoRetry: {
-    maxAttempts: 5,
-    backoff: 'exponential'  // or 'linear'
-  }
-})
+pipe({
+    rpc,
+    rpcSubscriptions,
+    signer,
+    adapters: { swap: jupiter() },
+    autoRetry: {
+        maxAttempts: 5,
+        backoff: 'exponential', // or 'linear'
+    },
+});
 
 // No retry
-pipe({ 
-  rpc, 
-  rpcSubscriptions, 
-  signer, 
-  adapters: { swap: jupiter() },
-  autoRetry: false
-})
+pipe({
+    rpc,
+    rpcSubscriptions,
+    signer,
+    adapters: { swap: jupiter() },
+    autoRetry: false,
+});
 ```
 
 ### Logging
 
 ```typescript
-pipe({ 
-  rpc, 
-  rpcSubscriptions, 
-  signer, 
-  adapters: { swap: jupiter() },
-  logLevel: 'verbose'  // silent | minimal | verbose
-})
+pipe({
+    rpc,
+    rpcSubscriptions,
+    signer,
+    adapters: { swap: jupiter() },
+    logLevel: 'verbose', // silent | minimal | verbose
+});
 ```
 
 ## Address Lookup Tables
@@ -324,7 +322,7 @@ const result = await pipe({ rpc, rpcSubscriptions, signer, adapters: { swap: jup
 ## Error Handling
 
 ```typescript
-import { 
+import {
   NoActionsError,
   NoAdapterError,
   ActionExecutionError,

@@ -11,11 +11,7 @@
 
 import { address, type Address } from '@solana/addresses';
 import type { Instruction, AccountRole } from '@solana/instructions';
-import type {
-  JitoBundleResponse,
-  JitoBundleStatusResponse,
-  JitoBlockEngineRegion,
-} from './types.js';
+import type { JitoBundleResponse, JitoBundleStatusResponse, JitoBlockEngineRegion } from './types.js';
 
 // ============================================================================
 // Constants
@@ -26,13 +22,13 @@ import type {
  * Use 'mainnet' for automatic load balancing across regions.
  */
 export const JITO_BLOCK_ENGINES: Record<JitoBlockEngineRegion, string> = {
-  mainnet: 'https://mainnet.block-engine.jito.wtf',
-  ny: 'https://ny.mainnet.block-engine.jito.wtf',
-  amsterdam: 'https://amsterdam.mainnet.block-engine.jito.wtf',
-  frankfurt: 'https://frankfurt.mainnet.block-engine.jito.wtf',
-  tokyo: 'https://tokyo.mainnet.block-engine.jito.wtf',
-  singapore: 'https://singapore.mainnet.block-engine.jito.wtf',
-  slc: 'https://slc.mainnet.block-engine.jito.wtf',
+    mainnet: 'https://mainnet.block-engine.jito.wtf',
+    ny: 'https://ny.mainnet.block-engine.jito.wtf',
+    amsterdam: 'https://amsterdam.mainnet.block-engine.jito.wtf',
+    frankfurt: 'https://frankfurt.mainnet.block-engine.jito.wtf',
+    tokyo: 'https://tokyo.mainnet.block-engine.jito.wtf',
+    singapore: 'https://singapore.mainnet.block-engine.jito.wtf',
+    slc: 'https://slc.mainnet.block-engine.jito.wtf',
 } as const;
 
 /**
@@ -41,14 +37,14 @@ export const JITO_BLOCK_ENGINES: Record<JitoBlockEngineRegion, string> = {
  * These are the official Jito tip payment program accounts.
  */
 export const JITO_TIP_ACCOUNTS: Address[] = [
-  address('96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5'),
-  address('HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe'),
-  address('Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY'),
-  address('ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49'),
-  address('DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh'),
-  address('ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt'),
-  address('DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL'),
-  address('3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT'),
+    address('96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5'),
+    address('HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe'),
+    address('Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY'),
+    address('ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49'),
+    address('DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh'),
+    address('ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt'),
+    address('DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL'),
+    address('3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT'),
 ];
 
 /**
@@ -77,8 +73,8 @@ export const JITO_DEFAULT_TIP_LAMPORTS = 10_000n;
  * @returns A randomly selected Jito tip account address
  */
 export function getRandomTipAccount(): Address {
-  const index = Math.floor(Math.random() * JITO_TIP_ACCOUNTS.length);
-  return JITO_TIP_ACCOUNTS[index];
+    const index = Math.floor(Math.random() * JITO_TIP_ACCOUNTS.length);
+    return JITO_TIP_ACCOUNTS[index];
 }
 
 /**
@@ -88,17 +84,17 @@ export function getRandomTipAccount(): Address {
  * @returns Full block engine URL
  */
 export function resolveBlockEngineUrl(urlOrRegion?: string | JitoBlockEngineRegion): string {
-  if (!urlOrRegion) {
-    return JITO_BLOCK_ENGINES.mainnet;
-  }
+    if (!urlOrRegion) {
+        return JITO_BLOCK_ENGINES.mainnet;
+    }
 
-  // Check if it's a region key
-  if (urlOrRegion in JITO_BLOCK_ENGINES) {
-    return JITO_BLOCK_ENGINES[urlOrRegion as JitoBlockEngineRegion];
-  }
+    // Check if it's a region key
+    if (urlOrRegion in JITO_BLOCK_ENGINES) {
+        return JITO_BLOCK_ENGINES[urlOrRegion as JitoBlockEngineRegion];
+    }
 
-  // Assume it's a full URL
-  return urlOrRegion;
+    // Assume it's a full URL
+    return urlOrRegion;
 }
 
 /**
@@ -118,38 +114,34 @@ export function resolveBlockEngineUrl(urlOrRegion?: string | JitoBlockEngineRegi
  * );
  * ```
  */
-export function createTipInstruction(
-  source: Address,
-  lamports: bigint,
-  tipAccount?: Address
-): Instruction {
-  const destination = tipAccount ?? getRandomTipAccount();
+export function createTipInstruction(source: Address, lamports: bigint, tipAccount?: Address): Instruction {
+    const destination = tipAccount ?? getRandomTipAccount();
 
-  // System program transfer instruction data layout:
-  // [0-3]: instruction discriminator (2 = transfer)
-  // [4-11]: lamports as u64 LE
-  const data = new Uint8Array(12);
-  const view = new DataView(data.buffer);
+    // System program transfer instruction data layout:
+    // [0-3]: instruction discriminator (2 = transfer)
+    // [4-11]: lamports as u64 LE
+    const data = new Uint8Array(12);
+    const view = new DataView(data.buffer);
 
-  // Transfer instruction discriminator
-  view.setUint32(0, 2, true);
-  // Lamports as u64 LE
-  view.setBigUint64(4, lamports, true);
+    // Transfer instruction discriminator
+    view.setUint32(0, 2, true);
+    // Lamports as u64 LE
+    view.setBigUint64(4, lamports, true);
 
-  return {
-    programAddress: SYSTEM_PROGRAM,
-    accounts: [
-      {
-        address: source,
-        role: 3 as AccountRole, // WRITABLE_SIGNER
-      },
-      {
-        address: destination,
-        role: 1 as AccountRole, // WRITABLE
-      },
-    ],
-    data,
-  };
+    return {
+        programAddress: SYSTEM_PROGRAM,
+        accounts: [
+            {
+                address: source,
+                role: 3 as AccountRole, // WRITABLE_SIGNER
+            },
+            {
+                address: destination,
+                role: 1 as AccountRole, // WRITABLE
+            },
+        ],
+        data,
+    };
 }
 
 // ============================================================================
@@ -160,31 +152,31 @@ export function createTipInstruction(
  * Error thrown when Jito bundle submission fails.
  */
 export class JitoBundleError extends Error {
-  readonly code: number | undefined;
-  readonly bundleId: string | undefined;
+    readonly code: number | undefined;
+    readonly bundleId: string | undefined;
 
-  constructor(message: string, options?: { code?: number; bundleId?: string }) {
-    super(message);
-    this.name = 'JitoBundleError';
-    this.code = options?.code;
-    this.bundleId = options?.bundleId;
-  }
+    constructor(message: string, options?: { code?: number; bundleId?: string }) {
+        super(message);
+        this.name = 'JitoBundleError';
+        this.code = options?.code;
+        this.bundleId = options?.bundleId;
+    }
 }
 
 /**
  * Options for sending a Jito bundle.
  */
 export interface SendBundleOptions {
-  /**
-   * Block engine URL or region.
-   * @default 'mainnet'
-   */
-  blockEngineUrl?: string | JitoBlockEngineRegion;
+    /**
+     * Block engine URL or region.
+     * @default 'mainnet'
+     */
+    blockEngineUrl?: string | JitoBlockEngineRegion;
 
-  /**
-   * Abort signal for cancellation.
-   */
-  abortSignal?: AbortSignal;
+    /**
+     * Abort signal for cancellation.
+     */
+    abortSignal?: AbortSignal;
 }
 
 /**
@@ -207,85 +199,80 @@ export interface SendBundleOptions {
  * );
  * ```
  */
-export async function sendBundle(
-  transactions: string[],
-  options: SendBundleOptions = {}
-): Promise<string> {
-  if (transactions.length === 0) {
-    throw new JitoBundleError('Bundle must contain at least one transaction');
-  }
+export async function sendBundle(transactions: string[], options: SendBundleOptions = {}): Promise<string> {
+    if (transactions.length === 0) {
+        throw new JitoBundleError('Bundle must contain at least one transaction');
+    }
 
-  if (transactions.length > 5) {
-    throw new JitoBundleError('Bundle cannot contain more than 5 transactions');
-  }
+    if (transactions.length > 5) {
+        throw new JitoBundleError('Bundle cannot contain more than 5 transactions');
+    }
 
-  const blockEngineUrl = resolveBlockEngineUrl(options.blockEngineUrl);
-  const url = `${blockEngineUrl}/api/v1/bundles`;
+    const blockEngineUrl = resolveBlockEngineUrl(options.blockEngineUrl);
+    const url = `${blockEngineUrl}/api/v1/bundles`;
 
-  const fetchOptions: RequestInit = {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'sendBundle',
-      params: [transactions, { encoding: 'base64' }],
-    }),
-  };
+    const fetchOptions: RequestInit = {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'sendBundle',
+            params: [transactions, { encoding: 'base64' }],
+        }),
+    };
 
-  if (options.abortSignal) {
-    fetchOptions.signal = options.abortSignal;
-  }
+    if (options.abortSignal) {
+        fetchOptions.signal = options.abortSignal;
+    }
 
-  const response = await fetch(url, fetchOptions);
+    const response = await fetch(url, fetchOptions);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new JitoBundleError(
-      `Jito block engine error: ${response.status} - ${errorText}`
-    );
-  }
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new JitoBundleError(`Jito block engine error: ${response.status} - ${errorText}`);
+    }
 
-  const data: JitoBundleResponse = await response.json();
+    const data: JitoBundleResponse = await response.json();
 
-  if (data.error) {
-    throw new JitoBundleError(data.error.message, { code: data.error.code });
-  }
+    if (data.error) {
+        throw new JitoBundleError(data.error.message, { code: data.error.code });
+    }
 
-  if (!data.result) {
-    throw new JitoBundleError('No bundle ID returned from Jito');
-  }
+    if (!data.result) {
+        throw new JitoBundleError('No bundle ID returned from Jito');
+    }
 
-  return data.result;
+    return data.result;
 }
 
 /**
  * Options for getting bundle status.
  */
 export interface GetBundleStatusOptions {
-  /**
-   * Block engine URL or region.
-   * @default 'mainnet'
-   */
-  blockEngineUrl?: string | JitoBlockEngineRegion;
+    /**
+     * Block engine URL or region.
+     * @default 'mainnet'
+     */
+    blockEngineUrl?: string | JitoBlockEngineRegion;
 
-  /**
-   * Abort signal for cancellation.
-   */
-  abortSignal?: AbortSignal;
+    /**
+     * Abort signal for cancellation.
+     */
+    abortSignal?: AbortSignal;
 }
 
 /**
  * Bundle status result.
  */
 export interface BundleStatus {
-  bundleId: string;
-  transactions: string[];
-  slot: number;
-  confirmationStatus: 'processed' | 'confirmed' | 'finalized';
-  error: { Ok: null } | { Err: unknown } | null;
+    bundleId: string;
+    transactions: string[];
+    slot: number;
+    confirmationStatus: 'processed' | 'confirmed' | 'finalized';
+    error: { Ok: null } | { Err: unknown } | null;
 }
 
 /**
@@ -307,66 +294,64 @@ export interface BundleStatus {
  * ```
  */
 export async function getBundleStatuses(
-  bundleIds: string[],
-  options: GetBundleStatusOptions = {}
+    bundleIds: string[],
+    options: GetBundleStatusOptions = {},
 ): Promise<Array<BundleStatus | null>> {
-  if (bundleIds.length === 0) {
-    return [];
-  }
+    if (bundleIds.length === 0) {
+        return [];
+    }
 
-  if (bundleIds.length > 5) {
-    throw new JitoBundleError('Cannot query more than 5 bundle IDs at once');
-  }
+    if (bundleIds.length > 5) {
+        throw new JitoBundleError('Cannot query more than 5 bundle IDs at once');
+    }
 
-  const blockEngineUrl = resolveBlockEngineUrl(options.blockEngineUrl);
-  const url = `${blockEngineUrl}/api/v1/getBundleStatuses`;
+    const blockEngineUrl = resolveBlockEngineUrl(options.blockEngineUrl);
+    const url = `${blockEngineUrl}/api/v1/getBundleStatuses`;
 
-  const fetchOptions: RequestInit = {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'getBundleStatuses',
-      params: [bundleIds],
-    }),
-  };
-
-  if (options.abortSignal) {
-    fetchOptions.signal = options.abortSignal;
-  }
-
-  const response = await fetch(url, fetchOptions);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new JitoBundleError(
-      `Jito block engine error: ${response.status} - ${errorText}`
-    );
-  }
-
-  const data: JitoBundleStatusResponse = await response.json();
-
-  if (data.error) {
-    throw new JitoBundleError(data.error.message, { code: data.error.code });
-  }
-
-  if (!data.result?.value) {
-    return bundleIds.map(() => null);
-  }
-
-  return data.result.value.map((status) => {
-    if (!status) return null;
-    return {
-      bundleId: status.bundle_id,
-      transactions: status.transactions,
-      slot: status.slot,
-      confirmationStatus: status.confirmation_status,
-      error: status.err,
+    const fetchOptions: RequestInit = {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'getBundleStatuses',
+            params: [bundleIds],
+        }),
     };
-  });
+
+    if (options.abortSignal) {
+        fetchOptions.signal = options.abortSignal;
+    }
+
+    const response = await fetch(url, fetchOptions);
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new JitoBundleError(`Jito block engine error: ${response.status} - ${errorText}`);
+    }
+
+    const data: JitoBundleStatusResponse = await response.json();
+
+    if (data.error) {
+        throw new JitoBundleError(data.error.message, { code: data.error.code });
+    }
+
+    if (!data.result?.value) {
+        return bundleIds.map(() => null);
+    }
+
+    return data.result.value.map(status => {
+        if (!status) return null;
+        return {
+            bundleId: status.bundle_id,
+            transactions: status.transactions,
+            slot: status.slot,
+            confirmationStatus: status.confirmation_status,
+            error: status.err,
+        };
+    });
 }
 
 /**
@@ -387,14 +372,7 @@ export async function getBundleStatuses(
  * });
  * ```
  */
-export async function sendTransactionViaJito(
-  transaction: string,
-  options: SendBundleOptions = {}
-): Promise<string> {
-  // Single transaction bundles are valid in Jito
-  return sendBundle([transaction], options);
+export async function sendTransactionViaJito(transaction: string, options: SendBundleOptions = {}): Promise<string> {
+    // Single transaction bundles are valid in Jito
+    return sendBundle([transaction], options);
 }
-
-
-
-

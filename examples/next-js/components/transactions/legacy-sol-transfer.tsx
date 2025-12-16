@@ -142,13 +142,13 @@ await connection.confirmTransaction({
     return (
         <div className="grid grid-cols-1 lg:grid-cols-6 gap-4">
             <div className="col-span-2">
-            <TransactionForm
-                title="Legacy SOL Transfer"
-                description="Using @solana/web3.js with wallet adapter compat layer"
-                onSubmit={handleTransfer}
-                disabled={!walletAdapter.connected}
-                defaultRecipient="DemoWa11et1111111111111111111111111111111111"
-            />
+                <TransactionForm
+                    title="Legacy SOL Transfer"
+                    description="Using @solana/web3.js with wallet adapter compat layer"
+                    onSubmit={handleTransfer}
+                    disabled={!walletAdapter.connected}
+                    defaultRecipient="DemoWa11et1111111111111111111111111111111111"
+                />
             </div>
             <div className="col-span-4">
                 {signature && <TransactionResult signature={signature} cluster={cluster?.id || 'devnet'} />}

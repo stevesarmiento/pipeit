@@ -6,20 +6,20 @@
 
 // Types
 export type {
-  ConfirmationStrategy,
-  ConfirmationConfig,
-  ConfirmationResult,
-  WaitForConfirmationOptions,
+    ConfirmationStrategy,
+    ConfirmationConfig,
+    ConfirmationResult,
+    WaitForConfirmationOptions,
 } from './types.js';
 
 // Strategies
 export {
-  DEFAULT_CONFIRMATION_TIMEOUT,
-  type ConfirmationRpc,
-  type ConfirmationRpcSubscriptions,
-  BlockHeightExceededError,
-  ConfirmationTimeoutError,
-  confirmWithBlockheight,
-  confirmWithTimeout,
-  confirmTransaction,
+    DEFAULT_CONFIRMATION_TIMEOUT,
+    type ConfirmationRpc,
+    type ConfirmationRpcSubscriptions,
+    BlockHeightExceededError,
+    ConfirmationTimeoutError,
+    confirmWithBlockheight,
+    confirmWithTimeout,
+    confirmTransaction,
 } from './strategies.js';
