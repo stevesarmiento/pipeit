@@ -35,8 +35,9 @@
     ],
     "scripts": {
         "artifacts": "napi artifacts",
-        "build": "napi build --platform --release",
+        "build": "which cargo > /dev/null 2>&1 && napi build --platform --release || echo 'Skipping native build (cargo not found)'",
         "build:debug": "napi build --platform",
+        "build:native": "napi build --platform --release",
         "prepublishOnly": "napi prepublish -t npm",
         "test": "node --test test.mjs",
         "universal": "napi universal",
