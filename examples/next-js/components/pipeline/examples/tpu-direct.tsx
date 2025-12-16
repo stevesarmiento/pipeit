@@ -37,13 +37,13 @@ export function useTpuDirectPipeline() {
         const { TransactionBuilder } = await import('@pipeit/core');
         
         const signature = await new TransactionBuilder({
-          rpc: ctx.rpc as any,
+          rpc: ctx.rpc,
           priorityFee: 'medium',
         })
           .setFeePayerSigner(ctx.signer)
           .addInstruction(instruction)
           .execute({
-            rpcSubscriptions: ctx.rpcSubscriptions as any,
+            rpcSubscriptions: ctx.rpcSubscriptions,
             commitment: 'confirmed',
             execution: {
               tpu: {
@@ -79,6 +79,7 @@ const result = await createFlow({
       enabled: true,        // Enable TPU submission
       fanout: 2,            // Send to 2 upcoming leaders
       apiRoute: '/api/tpu', // Browser API endpoint
+      priorityFee: 'medium',
     }
   }
 })
@@ -91,15 +92,27 @@ const result = await createFlow({
     })
     
     const { TransactionBuilder } = await import('@pipeit/core')
-    return await new TransactionBuilder({ rpc: ctx.rpc })
+    
+    const signature = await new TransactionBuilder({
+      rpc: ctx.rpc,
+      priorityFee: 'medium',
+    })
       .setFeePayerSigner(ctx.signer)
       .addInstruction(instruction)
       .execute({
         rpcSubscriptions: ctx.rpcSubscriptions,
+        commitment: 'confirmed',
         execution: {
-          tpu: { enabled: true, fanout: 2, apiRoute: '/api/tpu' }
-        }
+          tpu: {
+            enabled: true,
+            fanout: 2,
+            apiRoute: '/api/tpu',
+            priorityFee: 'medium',
+          },
+        },
       })
+
+    return { signature }
   })
   .execute()
 
