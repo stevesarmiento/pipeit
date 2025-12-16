@@ -44,17 +44,8 @@
     "transaction"
   ],
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/stevesarmiento/pipeit.git",
-    "directory": "packages/actions"
-  },
-  "homepage": "https://github.com/stevesarmiento/pipeit#readme",
-  "bugs": {
-    "url": "https://github.com/stevesarmiento/pipeit/issues"
-  },
   "peerDependencies": {
-    "@pipeit/core": "^0.2.0",
+    "@pipeit/core": "^0.2.1",
     "@solana/kit": "^5.0.0",
     "@solana/addresses": "*",
     "@solana/instructions": "*",

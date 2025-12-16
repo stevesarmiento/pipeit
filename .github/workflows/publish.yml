@@ -1,0 +1,71 @@
+name: Publish Packages
+
+on:
+  push:
+    branches:
+      - main
+      - tpu-addon
+    paths:
+      - 'packages/core/**'
+      - 'packages/actions/**'
+      - '.github/workflows/publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish-typescript:
+    name: Publish TypeScript packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org/
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+        working-directory: packages/core
+
+      - name: Build actions
+        run: pnpm build
+        working-directory: packages/actions
+
+      - name: Publish core
+        run: |
+          npm config set provenance true
+          if git log -1 --pretty=%B | grep -E "^[0-9]+\.[0-9]+\.[0-9]+"; then
+            echo "Publishing @pipeit/core..."
+            npm publish --access public --no-git-checks || echo "Package version may already exist"
+          else
+            echo "Not a release commit, skipping publish"
+          fi
+        working-directory: packages/core
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish actions
+        run: |
+          npm config set provenance true
+          if git log -1 --pretty=%B | grep -E "^[0-9]+\.[0-9]+\.[0-9]+"; then
+            echo "Publishing @pipeit/actions..."
+            npm publish --access public --no-git-checks || echo "Package version may already exist"
+          else
+            echo "Not a release commit, skipping publish"
+          fi
+        working-directory: packages/actions
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

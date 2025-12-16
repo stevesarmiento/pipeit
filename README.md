@@ -29,15 +29,15 @@ const rpc = createSolanaRpc('https://api.mainnet-beta.solana.com');
 const rpcSubscriptions = createSolanaRpcSubscriptions('wss://api.mainnet-beta.solana.com');
 
 // Auto-retry, auto-blockhash fetch, built-in validation
-const signature = await new TransactionBuilder({ 
-  rpc, 
-  autoRetry: true, 
-  priorityFee: 'high',
-  logLevel: 'verbose' 
+const signature = await new TransactionBuilder({
+    rpc,
+    autoRetry: true,
+    priorityFee: 'high',
+    logLevel: 'verbose',
 })
-  .setFeePayerSigner(signer)
-  .addInstruction(yourInstruction)
-  .execute({ rpcSubscriptions });
+    .setFeePayerSigner(signer)
+    .addInstruction(yourInstruction)
+    .execute({ rpcSubscriptions });
 ```
 
 ### Multi-Step Flows
@@ -77,15 +77,12 @@ const result = await executePlan(plan, { rpc, rpcSubscriptions, signer });
 ### Simulation
 
 ```typescript
-const result = await new TransactionBuilder({ rpc })
-  .setFeePayerSigner(signer)
-  .addInstruction(instruction)
-  .simulate();
+const result = await new TransactionBuilder({ rpc }).setFeePayerSigner(signer).addInstruction(instruction).simulate();
 
 if (result.err) {
-  console.error('Simulation failed:', result.logs);
+    console.error('Simulation failed:', result.logs);
 } else {
-  console.log('Success! Units consumed:', result.unitsConsumed);
+    console.log('Success! Units consumed:', result.unitsConsumed);
 }
 ```
 
@@ -97,32 +94,32 @@ import { jupiter } from '@pipeit/actions/adapters';
 
 // Simple, composable DeFi actions
 const result = await pipe({
-  rpc,
-  rpcSubscriptions,
-  signer,
-  adapters: { swap: jupiter() }
+    rpc,
+    rpcSubscriptions,
+    signer,
+    adapters: { swap: jupiter() },
 })
-  .swap({ 
-    inputMint: 'So11111111111111111111111111111111111111112', // SOL
-    outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
-    amount: 100_000_000n,  // 0.1 SOL
-    slippageBps: 50  // 0.5%
-  })
-  .execute();
+    .swap({
+        inputMint: 'So11111111111111111111111111111111111111112', // SOL
+        outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
+        amount: 100_000_000n, // 0.1 SOL
+        slippageBps: 50, // 0.5%
+    })
+    .execute();
 
 console.log('Swap completed:', result.signature);
 
 // Simulate before executing
 const simulation = await pipe({ rpc, rpcSubscriptions, signer, adapters: { swap: jupiter() } })
-  .swap({ 
-    inputMint: 'So11111111111111111111111111111111111111112', 
-    outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 
-    amount: 100_000_000n 
-  })
-  .simulate();
+    .swap({
+        inputMint: 'So11111111111111111111111111111111111111112',
+        outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        amount: 100_000_000n,
+    })
+    .simulate();
 
 if (simulation.success) {
-  console.log('Estimated compute units:', simulation.unitsConsumed);
+    console.log('Estimated compute units:', simulation.unitsConsumed);
 }
 ```
 
@@ -131,6 +128,7 @@ if (simulation.success) {
 ### @pipeit/core
 
 **Single Transactions:**
+
 - **Type-Safe Builder**: Compile-time checks ensure all required fields are set
 - **Auto-Blockhash**: Automatically fetches latest blockhash when RPC provided
 - **Smart Defaults**: Opinionated configuration for common use cases
@@ -145,6 +143,7 @@ if (simulation.success) {
 - **Comprehensive Logging**: Verbose error logs with simulation details
 
 **Multi-Step Flows:**
+
 - **Dynamic Context**: Build instructions that depend on previous step results
 - **Automatic Batching**: Intelligently batch instructions into single transactions
 - **Atomic Groups**: Group instructions that must execute together
@@ -152,6 +151,7 @@ if (simulation.success) {
 - **Execution Hooks**: Monitor step lifecycle with onStepStart, onStepComplete, onStepError
 
 **Kit Integration:**
+
 - **Instruction Plans**: Re-exports `@solana/instruction-plans` for advanced planning
 - **executePlan()**: Execute Kit instruction plans with TransactionBuilder features
 

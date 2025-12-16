@@ -11,62 +11,60 @@ const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
 /**
  * Example: Jupiter Swap using @pipeit/actions adapter
- * 
+ *
  * This demonstrates using the Jupiter adapter to get swap instructions,
  * then executing them via the Flow API.
  */
 export function useJupiterSwapPipeline() {
-  const visualPipeline = useMemo(() => {
-    // Create Jupiter adapter
-    const jupiterAdapter = jupiter();
+    const visualPipeline = useMemo(() => {
+        // Create Jupiter adapter
+        const jupiterAdapter = jupiter();
 
-    const flowFactory = (config: FlowConfig) =>
-      createFlow(config).transaction('jupiter-swap', async (ctx) => {
-        // Call Jupiter adapter to get swap instructions
-        const swapAction = jupiterAdapter.swap({
-          inputMint: SOL_MINT,
-          outputMint: USDC_MINT,
-          amount: 10_000_000n, // 0.01 SOL
-          slippageBps: 50,
-        });
+        const flowFactory = (config: FlowConfig) =>
+            createFlow(config).transaction('jupiter-swap', async ctx => {
+                // Call Jupiter adapter to get swap instructions
+                const swapAction = jupiterAdapter.swap({
+                    inputMint: SOL_MINT,
+                    outputMint: USDC_MINT,
+                    amount: 10_000_000n, // 0.01 SOL
+                    slippageBps: 50,
+                });
 
-        // Execute the action to get instructions
-        const result = await swapAction({
-          signer: ctx.signer,
-          rpc: ctx.rpc as any,
-          rpcSubscriptions: ctx.rpcSubscriptions as any,
-        });
+                // Execute the action to get instructions
+                const result = await swapAction({
+                    signer: ctx.signer,
+                    rpc: ctx.rpc as any,
+                    rpcSubscriptions: ctx.rpcSubscriptions as any,
+                });
 
-        // Use TransactionBuilder to execute all Jupiter instructions
-        const { TransactionBuilder } = await import('@pipeit/core');
-        const { address } = await import('@solana/kit');
-        
-        // Get lookup table addresses from Jupiter response and convert to Address types
-        const lookupTables = result.addressLookupTableAddresses ?? [];
-        const lookupTableAddrs = lookupTables.map(addr => address(addr));
-        
-        const signature = await new TransactionBuilder({
-          rpc: ctx.rpc as any,
-          computeUnits: result.computeUnits ?? 400_000,
-          // Use lookup tables to compress the transaction
-          lookupTableAddresses: lookupTableAddrs.length > 0 ? lookupTableAddrs : undefined,
-        })
-          .setFeePayerSigner(ctx.signer)
-          .addInstructions(result.instructions)
-          .execute({
-            rpcSubscriptions: ctx.rpcSubscriptions as any,
-            commitment: 'confirmed',
-          });
+                // Use TransactionBuilder to execute all Jupiter instructions
+                const { TransactionBuilder } = await import('@pipeit/core');
+                const { address } = await import('@solana/kit');
 
-        return { signature };
-      });
+                // Get lookup table addresses from Jupiter response and convert to Address types
+                const lookupTables = result.addressLookupTableAddresses ?? [];
+                const lookupTableAddrs = lookupTables.map(addr => address(addr));
 
-    return new VisualPipeline('jupiter-swap', flowFactory, [
-      { name: 'jupiter-swap', type: 'transaction' },
-    ]);
-  }, []);
+                const signature = await new TransactionBuilder({
+                    rpc: ctx.rpc as any,
+                    computeUnits: result.computeUnits ?? 400_000,
+                    // Use lookup tables to compress the transaction
+                    lookupTableAddresses: lookupTableAddrs.length > 0 ? lookupTableAddrs : undefined,
+                })
+                    .setFeePayerSigner(ctx.signer)
+                    .addInstructions(result.instructions)
+                    .execute({
+                        rpcSubscriptions: ctx.rpcSubscriptions as any,
+                        commitment: 'confirmed',
+                    });
 
-  return visualPipeline;
+                return { signature };
+            });
+
+        return new VisualPipeline('jupiter-swap', flowFactory, [{ name: 'jupiter-swap', type: 'transaction' }]);
+    }, []);
+
+    return visualPipeline;
 }
 
 export const jupiterSwapCode = `import { pipe } from '@pipeit/actions'

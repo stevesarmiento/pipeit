@@ -44,10 +44,10 @@ export function ConnectButton({ className }: ConnectButtonProps) {
     const connector = useConnector();
     const { connected, connecting, selectedWallet, selectedAccount, disconnect, wallets, cluster } = connector;
     const { clusters, setCluster } = useCluster();
-    
+
     const clusterName = cluster?.label || 'Unknown';
     const isMainnet = cluster?.id === 'solana:mainnet';
-    
+
     const handleClusterChange = async (clusterId: SolanaClusterId) => {
         try {
             await setCluster(clusterId);
@@ -93,7 +93,9 @@ export function ConnectButton({ className }: ConnectButtonProps) {
                 <DropdownMenuContent align="start" side="right" className="w-72">
                     <DropdownMenuLabel>
                         <div className="flex flex-col space-y-1">
-                            <p className="text-xs font-abc-diatype leading-none"><span className="opacity-50">Connected to</span> {selectedWallet.name}</p>
+                            <p className="text-xs font-abc-diatype leading-none">
+                                <span className="opacity-50">Connected to</span> {selectedWallet.name}
+                            </p>
                             <p className="text-body-md font-berkeley-mono text-muted-foreground">{shortAddress}</p>
                         </div>
                     </DropdownMenuLabel>
@@ -102,7 +104,8 @@ export function ConnectButton({ className }: ConnectButtonProps) {
                         <div className="flex items-start gap-2">
                             <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
                             <p className="text-xs text-muted-foreground leading-relaxed">
-                                These examples execute SOL transfers (self-transfers to your own address). Each transaction pays standard network fees.
+                                These examples execute SOL transfers (self-transfers to your own address). Each
+                                transaction pays standard network fees.
                             </p>
                         </div>
                     </div>
@@ -142,7 +145,10 @@ export function ConnectButton({ className }: ConnectButtonProps) {
                         </div>
                     )}
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => disconnect()} className="cursor-pointer group hover:!bg-red-600/5 transition-all duration-150 ease-in-out">
+                    <DropdownMenuItem
+                        onClick={() => disconnect()}
+                        className="cursor-pointer group hover:!bg-red-600/5 transition-all duration-150 ease-in-out"
+                    >
                         <LogOut className="mr-2 h-4 w-4 group-hover:text-red-600" />
                         <span className="font-berkeley-mono group-hover:text-red-600">Disconnect</span>
                     </DropdownMenuItem>

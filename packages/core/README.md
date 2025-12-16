@@ -20,15 +20,15 @@ const rpc = createSolanaRpc('https://api.mainnet-beta.solana.com');
 const rpcSubscriptions = createSolanaRpcSubscriptions('wss://api.mainnet-beta.solana.com');
 
 // Build and execute with auto-blockhash, auto-retry, and priority fees
-const signature = await new TransactionBuilder({ 
-  rpc,
-  autoRetry: true,
-  priorityFee: 'high',
-  logLevel: 'verbose'
+const signature = await new TransactionBuilder({
+    rpc,
+    autoRetry: true,
+    priorityFee: 'high',
+    logLevel: 'verbose',
 })
-  .setFeePayerSigner(signer)
-  .addInstruction(instruction)
-  .execute({ rpcSubscriptions });
+    .setFeePayerSigner(signer)
+    .addInstruction(instruction)
+    .execute({ rpcSubscriptions });
 ```
 
 ### Multi-Step Flows
@@ -70,14 +70,14 @@ const result = await executePlan(plan, { rpc, rpcSubscriptions, signer });
 
 ```typescript
 interface TransactionBuilderConfig {
-  version?: 0 | 'legacy';
-  rpc?: Rpc<GetLatestBlockhashApi & GetAccountInfoApi>;
-  autoRetry?: boolean | { maxAttempts: number; backoff: 'linear' | 'exponential' };
-  logLevel?: 'silent' | 'minimal' | 'verbose';
-  priorityFee?: PriorityFeeLevel | PriorityFeeConfig;
-  computeUnits?: 'auto' | number | ComputeUnitConfig;
-  lookupTableAddresses?: Address[];
-  addressesByLookupTable?: AddressesByLookupTableAddress;
+    version?: 0 | 'legacy';
+    rpc?: Rpc<GetLatestBlockhashApi & GetAccountInfoApi>;
+    autoRetry?: boolean | { maxAttempts: number; backoff: 'linear' | 'exponential' };
+    logLevel?: 'silent' | 'minimal' | 'verbose';
+    priorityFee?: PriorityFeeLevel | PriorityFeeConfig;
+    computeUnits?: 'auto' | number | ComputeUnitConfig;
+    lookupTableAddresses?: Address[];
+    addressesByLookupTable?: AddressesByLookupTableAddress;
 }
 ```
 
@@ -87,26 +87,26 @@ interface TransactionBuilderConfig {
 
 ```typescript
 // Use setFeePayerSigner when executing (recommended)
-builder.setFeePayerSigner(signer)
+builder.setFeePayerSigner(signer);
 
 // Use setFeePayer when only building/exporting
-builder.setFeePayer(address('...'))
+builder.setFeePayer(address('...'));
 ```
 
 #### Setting Lifetime
 
 ```typescript
 // Blockhash lifetime (auto-fetched if RPC provided)
-builder.setBlockhashLifetime(blockhash, lastValidBlockHeight)
+builder.setBlockhashLifetime(blockhash, lastValidBlockHeight);
 
 // Durable nonce lifetime
-builder.setDurableNonceLifetime(nonce, nonceAccountAddress, nonceAuthorityAddress)
+builder.setDurableNonceLifetime(nonce, nonceAccountAddress, nonceAuthorityAddress);
 
 // Static factory for durable nonce (auto-fetches nonce)
 const builder = await TransactionBuilder.withDurableNonce({
-  rpc,
-  nonceAccountAddress: address('...'),
-  nonceAuthorityAddress: address('...'),
+    rpc,
+    nonceAccountAddress: address('...'),
+    nonceAuthorityAddress: address('...'),
 });
 ```
 
@@ -114,10 +114,10 @@ const builder = await TransactionBuilder.withDurableNonce({
 
 ```typescript
 // Single instruction
-builder.addInstruction(instruction)
+builder.addInstruction(instruction);
 
 // Multiple instructions
-builder.addInstructions([ix1, ix2, ix3])
+builder.addInstructions([ix1, ix2, ix3]);
 
 // With auto-packing (returns overflow instructions)
 const { builder: packed, overflow } = await builder.addInstructionsWithPacking(manyInstructions);
@@ -136,9 +136,9 @@ const message = await builder.build();
 const result = await builder.simulate();
 
 if (result.err) {
-  console.error('Simulation failed:', result.logs);
+    console.error('Simulation failed:', result.logs);
 } else {
-  console.log('Compute units:', result.unitsConsumed);
+    console.log('Compute units:', result.unitsConsumed);
 }
 ```
 
@@ -150,12 +150,12 @@ const signature = await builder.execute({ rpcSubscriptions });
 
 // With execution options
 const signature = await builder.execute({
-  rpcSubscriptions,
-  commitment: 'confirmed',
-  skipPreflight: false,
-  skipPreflightOnRetry: true,
-  maxRetries: 5,
-  preflightCommitment: 'confirmed',
+    rpcSubscriptions,
+    commitment: 'confirmed',
+    skipPreflight: false,
+    skipPreflightOnRetry: true,
+    maxRetries: 5,
+    preflightCommitment: 'confirmed',
 });
 ```
 
@@ -186,45 +186,45 @@ Priority fees can be configured using preset levels or custom strategies:
 
 ```typescript
 // Preset levels
-new TransactionBuilder({ priorityFee: 'none' })    // 0 micro-lamports/CU
-new TransactionBuilder({ priorityFee: 'low' })     // 1,000 micro-lamports/CU
-new TransactionBuilder({ priorityFee: 'medium' })  // 10,000 micro-lamports/CU (default)
-new TransactionBuilder({ priorityFee: 'high' })     // 50,000 micro-lamports/CU
-new TransactionBuilder({ priorityFee: 'veryHigh' }) // 100,000 micro-lamports/CU
+new TransactionBuilder({ priorityFee: 'none' }); // 0 micro-lamports/CU
+new TransactionBuilder({ priorityFee: 'low' }); // 1,000 micro-lamports/CU
+new TransactionBuilder({ priorityFee: 'medium' }); // 10,000 micro-lamports/CU (default)
+new TransactionBuilder({ priorityFee: 'high' }); // 50,000 micro-lamports/CU
+new TransactionBuilder({ priorityFee: 'veryHigh' }); // 100,000 micro-lamports/CU
 
 // Custom fixed fee
-new TransactionBuilder({ 
-  priorityFee: { 
-    strategy: 'fixed', 
-    microLamports: 25_000 
-  } 
-})
+new TransactionBuilder({
+    priorityFee: {
+        strategy: 'fixed',
+        microLamports: 25_000,
+    },
+});
 
 // Percentile-based estimation (requires RPC)
-new TransactionBuilder({ 
-  priorityFee: { 
-    strategy: 'percentile', 
-    percentile: 75  // Use 75th percentile of recent fees
-  } 
-})
+new TransactionBuilder({
+    priorityFee: {
+        strategy: 'percentile',
+        percentile: 75, // Use 75th percentile of recent fees
+    },
+});
 ```
 
 ### Compute Units
 
 ```typescript
 // Auto (no explicit instruction, uses default)
-new TransactionBuilder({ computeUnits: 'auto' })
+new TransactionBuilder({ computeUnits: 'auto' });
 
 // Fixed limit
-new TransactionBuilder({ computeUnits: 300_000 })
+new TransactionBuilder({ computeUnits: 300_000 });
 
 // Custom strategy
-new TransactionBuilder({ 
-  computeUnits: { 
-    strategy: 'fixed', 
-    units: 400_000 
-  } 
-})
+new TransactionBuilder({
+    computeUnits: {
+        strategy: 'fixed',
+        units: 400_000,
+    },
+});
 ```
 
 ### Address Lookup Tables
@@ -233,16 +233,18 @@ Address lookup tables automatically compress transactions for version 0 transact
 
 ```typescript
 // Provide ALT addresses (will be fetched automatically)
-new TransactionBuilder({ 
-  version: 0,
-  lookupTableAddresses: [address('...'), address('...')]
-})
+new TransactionBuilder({
+    version: 0,
+    lookupTableAddresses: [address('...'), address('...')],
+});
 
 // Or provide pre-fetched ALT data
-new TransactionBuilder({ 
-  version: 0,
-  addressesByLookupTable: { /* pre-fetched data */ }
-})
+new TransactionBuilder({
+    version: 0,
+    addressesByLookupTable: {
+        /* pre-fetched data */
+    },
+});
 ```
 
 ## Flow API
@@ -255,12 +257,12 @@ The Flow API orchestrates multi-step transaction workflows where later instructi
 import { createFlow } from '@pipeit/core';
 
 const result = await createFlow({ rpc, rpcSubscriptions, signer })
-  .step('step1', (ctx) => instruction1)
-  .step('step2', (ctx) => {
-    const prev = ctx.get('step1'); // access previous results
-    return instruction2(prev);
-  })
-  .execute();
+    .step('step1', ctx => instruction1)
+    .step('step2', ctx => {
+        const prev = ctx.get('step1'); // access previous results
+        return instruction2(prev);
+    })
+    .execute();
 ```
 
 ### Step Types
@@ -268,11 +270,13 @@ const result = await createFlow({ rpc, rpcSubscriptions, signer })
 **Instruction Steps** - Automatically batched into single transactions:
 
 ```typescript
-flow.step('transfer', (ctx) => getTransferSolInstruction({
-  source: ctx.signer,
-  destination: recipient,
-  amount: lamports(1_000_000n),
-}));
+flow.step('transfer', ctx =>
+    getTransferSolInstruction({
+        source: ctx.signer,
+        destination: recipient,
+        amount: lamports(1_000_000n),
+    }),
+);
 ```
 
 **Atomic Groups** - Instructions that must execute together:
@@ -288,11 +292,11 @@ flow.atomic('swap', [
 **Transaction Steps** - Custom async operations that break batching:
 
 ```typescript
-flow.transaction('verify-state', async (ctx) => {
-  const prevResult = ctx.get('create-account');
-  // Custom logic that needs the previous transaction confirmed
-  const accountInfo = await ctx.rpc.getAccountInfo(accountAddress).send();
-  return { signature: prevResult?.signature ?? '', verified: !!accountInfo };
+flow.transaction('verify-state', async ctx => {
+    const prevResult = ctx.get('create-account');
+    // Custom logic that needs the previous transaction confirmed
+    const accountInfo = await ctx.rpc.getAccountInfo(accountAddress).send();
+    return { signature: prevResult?.signature ?? '', verified: !!accountInfo };
 });
 ```
 
@@ -302,11 +306,11 @@ Each step receives a `FlowContext`:
 
 ```typescript
 interface FlowContext {
-  results: Map<string, FlowStepResult>;  // All previous results
-  signer: TransactionSigner;             // The transaction signer
-  rpc: Rpc<FlowRpcApi>;                  // RPC client
-  rpcSubscriptions: RpcSubscriptions<FlowRpcSubscriptionsApi>;
-  get: (stepName: string) => FlowStepResult | undefined;  // Convenience method
+    results: Map<string, FlowStepResult>; // All previous results
+    signer: TransactionSigner; // The transaction signer
+    rpc: Rpc<FlowRpcApi>; // RPC client
+    rpcSubscriptions: RpcSubscriptions<FlowRpcSubscriptionsApi>;
+    get: (stepName: string) => FlowStepResult | undefined; // Convenience method
 }
 ```
 
@@ -314,24 +318,24 @@ interface FlowContext {
 
 ```typescript
 // Auto: Try batching, fallback to sequential if too large (default)
-createFlow({ rpc, rpcSubscriptions, signer, strategy: 'auto' })
+createFlow({ rpc, rpcSubscriptions, signer, strategy: 'auto' });
 
 // Batch: Always batch consecutive instruction steps
-createFlow({ rpc, rpcSubscriptions, signer, strategy: 'batch' })
+createFlow({ rpc, rpcSubscriptions, signer, strategy: 'batch' });
 
 // Sequential: Execute each step as separate transaction
-createFlow({ rpc, rpcSubscriptions, signer, strategy: 'sequential' })
+createFlow({ rpc, rpcSubscriptions, signer, strategy: 'sequential' });
 ```
 
 ### Lifecycle Hooks
 
 ```typescript
 createFlow({ rpc, rpcSubscriptions, signer })
-  .step('transfer', (ctx) => instruction)
-  .onStepStart((name) => console.log(`Starting ${name}`))
-  .onStepComplete((name, result) => console.log(`${name}: ${result.signature}`))
-  .onStepError((name, error) => console.error(`${name} failed:`, error))
-  .execute();
+    .step('transfer', ctx => instruction)
+    .onStepStart(name => console.log(`Starting ${name}`))
+    .onStepComplete((name, result) => console.log(`${name}: ${result.signature}`))
+    .onStepError((name, error) => console.error(`${name} failed:`, error))
+    .execute();
 ```
 
 ## Plans API
@@ -339,25 +343,21 @@ createFlow({ rpc, rpcSubscriptions, signer })
 For advanced users who know all instructions upfront, Pipeit re-exports Kit's instruction-plans and provides a convenience helper:
 
 ```typescript
-import { 
-  sequentialInstructionPlan, 
-  parallelInstructionPlan,
-  executePlan 
-} from '@pipeit/core';
+import { sequentialInstructionPlan, parallelInstructionPlan, executePlan } from '@pipeit/core';
 
 // Create a plan
 const plan = sequentialInstructionPlan([
-  parallelInstructionPlan([depositA, depositB]),
-  activateVault,
-  parallelInstructionPlan([withdrawA, withdrawB]),
+    parallelInstructionPlan([depositA, depositB]),
+    activateVault,
+    parallelInstructionPlan([withdrawA, withdrawB]),
 ]);
 
 // Execute with TransactionBuilder features
 const result = await executePlan(plan, {
-  rpc,
-  rpcSubscriptions,
-  signer,
-  commitment: 'confirmed',
+    rpc,
+    rpcSubscriptions,
+    signer,
+    commitment: 'confirmed',
 });
 ```
 
@@ -366,28 +366,28 @@ All Kit instruction-plans types and functions are re-exported. See [@solana/inst
 ## Error Handling
 
 ```typescript
-import { 
-  isBlockhashExpiredError,
-  isSimulationFailedError,
-  isTransactionTooLargeError,
-  TransactionTooLargeError,
-  InsufficientFundsError
+import {
+    isBlockhashExpiredError,
+    isSimulationFailedError,
+    isTransactionTooLargeError,
+    TransactionTooLargeError,
+    InsufficientFundsError,
 } from '@pipeit/core';
 
 try {
-  const sig = await builder.execute({ rpcSubscriptions });
+    const sig = await builder.execute({ rpcSubscriptions });
 } catch (error) {
-  if (isBlockhashExpiredError(error)) {
-    console.error('Blockhash expired, retry with fresh blockhash');
-  } else if (isSimulationFailedError(error)) {
-    console.error('Simulation failed');
-  } else if (isTransactionTooLargeError(error)) {
-    console.error('Transaction too large, split into multiple transactions');
-  } else if (error instanceof InsufficientFundsError) {
-    console.error(`Need ${error.required} lamports, have ${error.available}`);
-  } else if (error instanceof TransactionTooLargeError) {
-    console.error(`Transaction size: ${error.size}, limit: ${error.limit}`);
-  }
+    if (isBlockhashExpiredError(error)) {
+        console.error('Blockhash expired, retry with fresh blockhash');
+    } else if (isSimulationFailedError(error)) {
+        console.error('Simulation failed');
+    } else if (isTransactionTooLargeError(error)) {
+        console.error('Transaction too large, split into multiple transactions');
+    } else if (error instanceof InsufficientFundsError) {
+        console.error(`Need ${error.required} lamports, have ${error.available}`);
+    } else if (error instanceof TransactionTooLargeError) {
+        console.error(`Transaction size: ${error.size}, limit: ${error.limit}`);
+    }
 }
 ```
 
@@ -456,6 +456,7 @@ try {
 ### Kit Integration
 
 All types and functions from `@solana/instruction-plans` are re-exported:
+
 - `InstructionPlan`, `TransactionPlan`, `TransactionPlanResult`
 - `sequentialInstructionPlan`, `parallelInstructionPlan`, `nonDivisibleSequentialInstructionPlan`
 - `createTransactionPlanner`, `createTransactionPlanExecutor`

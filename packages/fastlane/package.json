@@ -1,0 +1,52 @@
+{
+    "name": "@pipeit/fastlane",
+    "version": "0.1.0",
+    "description": "Native QUIC client for direct Solana TPU transaction submission",
+    "main": "index.js",
+    "types": "index.d.ts",
+    "exports": {
+        ".": {
+            "browser": "./browser.js",
+            "default": "./index.js"
+        },
+        "./browser": "./browser.js"
+    },
+    "browser": "./browser.js",
+    "napi": {
+        "name": "fastlane",
+        "triples": {
+            "defaults": true,
+            "additional": [
+                "aarch64-apple-darwin"
+            ]
+        }
+    },
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/stevesarmiento/pipeit.git",
+        "directory": "packages/fastlane"
+    },
+    "files": [
+        "index.js",
+        "index.d.ts",
+        "browser.js",
+        "*.node"
+    ],
+    "scripts": {
+        "artifacts": "napi artifacts",
+        "build": "which cargo > /dev/null 2>&1 && napi build --platform --release || echo 'Skipping native build (cargo not found)'",
+        "build:debug": "napi build --platform",
+        "build:native": "napi build --platform --release",
+        "prepublishOnly": "napi prepublish -t npm",
+        "test": "node --test test.mjs",
+        "universal": "napi universal",
+        "version": "napi version"
+    },
+    "devDependencies": {
+        "@napi-rs/cli": "^2.18.0"
+    },
+    "engines": {
+        "node": ">= 18"
+    }
+}

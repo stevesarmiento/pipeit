@@ -1,0 +1,19 @@
+# Build artifacts
+target/
+*.node
+
+# npm
+node_modules/
+npm/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+

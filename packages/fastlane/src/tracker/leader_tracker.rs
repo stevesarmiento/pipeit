@@ -1,0 +1,317 @@
+//! Leader tracking coordination.
+//!
+//! Coordinates slot tracking, leader schedule, and validator socket addresses
+//! to determine where to send transactions at any given moment.
+
+use anyhow::{Context, Result};
+use futures_util::StreamExt;
+use log::{debug, error, info, warn};
+use solana_client::nonblocking::pubsub_client::PubsubClient;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_client::rpc_response::SlotUpdate;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::RwLock;
+
+use super::schedule_tracker::ScheduleTracker;
+use super::slots_tracker::{SlotEvent, SlotsTracker};
+use super::Slot;
+
+/// Information about a leader validator.
+#[derive(Debug, Clone)]
+pub struct LeaderInfo {
+    /// Validator identity pubkey.
+    pub identity: String,
+    /// TPU socket address (ip:port).
+    pub tpu_socket: String,
+    /// Current slot when this info was generated.
+    pub slot: Slot,
+}
+
+/// Coordinates leader tracking for TPU transaction routing.
+///
+/// Responsibilities:
+/// 1. Track current slot via WebSocket subscriptions
+/// 2. Maintain leader schedule for current and next epochs
+/// 3. Map leader identities to TPU socket addresses
+///
+/// The separation of identities from IPs allows independent updates
+/// since the schedule is based on identities and IPs can change.
+pub struct LeaderTracker {
+    /// RPC URL for fetching data.
+    rpc_url: String,
+    /// WebSocket URL for subscriptions.
+    ws_url: String,
+    /// Real-time slot tracker.
+    pub slots_tracker: RwLock<SlotsTracker>,
+    /// Leader schedule tracker.
+    schedule_tracker: RwLock<ScheduleTracker>,
+    /// Maps validator identity -> TPU socket address.
+    leader_sockets: RwLock<HashMap<String, String>>,
+    /// Whether the tracker is ready.
+    ready: RwLock<bool>,
+}
+
+impl LeaderTracker {
+    /// Creates a new LeaderTracker.
+    ///
+    /// # Arguments
+    ///
+    /// * `rpc_url` - RPC endpoint URL
+    /// * `ws_url` - WebSocket endpoint URL
+    pub async fn new(rpc_url: String, ws_url: String) -> Result<Self> {
+        let rpc_client = RpcClient::new(rpc_url.clone());
+
+        let schedule_tracker = ScheduleTracker::new(&rpc_client)
+            .await
+            .context("Failed to initialize schedule tracker")?;
+
+        Ok(Self {
+            rpc_url,
+            ws_url,
+            slots_tracker: RwLock::new(SlotsTracker::new()),
+            schedule_tracker: RwLock::new(schedule_tracker),
+            leader_sockets: RwLock::new(HashMap::new()),
+            ready: RwLock::new(false),
+        })
+    }
+
+    /// Returns whether the tracker is ready to provide leader info.
+    pub async fn is_ready(&self) -> bool {
+        *self.ready.read().await
+    }
+
+    /// Gets the current estimated slot.
+    pub async fn current_slot(&self) -> Slot {
+        self.slots_tracker.read().await.current_slot()
+    }
+
+    /// Gets upcoming leaders for transaction routing.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - Start offset from current slot (usually 0)
+    /// * `end` - End offset from current slot (usually 2-4)
+    ///
+    /// # Returns
+    ///
+    /// Vector of leader info for the specified slot range, deduplicated.
+    pub async fn get_future_leaders(&self, start: u64, end: u64) -> Vec<LeaderInfo> {
+        // Acquire all locks together for consistent view
+        let slot_tracker = self.slots_tracker.read().await;
+        let schedule_tracker = self.schedule_tracker.read().await;
+        let leader_sockets = self.leader_sockets.read().await;
+
+        let curr_slot = slot_tracker.current_slot();
+
+        if curr_slot == 0 {
+            return vec![];
+        }
+
+        // Validate we're in the current epoch
+        if curr_slot < schedule_tracker.current_epoch_slot_start()
+            || curr_slot >= schedule_tracker.next_epoch_slot_start()
+        {
+            warn!(
+                "Current slot {} is outside epoch range [{}, {})",
+                curr_slot,
+                schedule_tracker.current_epoch_slot_start(),
+                schedule_tracker.next_epoch_slot_start()
+            );
+            return vec![];
+        }
+
+        let mut leaders = Vec::new();
+        let mut seen = HashSet::new();
+
+        for i in start..end {
+            let target_slot = match curr_slot.checked_add(i) {
+                Some(s) => s,
+                None => break, // Overflow protection
+            };
+
+            // Skip if out of current epoch range
+            if target_slot >= schedule_tracker.next_epoch_slot_start() {
+                break;
+            }
+
+            // Convert absolute slot to epoch-relative index
+            let slot_index = match schedule_tracker.slot_to_index(target_slot) {
+                Some(idx) => idx,
+                None => continue,
+            };
+
+            // Get leader for this slot
+            if let Some(leader_pubkey) = schedule_tracker.get_leader_for_slot_index(slot_index) {
+                // Deduplicate - only add each leader once
+                if !seen.insert(leader_pubkey.to_string()) {
+                    continue;
+                }
+
+                match leader_sockets.get(leader_pubkey) {
+                    Some(socket) => {
+                        leaders.push(LeaderInfo {
+                            identity: leader_pubkey.to_string(),
+                            tpu_socket: socket.clone(),
+                            slot: curr_slot,
+                        });
+                    }
+                    None => {
+                        debug!("Leader {} has no known socket address", leader_pubkey);
+                    }
+                }
+            }
+        }
+
+        leaders
+    }
+
+    /// Gets the current leader and next leader (if close to leader switch).
+    ///
+    /// This is the main method for transaction routing.
+    pub async fn get_leaders(&self) -> Vec<LeaderInfo> {
+        self.get_future_leaders(0, 2).await
+    }
+
+    /// Updates the leader socket addresses from cluster nodes.
+    ///
+    /// Should be called periodically (e.g., every 60 seconds) as
+    /// validator IPs can change.
+    pub async fn update_leader_sockets(&self) -> Result<()> {
+        let rpc_client = RpcClient::new(self.rpc_url.clone());
+
+        let nodes = rpc_client
+            .get_cluster_nodes()
+            .await
+            .context("Failed to fetch cluster nodes")?;
+
+        let mut new_sockets = HashMap::new();
+
+        for node in nodes {
+            if let (Some(tpu_quic), Some(gossip)) = (node.tpu_quic, node.gossip) {
+                // TPU QUIC uses the gossip IP with the TPU QUIC port
+                new_sockets.insert(
+                    node.pubkey.to_string(),
+                    format!("{}:{}", gossip.ip(), tpu_quic.port()),
+                );
+            }
+        }
+
+        info!("Updated sockets for {} validators", new_sockets.len());
+
+        let mut sockets = self.leader_sockets.write().await;
+        *sockets = new_sockets;
+
+        Ok(())
+    }
+
+    /// Starts the slot updates listener.
+    ///
+    /// This should be spawned as a background task.
+    pub async fn run_slot_listener(self: Arc<Self>) -> Result<()> {
+        let ws_client = PubsubClient::new(&self.ws_url)
+            .await
+            .context("Failed to connect to WebSocket")?;
+
+        let (mut slot_notifications, _unsubscribe) = ws_client
+            .slot_updates_subscribe()
+            .await
+            .context("Failed to subscribe to slot updates")?;
+
+        info!("Listening for slot updates...");
+
+        // Mark as ready once we start receiving updates
+        {
+            let mut ready = self.ready.write().await;
+            *ready = true;
+        }
+
+        while let Some(slot_event) = slot_notifications.next().await {
+            if let Err(e) = self.handle_slot_event(slot_event).await {
+                error!("Error handling slot event: {}", e);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Handles a single slot update event.
+    async fn handle_slot_event(&self, slot_update: SlotUpdate) -> Result<()> {
+        // Convert to our SlotEvent type
+        let event = match slot_update {
+            SlotUpdate::FirstShredReceived { slot, .. } => SlotEvent::Start(slot),
+            SlotUpdate::Completed { slot, .. } => SlotEvent::End(slot),
+            _ => return Ok(()), // Ignore other event types
+        };
+
+        // Record the slot event
+        let curr_slot = {
+            let mut slot_tracker = self.slots_tracker.write().await;
+            slot_tracker.record(event)
+        };
+
+        // Check if we need to rotate to next epoch
+        let needs_rotation = {
+            let schedule_tracker = self.schedule_tracker.read().await;
+            curr_slot >= schedule_tracker.next_epoch_slot_start()
+        };
+
+        if needs_rotation {
+            self.rotate_epoch(curr_slot).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Rotates the schedule to the next epoch.
+    async fn rotate_epoch(&self, curr_slot: Slot) -> Result<()> {
+        let rpc_client = RpcClient::new(self.rpc_url.clone());
+        let mut schedule_tracker = self.schedule_tracker.write().await;
+
+        info!(
+            "Rotating epoch: {} -> {}",
+            schedule_tracker.current_epoch_slot_start(),
+            schedule_tracker.next_epoch_slot_start()
+        );
+
+        match schedule_tracker.maybe_rotate(curr_slot, &rpc_client).await {
+            Ok(true) => {
+                info!("Successfully rotated to next epoch");
+            }
+            Ok(false) => {
+                warn!("Rotation not needed despite check");
+            }
+            Err(e) => {
+                error!("Failed to rotate epoch: {}", e);
+                return Err(e).context("Epoch rotation failed");
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Starts a background task to periodically update leader sockets.
+    ///
+    /// Should be spawned as a background task.
+    pub async fn run_socket_updater(self: Arc<Self>, interval: Duration) {
+        loop {
+            match self.update_leader_sockets().await {
+                Ok(_) => debug!("Leader sockets updated successfully"),
+                Err(e) => error!("Failed to update leader sockets: {}", e),
+            }
+            tokio::time::sleep(interval).await;
+        }
+    }
+}
+
+impl std::fmt::Debug for LeaderTracker {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LeaderTracker")
+            .field("rpc_url", &self.rpc_url)
+            .field("ws_url", &self.ws_url)
+            .finish()
+    }
+}
+
+

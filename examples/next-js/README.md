@@ -222,20 +222,26 @@ See `app/page.tsx` for a complete example showing:
 The playground (`/playground`) demonstrates various transaction pipeline patterns:
 
 ### Simple Transfer
+
 Single instruction, single transaction - baseline example showing basic pipeline usage.
 
 ### Batched Transfers
+
 Multiple transfer instructions batched into one atomic transaction, demonstrating cost savings.
 
 ### Mixed Pipeline
+
 Shows how transaction steps break batching - instruction steps batch together, but transaction steps execute separately.
 
 ### DeFi Composition (Jupiter → Kamino)
+
 A complex multi-protocol DeFi transaction demonstrating:
+
 1. **Jupiter Swap**: Swap SOL to USDC on Jupiter aggregator
 2. **Kamino Deposit**: Deposit USDC into Kamino lending vault
 
 **Features Showcased:**
+
 - ✅ IDL-based instruction building
 - ✅ Automatic account discovery (no manual account management!)
 - ✅ Protocol plugins (Jupiter, Kamino)
@@ -244,12 +250,14 @@ A complex multi-protocol DeFi transaction demonstrating:
 
 **How It Works:**
 The pipeline uses protocol-specific plugins that:
+
 - Call Jupiter's quote API to get optimal swap route and accounts
 - Derive Kamino PDAs (lending market, reserve, user ATAs)
 - Resolve all required accounts automatically
 - Handle complex account structures without user intervention
 
 **Batching Strategy:**
+
 - Uses `strategy: 'auto'` (default)
 - Jupiter swap executes in transaction 1
 - Kamino deposit executes in transaction 2
@@ -257,6 +265,7 @@ The pipeline uses protocol-specific plugins that:
 - Total: 2 transactions, ~0.00001 SOL in fees
 
 **Technical Details:**
+
 - IDL files stored in `lib/idls/`
 - Registry setup in `lib/idl-registry.ts`
 - Pipeline hook in `components/pipeline/examples/jupiter-kamino.tsx`

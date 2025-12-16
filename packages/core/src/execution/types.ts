@@ -17,143 +17,201 @@ export type JitoBlockEngineRegion = 'mainnet' | 'ny' | 'amsterdam' | 'frankfurt'
  * Configuration for Jito bundle submission.
  */
 export interface JitoConfig {
-  /**
-   * Whether Jito bundle submission is enabled.
-   */
-  enabled: boolean;
+    /**
+     * Whether Jito bundle submission is enabled.
+     */
+    enabled: boolean;
 
-  /**
-   * Tip amount in lamports to include in the bundle.
-   * Higher tips increase priority in the Jito auction.
-   * @default 10_000n (0.00001 SOL)
-   */
-  tipLamports?: bigint;
+    /**
+     * Tip amount in lamports to include in the bundle.
+     * Higher tips increase priority in the Jito auction.
+     * @default 10_000n (0.00001 SOL)
+     */
+    tipLamports?: bigint;
 
-  /**
-   * Jito block engine URL.
-   * Can be a full URL or a region key.
-   * @default 'mainnet' (load-balanced)
-   */
-  blockEngineUrl?: string | JitoBlockEngineRegion;
+    /**
+     * Jito block engine URL.
+     * Can be a full URL or a region key.
+     * @default 'mainnet' (load-balanced)
+     */
+    blockEngineUrl?: string | JitoBlockEngineRegion;
 
-  /**
-   * Whether to use MEV protection (delays submission to risky leaders).
-   * @default true
-   */
-  mevProtection?: boolean;
+    /**
+     * Whether to use MEV protection (delays submission to risky leaders).
+     * @default true
+     */
+    mevProtection?: boolean;
 }
 
 /**
  * Configuration for parallel RPC submission.
  */
 export interface ParallelConfig {
-  /**
-   * Whether parallel submission is enabled.
-   */
-  enabled: boolean;
+    /**
+     * Whether parallel submission is enabled.
+     */
+    enabled: boolean;
 
-  /**
-   * Additional RPC endpoint URLs to submit to in parallel.
-   * These are used alongside the builder's configured RPC.
-   */
-  endpoints?: string[];
+    /**
+     * Additional RPC endpoint URLs to submit to in parallel.
+     * These are used alongside the builder's configured RPC.
+     */
+    endpoints?: string[];
 
-  /**
-   * Whether to include the builder's default RPC in the parallel race.
-   * @default true
-   */
-  raceWithDefault?: boolean;
+    /**
+     * Whether to include the builder's default RPC in the parallel race.
+     * @default true
+     */
+    raceWithDefault?: boolean;
+}
+
+/**
+ * Configuration for direct TPU submission.
+ *
+ * TPU (Transaction Processing Unit) submission bypasses RPC nodes
+ * and sends transactions directly to validator QUIC endpoints.
+ * This provides lower latency and higher landing probability.
+ *
+ * Requires the `@pipeit/fastlane` package and a server-side
+ * API route for browser environments.
+ */
+export interface TpuConfig {
+    /**
+     * Whether TPU submission is enabled.
+     */
+    enabled: boolean;
+
+    /**
+     * RPC URL for fetching leader schedule and cluster info.
+     * If not provided, uses the builder's configured RPC URL.
+     */
+    rpcUrl?: string;
+
+    /**
+     * WebSocket URL for slot update subscriptions.
+     * If not provided, derived from rpcUrl by replacing http(s) with ws(s).
+     */
+    wsUrl?: string;
+
+    /**
+     * Number of upcoming leaders to send transactions to.
+     * Higher values increase landing probability but use more resources.
+     * @default 2
+     */
+    fanout?: number;
+
+    /**
+     * API route URL for browser environments.
+     * When running in the browser, transactions are sent to this
+     * endpoint which forwards them via the native TPU client.
+     * @default '/api/tpu'
+     */
+    apiRoute?: string;
 }
 
 /**
  * Execution strategy presets.
- * - 'standard': Default RPC submission only (no Jito, no parallel)
+ * - 'standard': Default RPC submission only (no Jito, no parallel, no TPU)
  * - 'economical': Jito bundle only (good balance of speed and cost)
  * - 'fast': Jito + parallel RPC race (maximum landing probability)
+ * - 'ultra': Direct TPU + Jito race (fastest possible, requires @pipeit/fastlane)
  */
-export type ExecutionPreset = 'standard' | 'economical' | 'fast';
+export type ExecutionPreset = 'standard' | 'economical' | 'fast' | 'ultra';
 
 /**
  * Full execution configuration.
  * Can be a preset string or detailed configuration object.
  */
 export type ExecutionConfig =
-  | ExecutionPreset
-  | {
-      jito?: JitoConfig;
-      parallel?: ParallelConfig;
-    };
+    | ExecutionPreset
+    | {
+          jito?: JitoConfig;
+          parallel?: ParallelConfig;
+          tpu?: TpuConfig;
+      };
 
 /**
  * Resolved execution configuration with all values filled in.
  */
 export interface ResolvedExecutionConfig {
-  jito: {
-    enabled: boolean;
-    tipLamports: bigint;
-    blockEngineUrl: string;
-    mevProtection: boolean;
-  };
-  parallel: {
-    enabled: boolean;
-    endpoints: string[];
-    raceWithDefault: boolean;
-  };
+    jito: {
+        enabled: boolean;
+        tipLamports: bigint;
+        blockEngineUrl: string;
+        mevProtection: boolean;
+    };
+    parallel: {
+        enabled: boolean;
+        endpoints: string[];
+        raceWithDefault: boolean;
+    };
+    tpu: {
+        enabled: boolean;
+        rpcUrl: string;
+        wsUrl: string;
+        fanout: number;
+        apiRoute: string;
+    };
 }
 
 /**
  * Context required for execution strategies.
  */
 export interface ExecutionContext {
-  /**
-   * RPC client for standard transaction submission.
-   */
-  rpc?: Rpc<SendTransactionApi>;
+    /**
+     * RPC client for standard transaction submission.
+     */
+    rpc?: Rpc<SendTransactionApi>;
 
-  /**
-   * RPC subscriptions for confirmation.
-   */
-  rpcSubscriptions?: RpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi>;
+    /**
+     * RPC subscriptions for confirmation.
+     */
+    rpcSubscriptions?: RpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi>;
 
-  /**
-   * Fee payer address (needed for tip instruction).
-   */
-  feePayer?: Address;
+    /**
+     * Fee payer address (needed for tip instruction).
+     */
+    feePayer?: Address;
 
-  /**
-   * Abort signal for cancellation.
-   */
-  abortSignal?: AbortSignal;
+    /**
+     * Abort signal for cancellation.
+     */
+    abortSignal?: AbortSignal;
 }
 
 /**
  * Result from execution strategy.
  */
 export interface ExecutionResult {
-  /**
-   * Transaction signature.
-   */
-  signature: string;
+    /**
+     * Transaction signature.
+     */
+    signature: string;
 
-  /**
-   * Which execution path landed the transaction.
-   */
-  landedVia: 'jito' | 'rpc' | 'parallel';
+    /**
+     * Which execution path landed the transaction.
+     */
+    landedVia: 'jito' | 'rpc' | 'parallel' | 'tpu';
 
-  /**
-   * Time from submission to confirmation in milliseconds.
-   */
-  latencyMs?: number;
+    /**
+     * Time from submission to confirmation in milliseconds.
+     */
+    latencyMs?: number;
 
-  /**
-   * Bundle ID if submitted via Jito.
-   */
-  bundleId?: string;
+    /**
+     * Bundle ID if submitted via Jito.
+     */
+    bundleId?: string;
 
-  /**
-   * Which endpoint landed the transaction (for parallel).
-   */
-  endpoint?: string;
+    /**
+     * Which endpoint landed the transaction (for parallel).
+     */
+    endpoint?: string;
+
+    /**
+     * Number of leaders the transaction was sent to (for TPU).
+     */
+    leaderCount?: number;
 }
 
 // ============================================================================
@@ -164,50 +222,50 @@ export interface ExecutionResult {
  * Jito sendBundle JSON-RPC response.
  */
 export interface JitoBundleResponse {
-  jsonrpc: '2.0';
-  id: number;
-  result?: string; // bundle_id (SHA-256 hash of signatures)
-  error?: {
-    code: number;
-    message: string;
-  };
+    jsonrpc: '2.0';
+    id: number;
+    result?: string; // bundle_id (SHA-256 hash of signatures)
+    error?: {
+        code: number;
+        message: string;
+    };
 }
 
 /**
  * Jito getBundleStatuses response.
  */
 export interface JitoBundleStatusResponse {
-  jsonrpc: '2.0';
-  id: number;
-  result?: {
-    context: {
-      slot: number;
+    jsonrpc: '2.0';
+    id: number;
+    result?: {
+        context: {
+            slot: number;
+        };
+        value: Array<{
+            bundle_id: string;
+            transactions: string[];
+            slot: number;
+            confirmation_status: 'processed' | 'confirmed' | 'finalized';
+            err: { Ok: null } | { Err: unknown };
+        } | null>;
     };
-    value: Array<{
-      bundle_id: string;
-      transactions: string[];
-      slot: number;
-      confirmation_status: 'processed' | 'confirmed' | 'finalized';
-      err: { Ok: null } | { Err: unknown };
-    } | null>;
-  };
-  error?: {
-    code: number;
-    message: string;
-  };
+    error?: {
+        code: number;
+        message: string;
+    };
 }
 
 /**
  * Jito getTipAccounts response.
  */
 export interface JitoTipAccountsResponse {
-  jsonrpc: '2.0';
-  id: number;
-  result?: string[];
-  error?: {
-    code: number;
-    message: string;
-  };
+    jsonrpc: '2.0';
+    id: number;
+    result?: string[];
+    error?: {
+        code: number;
+        message: string;
+    };
 }
 
 // ============================================================================
@@ -218,46 +276,44 @@ export interface JitoTipAccountsResponse {
  * Options for parallel submission.
  */
 export interface ParallelSubmitOptions {
-  /**
-   * RPC endpoint URLs to submit to.
-   */
-  endpoints: string[];
+    /**
+     * RPC endpoint URLs to submit to.
+     */
+    endpoints: string[];
 
-  /**
-   * Base64-encoded signed transaction.
-   */
-  transaction: string;
+    /**
+     * Base64-encoded signed transaction.
+     */
+    transaction: string;
 
-  /**
-   * Whether to skip preflight simulation.
-   * @default true
-   */
-  skipPreflight?: boolean;
+    /**
+     * Whether to skip preflight simulation.
+     * @default true
+     */
+    skipPreflight?: boolean;
 
-  /**
-   * Abort signal for cancellation.
-   */
-  abortSignal?: AbortSignal;
+    /**
+     * Abort signal for cancellation.
+     */
+    abortSignal?: AbortSignal;
 }
 
 /**
  * Result from parallel submission.
  */
 export interface ParallelSubmitResult {
-  /**
-   * Transaction signature.
-   */
-  signature: string;
+    /**
+     * Transaction signature.
+     */
+    signature: string;
 
-  /**
-   * Which endpoint successfully submitted the transaction.
-   */
-  endpoint: string;
+    /**
+     * Which endpoint successfully submitted the transaction.
+     */
+    endpoint: string;
 
-  /**
-   * Time from submission to response in milliseconds.
-   */
-  latencyMs: number;
+    /**
+     * Time from submission to response in milliseconds.
+     */
+    latencyMs: number;
 }
-
-

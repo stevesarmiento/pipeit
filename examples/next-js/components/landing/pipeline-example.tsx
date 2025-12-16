@@ -56,22 +56,25 @@ const result = await createFlow({ rpc, rpcSubscriptions, signer })
 
 export function PipelineExample() {
     return (
-        <section className="py-16 border-b border-sand-200"
-        style={{
-            backgroundImage: `repeating-linear-gradient(
+        <section
+            className="py-16 border-b border-sand-200"
+            style={{
+                backgroundImage: `repeating-linear-gradient(
               45deg,
               transparent,
               transparent 10px,
               rgba(233, 231, 222, 0.5) 10px,
               rgba(233, 231, 222, 0.5) 11px
-            )`
-          }}>
+            )`,
+            }}
+        >
             <div className="max-w-5xl mx-auto">
                 <h2 className="text-h2 text-gray-900 mb-2 text-center text-pretty">
                     Orchestrate multi-transaction flows
                 </h2>
                 <p className="text-body-xl text-gray-600 mb-12 text-center max-w-3xl mx-auto">
-                    Build flows that batch instructions across multiple transactions. Automatically groups compatible operations, passes results between transactions, and handles cleanup.
+                    Build flows that batch instructions across multiple transactions. Automatically groups compatible
+                    operations, passes results between transactions, and handles cleanup.
                 </p>
                 <Card className="border-sand-300 bg-white">
                     <CardHeader className="pb-3">

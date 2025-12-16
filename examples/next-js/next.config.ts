@@ -1,12 +1,11 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-    turbopack: {
-        resolveAlias: {
-            // Alias .js imports to .ts files for monorepo packages
-        },
-        resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
-    },
+    // Keep native module external on server (loads real native bindings at runtime)
+    serverExternalPackages: ['@pipeit/fastlane'],
+
+    // Transpile these workspace packages
+    transpilePackages: ['@pipeit/core', '@pipeit/actions'],
 };
 
 export default nextConfig;

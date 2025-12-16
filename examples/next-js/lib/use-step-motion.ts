@@ -1,13 +1,13 @@
 'use client';
 
 import {
-  type AnimationPlaybackControls,
-  animate,
-  type MotionValue,
-  useMotionValue,
-  useSpring,
-  useTransform,
-  useVelocity,
+    type AnimationPlaybackControls,
+    animate,
+    type MotionValue,
+    useMotionValue,
+    useSpring,
+    useTransform,
+    useVelocity,
 } from 'motion/react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { colors, effects, shake, springs, timing } from './pipeline-animations';
@@ -18,342 +18,333 @@ const NODE_HEIGHT = 64;
 const NODE_RADIUS = 32; // Full circle (half of width/height)
 
 export interface StepMotionValues {
-  nodeWidth: MotionValue<number>;
-  nodeHeight: MotionValue<number>;
-  contentOpacity: MotionValue<number>;
-  flashOpacity: MotionValue<number>;
-  flashColor: MotionValue<string>;
-  borderRadius: MotionValue<number>;
-  rotation: MotionValue<number>;
-  shakeX: MotionValue<number>;
-  shakeY: MotionValue<number>;
-  contentScale: MotionValue<number>;
-  blurAmount: MotionValue<number>;
-  borderColor: MotionValue<string>;
-  borderOpacity: MotionValue<number>;
-  glowIntensity: MotionValue<number>;
+    nodeWidth: MotionValue<number>;
+    nodeHeight: MotionValue<number>;
+    contentOpacity: MotionValue<number>;
+    flashOpacity: MotionValue<number>;
+    flashColor: MotionValue<string>;
+    borderRadius: MotionValue<number>;
+    rotation: MotionValue<number>;
+    shakeX: MotionValue<number>;
+    shakeY: MotionValue<number>;
+    contentScale: MotionValue<number>;
+    blurAmount: MotionValue<number>;
+    borderColor: MotionValue<string>;
+    borderOpacity: MotionValue<number>;
+    glowIntensity: MotionValue<number>;
 }
 
 /** tiny util: stable init once without eslint disables */
 function useConst<T>(init: () => T): T {
-  const ref = useRef<T | null>(null);
-  if (ref.current === null) ref.current = init();
-  return ref.current;
+    const ref = useRef<T | null>(null);
+    if (ref.current === null) ref.current = init();
+    return ref.current;
 }
 
 /** minimal, SSR-safe reduced-motion hook */
 function usePrefersReducedMotion() {
-  const [prefers, setPrefers] = useState(false);
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('matchMedia' in window)) return;
-    const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const set = () => setPrefers(mql.matches);
-    set();
-    // legacy Safari support
-    const onChange = (e: MediaQueryListEvent) => setPrefers(e.matches);
-    mql.addEventListener ? mql.addEventListener('change', onChange) : mql.addListener(onChange);
-    return () => {
-      mql.removeEventListener
-        ? mql.removeEventListener('change', onChange)
-        : mql.removeListener(onChange);
-    };
-  }, []);
-  return prefers;
+    const [prefers, setPrefers] = useState(false);
+    useEffect(() => {
+        if (typeof window === 'undefined' || !('matchMedia' in window)) return;
+        const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const set = () => setPrefers(mql.matches);
+        set();
+        // legacy Safari support
+        const onChange = (e: MediaQueryListEvent) => setPrefers(e.matches);
+        mql.addEventListener ? mql.addEventListener('change', onChange) : mql.addListener(onChange);
+        return () => {
+            mql.removeEventListener ? mql.removeEventListener('change', onChange) : mql.removeListener(onChange);
+        };
+    }, []);
+    return prefers;
 }
 
 // ------------------------
 // useStepMotion
 // ------------------------
 export function useStepMotion(): StepMotionValues {
-  const nodeWidth = useSpring(NODE_WIDTH, springs.nodeWidth);
-  const contentOpacity = useSpring(1, springs.default);
-  const flashOpacity = useMotionValue(0);
-  const flashColor = useMotionValue<string>(colors.flash);
-  const borderRadius = useSpring(NODE_RADIUS, springs.default);
-  const nodeHeight = useMotionValue(NODE_HEIGHT);
-  const rotation = useMotionValue(0);
-  const shakeX = useMotionValue(0);
-  const shakeY = useMotionValue(0);
-  const contentScale = useSpring(1, springs.default);
-  const borderColor = useMotionValue<string>(colors.border.default);
-  const borderOpacity = useSpring(1, springs.default);
-  const glowIntensity = useSpring(0, springs.default);
+    const nodeWidth = useSpring(NODE_WIDTH, springs.nodeWidth);
+    const contentOpacity = useSpring(1, springs.default);
+    const flashOpacity = useMotionValue(0);
+    const flashColor = useMotionValue<string>(colors.flash);
+    const borderRadius = useSpring(NODE_RADIUS, springs.default);
+    const nodeHeight = useMotionValue(NODE_HEIGHT);
+    const rotation = useMotionValue(0);
+    const shakeX = useMotionValue(0);
+    const shakeY = useMotionValue(0);
+    const contentScale = useSpring(1, springs.default);
+    const borderColor = useMotionValue<string>(colors.border.default);
+    const borderOpacity = useSpring(1, springs.default);
+    const glowIntensity = useSpring(0, springs.default);
 
-  const rotationVelocity = useVelocity(rotation);
+    const rotationVelocity = useVelocity(rotation);
 
-  // Optional smoothing of velocity -> blur to avoid flicker
-  const blurAmount = useTransform(rotationVelocity, [-100, 0, 100], [1, 0, 1], { clamp: true });
+    // Optional smoothing of velocity -> blur to avoid flicker
+    const blurAmount = useTransform(rotationVelocity, [-100, 0, 100], [1, 0, 1], { clamp: true });
 
-  // Stable container without eslint disables
-  const motionValues: StepMotionValues = useConst(() => ({
-    nodeWidth,
-    nodeHeight,
-    contentOpacity,
-    flashOpacity,
-    flashColor,
-    borderRadius,
-    rotation,
-    shakeX,
-    shakeY,
-    contentScale,
-    blurAmount,
-    borderColor,
-    borderOpacity,
-    glowIntensity,
-  }));
+    // Stable container without eslint disables
+    const motionValues: StepMotionValues = useConst(() => ({
+        nodeWidth,
+        nodeHeight,
+        contentOpacity,
+        flashOpacity,
+        flashColor,
+        borderRadius,
+        rotation,
+        shakeX,
+        shakeY,
+        contentScale,
+        blurAmount,
+        borderColor,
+        borderOpacity,
+        glowIntensity,
+    }));
 
-  return motionValues;
+    return motionValues;
 }
 
 // ------------------------
 // useRunningAnimation
 // ------------------------
 export function useRunningAnimation(
-  isRunning: boolean,
-  motionValues: Pick<
-    StepMotionValues,
-    'rotation' | 'shakeX' | 'shakeY' | 'borderOpacity' | 'glowIntensity'
-  >
+    isRunning: boolean,
+    motionValues: Pick<StepMotionValues, 'rotation' | 'shakeX' | 'shakeY' | 'borderOpacity' | 'glowIntensity'>,
 ) {
-  const prefersReducedMotion = usePrefersReducedMotion();
+    const prefersReducedMotion = usePrefersReducedMotion();
 
-  useEffect(() => {
-    let cancelled = false;
-    let rafId: number | null = null; // single RAF id (fix leak)
-    const animControls: {
-      border: AnimationPlaybackControls | undefined;
-      glow: AnimationPlaybackControls | undefined;
-    } = { border: undefined, glow: undefined };
+    useEffect(() => {
+        let cancelled = false;
+        let rafId: number | null = null; // single RAF id (fix leak)
+        const animControls: {
+            border: AnimationPlaybackControls | undefined;
+            glow: AnimationPlaybackControls | undefined;
+        } = { border: undefined, glow: undefined };
 
-    const stopAll = () => {
-      if (animControls.border) animControls.border.stop();
-      if (animControls.glow) animControls.glow.stop();
-      if (rafId !== null) cancelAnimationFrame(rafId);
-      // reset quickly
-      animate(motionValues.rotation, 0, {
-        duration: timing.exit.duration,
-        ease: timing.exit.ease,
-      });
-      animate(motionValues.shakeX, 0, {
-        duration: timing.exit.duration,
-        ease: timing.exit.ease,
-      });
-      animate(motionValues.shakeY, 0, {
-        duration: timing.exit.duration,
-        ease: timing.exit.ease,
-      });
-      motionValues.borderOpacity.set(1);
-      motionValues.glowIntensity.set(0);
-    };
+        const stopAll = () => {
+            if (animControls.border) animControls.border.stop();
+            if (animControls.glow) animControls.glow.stop();
+            if (rafId !== null) cancelAnimationFrame(rafId);
+            // reset quickly
+            animate(motionValues.rotation, 0, {
+                duration: timing.exit.duration,
+                ease: timing.exit.ease,
+            });
+            animate(motionValues.shakeX, 0, {
+                duration: timing.exit.duration,
+                ease: timing.exit.ease,
+            });
+            animate(motionValues.shakeY, 0, {
+                duration: timing.exit.duration,
+                ease: timing.exit.ease,
+            });
+            motionValues.borderOpacity.set(1);
+            motionValues.glowIntensity.set(0);
+        };
 
-    if (!isRunning || prefersReducedMotion) {
-      stopAll();
-      return;
-    }
+        if (!isRunning || prefersReducedMotion) {
+            stopAll();
+            return;
+        }
 
-    // border pulse
-    animControls.border = animate(motionValues.borderOpacity, [...timing.borderPulse.values], {
-      duration: timing.borderPulse.duration,
-      ease: 'easeInOut',
-      repeat: Infinity,
-    });
+        // border pulse
+        animControls.border = animate(motionValues.borderOpacity, [...timing.borderPulse.values], {
+            duration: timing.borderPulse.duration,
+            ease: 'easeInOut',
+            repeat: Infinity,
+        });
 
-    // glow pulse
-    animControls.glow = animate(motionValues.glowIntensity, [...timing.glowPulse.values], {
-      duration: timing.glowPulse.duration,
-      ease: 'easeInOut',
-      repeat: Infinity,
-    });
+        // glow pulse
+        animControls.glow = animate(motionValues.glowIntensity, [...timing.glowPulse.values], {
+            duration: timing.glowPulse.duration,
+            ease: 'easeInOut',
+            repeat: Infinity,
+        });
 
-    const jitter = () => {
-      if (cancelled) return;
+        const jitter = () => {
+            if (cancelled) return;
 
-      const angle =
-        (Math.random() * shake.running.angleRange + shake.running.angleBase) *
-        (Math.random() < 0.5 ? 1 : -1);
+            const angle =
+                (Math.random() * shake.running.angleRange + shake.running.angleBase) * (Math.random() < 0.5 ? 1 : -1);
 
-      const offset =
-        (Math.random() * shake.running.offsetRange + shake.running.offsetBase) *
-        (Math.random() < 0.5 ? -1 : 1);
+            const offset =
+                (Math.random() * shake.running.offsetRange + shake.running.offsetBase) * (Math.random() < 0.5 ? -1 : 1);
 
-      const offsetY =
-        (Math.random() * shake.running.offsetYRange + shake.running.offsetYBase) *
-        (Math.random() < 0.5 ? -1 : 1);
+            const offsetY =
+                (Math.random() * shake.running.offsetYRange + shake.running.offsetYBase) *
+                (Math.random() < 0.5 ? -1 : 1);
 
-      // FIX: proper [min,max] duration
-      const min = shake.running.durationMin;
-      const max = shake.running.durationMax ?? min * 2;
-      const duration = min + Math.random() * Math.max(0.001, max - min);
+            // FIX: proper [min,max] duration
+            const min = shake.running.durationMin;
+            const max = shake.running.durationMax ?? min * 2;
+            const duration = min + Math.random() * Math.max(0.001, max - min);
 
-      const rot = animate(motionValues.rotation, angle, { duration, ease: 'circInOut' });
-      const x = animate(motionValues.shakeX, offset, { duration, ease: 'easeInOut' });
-      const y = animate(motionValues.shakeY, offsetY, { duration, ease: 'easeInOut' });
+            const rot = animate(motionValues.rotation, angle, { duration, ease: 'circInOut' });
+            const x = animate(motionValues.shakeX, offset, { duration, ease: 'easeInOut' });
+            const y = animate(motionValues.shakeY, offsetY, { duration, ease: 'easeInOut' });
 
-      // When this triple finishes, schedule next cycle on next frame
-      Promise.all([rot.finished, x.finished, y.finished]).then(() => {
-        if (cancelled) return;
+            // When this triple finishes, schedule next cycle on next frame
+            Promise.all([rot.finished, x.finished, y.finished]).then(() => {
+                if (cancelled) return;
+                rafId = requestAnimationFrame(jitter);
+            });
+        };
+
         rafId = requestAnimationFrame(jitter);
-      });
-    };
 
-    rafId = requestAnimationFrame(jitter);
-
-    return () => {
-      cancelled = true;
-      stopAll();
-    };
-  }, [
-    isRunning,
-    motionValues.rotation,
-    motionValues.shakeX,
-    motionValues.shakeY,
-    motionValues.borderOpacity,
-    motionValues.glowIntensity,
-  ]);
+        return () => {
+            cancelled = true;
+            stopAll();
+        };
+    }, [
+        isRunning,
+        motionValues.rotation,
+        motionValues.shakeX,
+        motionValues.shakeY,
+        motionValues.borderOpacity,
+        motionValues.glowIntensity,
+    ]);
 }
 
 // ------------------------
 // useStateAnimations
 // ------------------------
 export function useStateAnimations(state: StepState, motionValues: StepMotionValues) {
-  const isRunning =
-    state.type === 'building' || state.type === 'signing' || state.type === 'sending';
+    const isRunning = state.type === 'building' || state.type === 'signing' || state.type === 'sending';
 
-  // Radius - keep as circle (no shape change, just pulsing effects)
-  useEffect(() => {
-    motionValues.borderRadius.set(NODE_RADIUS);
-  }, [motionValues.borderRadius]);
+    // Radius - keep as circle (no shape change, just pulsing effects)
+    useEffect(() => {
+        motionValues.borderRadius.set(NODE_RADIUS);
+    }, [motionValues.borderRadius]);
 
-  // Height
-  useEffect(() => {
-    animate(motionValues.nodeHeight, isRunning ? NODE_HEIGHT : NODE_HEIGHT, {
-      duration: 0.4,
-      bounce: isRunning ? 0.3 : 0.5,
-      type: 'spring',
-    });
-  }, [isRunning, motionValues.nodeHeight]);
+    // Height
+    useEffect(() => {
+        animate(motionValues.nodeHeight, isRunning ? NODE_HEIGHT : NODE_HEIGHT, {
+            duration: 0.4,
+            bounce: isRunning ? 0.3 : 0.5,
+            type: 'spring',
+        });
+    }, [isRunning, motionValues.nodeHeight]);
 
-  // Width & content opacity
-  useEffect(() => {
-    const hasResult = state.type === 'confirmed' || state.type === 'failed';
+    // Width & content opacity
+    useEffect(() => {
+        const hasResult = state.type === 'confirmed' || state.type === 'failed';
 
-    if (!hasResult) {
-      motionValues.nodeWidth.set(NODE_WIDTH); // if you want this animated, swap to animate(...)
-    }
+        if (!hasResult) {
+            motionValues.nodeWidth.set(NODE_WIDTH); // if you want this animated, swap to animate(...)
+        }
 
-    motionValues.contentOpacity.set(hasResult ? 1 : isRunning ? 0 : 1);
-  }, [state, motionValues, isRunning]);
+        motionValues.contentOpacity.set(hasResult ? 1 : isRunning ? 0 : 1);
+    }, [state, motionValues, isRunning]);
 }
 
 // Track previous state for transitions
 function usePreviousState<T>(state: T): T | undefined {
-  const ref = useRef<T | undefined>(undefined);
-  useEffect(() => {
-    ref.current = state;
-  });
-  return ref.current;
+    const ref = useRef<T | undefined>(undefined);
+    useEffect(() => {
+        ref.current = state;
+    });
+    return ref.current;
 }
 
 // ------------------------
 // useStepAnimations
 // ------------------------
 export function useStepAnimations(
-  state: StepState,
-  motionValues: StepMotionValues,
-  isHovering: boolean,
-  setShowErrorBubble: (show: boolean) => void
+    state: StepState,
+    motionValues: StepMotionValues,
+    isHovering: boolean,
+    setShowErrorBubble: (show: boolean) => void,
 ) {
-  const prefersReducedMotion = usePrefersReducedMotion();
-  const isFailed = state.type === 'failed';
-  const previousState = usePreviousState(state);
-  const justCompleted = previousState?.type !== 'confirmed' && state.type === 'confirmed';
-  const justStarted =
-    previousState?.type === 'idle' &&
-    (state.type === 'building' || state.type === 'signing' || state.type === 'sending');
+    const prefersReducedMotion = usePrefersReducedMotion();
+    const isFailed = state.type === 'failed';
+    const previousState = usePreviousState(state);
+    const justCompleted = previousState?.type !== 'confirmed' && state.type === 'confirmed';
+    const justStarted =
+        previousState?.type === 'idle' &&
+        (state.type === 'building' || state.type === 'signing' || state.type === 'sending');
 
-  // Error bubble visibility (comment aligned with code: 1.5s)
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Error bubble visibility (comment aligned with code: 1.5s)
+    useEffect(() => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
 
-    if (isFailed) {
-      setShowErrorBubble(true);
-      timer = setTimeout(() => {
-        if (!isHovering) setShowErrorBubble(false);
-      }, 1500);
-    } else {
-      setShowErrorBubble(false);
-    }
-
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [isFailed, isHovering, setShowErrorBubble]);
-
-  // Flash on start/complete
-  useEffect(() => {
-    if (justCompleted || justStarted) {
-      const up = animate(motionValues.flashOpacity, 0.6, {
-        duration: 0.02,
-        ease: 'circOut',
-      });
-      up.finished.then(() => {
-        if (prefersReducedMotion) {
-          motionValues.flashOpacity.set(0);
+        if (isFailed) {
+            setShowErrorBubble(true);
+            timer = setTimeout(() => {
+                if (!isHovering) setShowErrorBubble(false);
+            }, 1500);
         } else {
-          animate(motionValues.flashOpacity, 0, {
-            duration: timing.flash.duration,
-            ease: timing.flash.ease,
-          });
+            setShowErrorBubble(false);
         }
-      });
-    }
-  }, [justCompleted, justStarted, motionValues.flashOpacity, prefersReducedMotion]);
 
-  // Failure shake
-  useEffect(() => {
-    if (!isFailed || prefersReducedMotion) return;
+        return () => {
+            if (timer) clearTimeout(timer);
+        };
+    }, [isFailed, isHovering, setShowErrorBubble]);
 
-    let cancelled = false;
+    // Flash on start/complete
+    useEffect(() => {
+        if (justCompleted || justStarted) {
+            const up = animate(motionValues.flashOpacity, 0.6, {
+                duration: 0.02,
+                ease: 'circOut',
+            });
+            up.finished.then(() => {
+                if (prefersReducedMotion) {
+                    motionValues.flashOpacity.set(0);
+                } else {
+                    animate(motionValues.flashOpacity, 0, {
+                        duration: timing.flash.duration,
+                        ease: timing.flash.ease,
+                    });
+                }
+            });
+        }
+    }, [justCompleted, justStarted, motionValues.flashOpacity, prefersReducedMotion]);
 
-    const shakeSequence = async () => {
-      const { intensity, duration, count, rotationRange, returnDuration } = shake.failure;
+    // Failure shake
+    useEffect(() => {
+        if (!isFailed || prefersReducedMotion) return;
 
-      for (let i = 0; i < count && !cancelled; i++) {
-        const xOffset = (Math.random() - 0.5) * intensity;
-        const yOffset = (Math.random() - 0.5) * intensity;
-        const rotOffset = (Math.random() - 0.5) * rotationRange;
+        let cancelled = false;
 
-        const anims = [
-          animate(motionValues.shakeX, xOffset, { duration, ease: 'easeInOut' }),
-          animate(motionValues.shakeY, yOffset, { duration, ease: 'easeInOut' }),
-          animate(motionValues.rotation, rotOffset, { duration, ease: 'easeInOut' }),
-        ];
-        await Promise.all(anims.map((a) => a.finished));
-      }
+        const shakeSequence = async () => {
+            const { intensity, duration, count, rotationRange, returnDuration } = shake.failure;
 
-      if (!cancelled) {
-        await Promise.all([
-          animate(motionValues.shakeX, 0, { duration: returnDuration, ease: 'easeOut' }).finished,
-          animate(motionValues.shakeY, 0, { duration: returnDuration, ease: 'easeOut' }).finished,
-          animate(motionValues.rotation, 0, { duration: returnDuration, ease: 'easeOut' }).finished,
-        ]);
-      }
-    };
+            for (let i = 0; i < count && !cancelled; i++) {
+                const xOffset = (Math.random() - 0.5) * intensity;
+                const yOffset = (Math.random() - 0.5) * intensity;
+                const rotOffset = (Math.random() - 0.5) * rotationRange;
 
-    shakeSequence();
-    return () => {
-      cancelled = true;
-    };
-  }, [state, prefersReducedMotion, motionValues.shakeX, motionValues.shakeY, motionValues.rotation, isFailed]);
+                const anims = [
+                    animate(motionValues.shakeX, xOffset, { duration, ease: 'easeInOut' }),
+                    animate(motionValues.shakeY, yOffset, { duration, ease: 'easeInOut' }),
+                    animate(motionValues.rotation, rotOffset, { duration, ease: 'easeInOut' }),
+                ];
+                await Promise.all(anims.map(a => a.finished));
+            }
 
-  // Content scale pop on completion
-  useLayoutEffect(() => {
-    if (justCompleted) {
-      motionValues.contentScale.set(0);
-      animate(motionValues.contentScale, [1.3, 1], springs.contentScale).finished.catch(() => {
-        // Ignore animation cancellation errors
-      });
-    }
-  }, [justCompleted, motionValues.contentScale]);
+            if (!cancelled) {
+                await Promise.all([
+                    animate(motionValues.shakeX, 0, { duration: returnDuration, ease: 'easeOut' }).finished,
+                    animate(motionValues.shakeY, 0, { duration: returnDuration, ease: 'easeOut' }).finished,
+                    animate(motionValues.rotation, 0, { duration: returnDuration, ease: 'easeOut' }).finished,
+                ]);
+            }
+        };
+
+        shakeSequence();
+        return () => {
+            cancelled = true;
+        };
+    }, [state, prefersReducedMotion, motionValues.shakeX, motionValues.shakeY, motionValues.rotation, isFailed]);
+
+    // Content scale pop on completion
+    useLayoutEffect(() => {
+        if (justCompleted) {
+            motionValues.contentScale.set(0);
+            animate(motionValues.contentScale, [1.3, 1], springs.contentScale).finished.catch(() => {
+                // Ignore animation cancellation errors
+            });
+        }
+    }, [justCompleted, motionValues.contentScale]);
 }
-

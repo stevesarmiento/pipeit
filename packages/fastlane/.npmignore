@@ -1,0 +1,11 @@
+target/
+.cargo-cache/
+Cargo.lock
+**/*.rs
+!index.js
+!index.d.ts
+!*.node
+artifacts/
+test.mjs
+build.rs
+

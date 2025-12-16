@@ -11,27 +11,25 @@ import { lamports } from '@solana/kit';
  * Baseline example showing basic flow usage.
  */
 export function useSimpleTransferPipeline() {
-  const visualPipeline = useMemo(() => {
-    const flowFactory = (config: FlowConfig) =>
-      createFlow(config).step('transfer-sol', (ctx) => {
-        // Self-transfer example (transferring to own address) - valid for demos
-        // In real usage, recipient and amount would come from props
-        const recipient = ctx.signer.address; // Self-transfer (always valid)
-        const amount = lamports(BigInt(1_000_000)); // 0.001 SOL
+    const visualPipeline = useMemo(() => {
+        const flowFactory = (config: FlowConfig) =>
+            createFlow(config).step('transfer-sol', ctx => {
+                // Self-transfer example (transferring to own address) - valid for demos
+                // In real usage, recipient and amount would come from props
+                const recipient = ctx.signer.address; // Self-transfer (always valid)
+                const amount = lamports(BigInt(1_000_000)); // 0.001 SOL
 
-        return getTransferSolInstruction({
-          source: ctx.signer,
-          destination: recipient,
-          amount,
-        });
-      });
+                return getTransferSolInstruction({
+                    source: ctx.signer,
+                    destination: recipient,
+                    amount,
+                });
+            });
 
-    return new VisualPipeline('simple-transfer', flowFactory, [
-      { name: 'transfer-sol', type: 'instruction' },
-    ]);
-  }, []);
+        return new VisualPipeline('simple-transfer', flowFactory, [{ name: 'transfer-sol', type: 'instruction' }]);
+    }, []);
 
-  return visualPipeline;
+    return visualPipeline;
 }
 
 export const simpleTransferCode = `import { createFlow } from '@pipeit/core';

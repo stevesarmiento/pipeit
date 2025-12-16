@@ -26,16 +26,13 @@ const DEFAULT_SUBMIT_TIMEOUT = 30_000;
  * Error thrown when all parallel submission attempts fail.
  */
 export class ParallelSubmitError extends Error {
-  readonly errors: Array<{ endpoint: string; error: Error }>;
+    readonly errors: Array<{ endpoint: string; error: Error }>;
 
-  constructor(
-    message: string,
-    errors: Array<{ endpoint: string; error: Error }>
-  ) {
-    super(message);
-    this.name = 'ParallelSubmitError';
-    this.errors = errors;
-  }
+    constructor(message: string, errors: Array<{ endpoint: string; error: Error }>) {
+        super(message);
+        this.name = 'ParallelSubmitError';
+        this.errors = errors;
+    }
 }
 
 // ============================================================================
@@ -46,9 +43,9 @@ export class ParallelSubmitError extends Error {
  * Internal result from a single endpoint submission attempt.
  */
 interface EndpointSubmitResult {
-  signature: string;
-  endpoint: string;
-  startTime: number;
+    signature: string;
+    endpoint: string;
+    startTime: number;
 }
 
 // ============================================================================
@@ -65,75 +62,75 @@ interface EndpointSubmitResult {
  * @returns Submission result with signature and timing
  */
 async function submitToEndpoint(
-  endpoint: string,
-  transaction: string,
-  skipPreflight: boolean,
-  abortSignal?: AbortSignal
+    endpoint: string,
+    transaction: string,
+    skipPreflight: boolean,
+    abortSignal?: AbortSignal,
 ): Promise<EndpointSubmitResult> {
-  const startTime = performance.now();
+    const startTime = performance.now();
 
-  const fetchOptions: RequestInit = {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'sendTransaction',
-      params: [
-        transaction,
-        {
-          encoding: 'base64',
-          skipPreflight,
-          preflightCommitment: 'confirmed',
+    const fetchOptions: RequestInit = {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
         },
-      ],
-    }),
-  };
+        body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'sendTransaction',
+            params: [
+                transaction,
+                {
+                    encoding: 'base64',
+                    skipPreflight,
+                    preflightCommitment: 'confirmed',
+                },
+            ],
+        }),
+    };
 
-  if (abortSignal) {
-    fetchOptions.signal = abortSignal;
-  }
+    if (abortSignal) {
+        fetchOptions.signal = abortSignal;
+    }
 
-  const response = await fetch(endpoint, fetchOptions);
+    const response = await fetch(endpoint, fetchOptions);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`RPC error: ${response.status} - ${errorText}`);
-  }
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`RPC error: ${response.status} - ${errorText}`);
+    }
 
-  const data = await response.json();
+    const data = await response.json();
 
-  if (data.error) {
-    throw new Error(data.error.message || JSON.stringify(data.error));
-  }
+    if (data.error) {
+        throw new Error(data.error.message || JSON.stringify(data.error));
+    }
 
-  if (!data.result) {
-    throw new Error('No signature returned from RPC');
-  }
+    if (!data.result) {
+        throw new Error('No signature returned from RPC');
+    }
 
-  return {
-    signature: data.result,
-    endpoint,
-    startTime,
-  };
+    return {
+        signature: data.result,
+        endpoint,
+        startTime,
+    };
 }
 
 /**
  * Create a promise that rejects after a timeout.
  */
 function createTimeoutPromise(ms: number, signal?: AbortSignal): Promise<never> {
-  return new Promise((_, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`Submission timed out after ${ms}ms`));
-    }, ms);
+    return new Promise((_, reject) => {
+        const timer = setTimeout(() => {
+            reject(new Error(`Submission timed out after ${ms}ms`));
+        }, ms);
 
-    signal?.addEventListener('abort', () => {
-      clearTimeout(timer);
-      reject(new Error('Submission aborted'));
+        signal?.addEventListener('abort', () => {
+            clearTimeout(timer);
+            reject(new Error('Submission aborted'));
+        });
     });
-  });
 }
 
 // ============================================================================
@@ -167,119 +164,101 @@ function createTimeoutPromise(ms: number, signal?: AbortSignal): Promise<never> 
  * console.log(`Landed via ${result.endpoint} in ${result.latencyMs}ms`);
  * ```
  */
-export async function submitParallel(
-  options: ParallelSubmitOptions
-): Promise<ParallelSubmitResult> {
-  const { endpoints, transaction, skipPreflight = true, abortSignal } = options;
+export async function submitParallel(options: ParallelSubmitOptions): Promise<ParallelSubmitResult> {
+    const { endpoints, transaction, skipPreflight = true, abortSignal } = options;
 
-  if (endpoints.length === 0) {
-    throw new ParallelSubmitError('No endpoints provided', []);
-  }
+    if (endpoints.length === 0) {
+        throw new ParallelSubmitError('No endpoints provided', []);
+    }
 
-  // Single endpoint - no need for parallel logic
-  if (endpoints.length === 1) {
+    // Single endpoint - no need for parallel logic
+    if (endpoints.length === 1) {
+        const startTime = performance.now();
+        const result = await submitToEndpoint(endpoints[0], transaction, skipPreflight, abortSignal);
+        return {
+            signature: result.signature,
+            endpoint: result.endpoint,
+            latencyMs: Math.round(performance.now() - startTime),
+        };
+    }
+
+    // Create abort controller to cancel losing requests
+    const abortController = new AbortController();
+    const combinedSignal = abortSignal
+        ? combineAbortSignals(abortSignal, abortController.signal)
+        : abortController.signal;
+
+    const errors: Array<{ endpoint: string; error: Error }> = [];
     const startTime = performance.now();
-    const result = await submitToEndpoint(
-      endpoints[0],
-      transaction,
-      skipPreflight,
-      abortSignal
-    );
-    return {
-      signature: result.signature,
-      endpoint: result.endpoint,
-      latencyMs: Math.round(performance.now() - startTime),
-    };
-  }
 
-  // Create abort controller to cancel losing requests
-  const abortController = new AbortController();
-  const combinedSignal = abortSignal
-    ? combineAbortSignals(abortSignal, abortController.signal)
-    : abortController.signal;
+    // Create submission promises for each endpoint
+    const submissionPromises = endpoints.map(async endpoint => {
+        try {
+            return await submitToEndpoint(endpoint, transaction, skipPreflight, combinedSignal);
+        } catch (error) {
+            // Collect errors but don't reject yet
+            errors.push({
+                endpoint,
+                error: error instanceof Error ? error : new Error(String(error)),
+            });
+            // Re-throw to let Promise.any continue
+            throw error;
+        }
+    });
 
-  const errors: Array<{ endpoint: string; error: Error }> = [];
-  const startTime = performance.now();
-
-  // Create submission promises for each endpoint
-  const submissionPromises = endpoints.map(async (endpoint) => {
     try {
-      return await submitToEndpoint(
-        endpoint,
-        transaction,
-        skipPreflight,
-        combinedSignal
-      );
+        // Use Promise.race to wrap Promise.any with a timeout
+        const result = (await Promise.race([
+            Promise.any(submissionPromises),
+            createTimeoutPromise(DEFAULT_SUBMIT_TIMEOUT, combinedSignal),
+        ])) as EndpointSubmitResult;
+
+        // Cancel remaining requests
+        abortController.abort();
+
+        return {
+            signature: result.signature,
+            endpoint: result.endpoint,
+            latencyMs: Math.round(performance.now() - startTime),
+        };
     } catch (error) {
-      // Collect errors but don't reject yet
-      errors.push({
-        endpoint,
-        error: error instanceof Error ? error : new Error(String(error)),
-      });
-      // Re-throw to let Promise.any continue
-      throw error;
+        // All submissions failed or timed out
+        abortController.abort();
+
+        if (error instanceof AggregateError) {
+            throw new ParallelSubmitError(
+                `All ${endpoints.length} endpoints failed`,
+                errors.length > 0
+                    ? errors
+                    : error.errors.map((e, i) => ({
+                          endpoint: endpoints[i],
+                          error: e instanceof Error ? e : new Error(String(e)),
+                      })),
+            );
+        }
+
+        throw new ParallelSubmitError(error instanceof Error ? error.message : 'Parallel submission failed', errors);
     }
-  });
-
-  try {
-    // Use Promise.race to wrap Promise.any with a timeout
-    const result = await Promise.race([
-      Promise.any(submissionPromises),
-      createTimeoutPromise(DEFAULT_SUBMIT_TIMEOUT, combinedSignal),
-    ]) as EndpointSubmitResult;
-
-    // Cancel remaining requests
-    abortController.abort();
-
-    return {
-      signature: result.signature,
-      endpoint: result.endpoint,
-      latencyMs: Math.round(performance.now() - startTime),
-    };
-  } catch (error) {
-    // All submissions failed or timed out
-    abortController.abort();
-
-    if (error instanceof AggregateError) {
-      throw new ParallelSubmitError(
-        `All ${endpoints.length} endpoints failed`,
-        errors.length > 0
-          ? errors
-          : error.errors.map((e, i) => ({
-              endpoint: endpoints[i],
-              error: e instanceof Error ? e : new Error(String(e)),
-            }))
-      );
-    }
-
-    throw new ParallelSubmitError(
-      error instanceof Error ? error.message : 'Parallel submission failed',
-      errors
-    );
-  }
 }
 
 /**
  * Combine two abort signals into one.
  * The combined signal aborts when either input signal aborts.
  */
-function combineAbortSignals(
-  signal1: AbortSignal,
-  signal2: AbortSignal
-): AbortSignal {
-  const controller = new AbortController();
+function combineAbortSignals(signal1: AbortSignal, signal2: AbortSignal): AbortSignal {
+    const controller = new AbortController();
 
-  const abort = () => controller.abort();
+    const abort = () => controller.abort();
 
-  signal1.addEventListener('abort', abort);
-  signal2.addEventListener('abort', abort);
+    signal1.addEventListener('abort', abort);
+    signal2.addEventListener('abort', abort);
 
-  // Check if either is already aborted
-  if (signal1.aborted || signal2.aborted) {
-    controller.abort();
-  }
+    // Check if either is already aborted
+    if (signal1.aborted || signal2.aborted) {
+        controller.abort();
+    }
 
-  return controller.signal;
+    return controller.signal;
 }
 
 /**
@@ -295,70 +274,93 @@ function combineAbortSignals(
  * @returns Transaction signature
  */
 export async function submitToRpc(
-  rpcUrl: string,
-  transaction: string,
-  options: {
-    skipPreflight?: boolean;
-    preflightCommitment?: 'processed' | 'confirmed' | 'finalized';
-    maxRetries?: number;
-    abortSignal?: AbortSignal;
-  } = {}
+    rpcUrl: string,
+    transaction: string,
+    options: {
+        skipPreflight?: boolean;
+        preflightCommitment?: 'processed' | 'confirmed' | 'finalized';
+        maxRetries?: number;
+        abortSignal?: AbortSignal;
+    } = {},
 ): Promise<string> {
-  const {
-    skipPreflight = true,
-    preflightCommitment = 'confirmed',
-    maxRetries,
-    abortSignal,
-  } = options;
+    const { skipPreflight = true, preflightCommitment = 'confirmed', maxRetries, abortSignal } = options;
 
-  const params: Record<string, unknown> = {
-    encoding: 'base64',
-    skipPreflight,
-  };
+    const startTime = performance.now();
 
-  if (!skipPreflight) {
-    params.preflightCommitment = preflightCommitment;
-  }
+    // Parse RPC URL for display
+    const rpcHost = (() => {
+        try {
+            return new URL(rpcUrl).hostname;
+        } catch {
+            return rpcUrl;
+        }
+    })();
 
-  if (maxRetries !== undefined) {
-    params.maxRetries = maxRetries;
-  }
+    console.log('\n┌─────────────────────────────────────────────────────────────┐');
+    console.log('│ 📡 RPC SUBMISSION (Standard)                                │');
+    console.log('├─────────────────────────────────────────────────────────────┤');
+    console.log(`│ Protocol: HTTP/JSON-RPC                                     │`);
+    console.log(`│ Target: ${rpcHost}`.slice(0, 61).padEnd(62) + '│');
+    console.log(`│ Method: sendTransaction                                     │`);
 
-  const fetchOptions: RequestInit = {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'sendTransaction',
-      params: [transaction, params],
-    }),
-  };
+    const params: Record<string, unknown> = {
+        encoding: 'base64',
+        skipPreflight,
+    };
 
-  if (abortSignal) {
-    fetchOptions.signal = abortSignal;
-  }
+    if (!skipPreflight) {
+        params.preflightCommitment = preflightCommitment;
+    }
 
-  const response = await fetch(rpcUrl, fetchOptions);
+    if (maxRetries !== undefined) {
+        params.maxRetries = maxRetries;
+    }
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`RPC error: ${response.status} - ${errorText}`);
-  }
+    const fetchOptions: RequestInit = {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'sendTransaction',
+            params: [transaction, params],
+        }),
+    };
 
-  const data = await response.json();
+    if (abortSignal) {
+        fetchOptions.signal = abortSignal;
+    }
 
-  if (data.error) {
-    throw new Error(data.error.message || JSON.stringify(data.error));
-  }
+    const response = await fetch(rpcUrl, fetchOptions);
 
-  if (!data.result) {
-    throw new Error('No signature returned from RPC');
-  }
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.log(`│ Result: ❌ FAILED (${response.status})`.padEnd(62) + '│');
+        console.log('└─────────────────────────────────────────────────────────────┘\n');
+        throw new Error(`RPC error: ${response.status} - ${errorText}`);
+    }
 
-  return data.result;
+    const data = await response.json();
+
+    if (data.error) {
+        console.log(`│ Result: ❌ FAILED`.padEnd(62) + '│');
+        console.log('└─────────────────────────────────────────────────────────────┘\n');
+        throw new Error(data.error.message || JSON.stringify(data.error));
+    }
+
+    if (!data.result) {
+        console.log(`│ Result: ❌ No signature`.padEnd(62) + '│');
+        console.log('└─────────────────────────────────────────────────────────────┘\n');
+        throw new Error('No signature returned from RPC');
+    }
+
+    const latencyMs = Math.round(performance.now() - startTime);
+    console.log(`│ Result: ✅ SUCCESS`.padEnd(62) + '│');
+    console.log(`│ Latency: ${latencyMs}ms`.padEnd(62) + '│');
+    console.log(`│ Signature: ${data.result.slice(0, 20)}...`.padEnd(62) + '│');
+    console.log('└─────────────────────────────────────────────────────────────┘\n');
+
+    return data.result;
 }
-
-
