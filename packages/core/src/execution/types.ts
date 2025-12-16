@@ -66,12 +66,57 @@ export interface ParallelConfig {
 }
 
 /**
+ * Configuration for direct TPU submission.
+ *
+ * TPU (Transaction Processing Unit) submission bypasses RPC nodes
+ * and sends transactions directly to validator QUIC endpoints.
+ * This provides lower latency and higher landing probability.
+ *
+ * Requires the `@pipeit/tpu-native` package and a server-side
+ * API route for browser environments.
+ */
+export interface TpuConfig {
+  /**
+   * Whether TPU submission is enabled.
+   */
+  enabled: boolean;
+
+  /**
+   * RPC URL for fetching leader schedule and cluster info.
+   * If not provided, uses the builder's configured RPC URL.
+   */
+  rpcUrl?: string;
+
+  /**
+   * WebSocket URL for slot update subscriptions.
+   * If not provided, derived from rpcUrl by replacing http(s) with ws(s).
+   */
+  wsUrl?: string;
+
+  /**
+   * Number of upcoming leaders to send transactions to.
+   * Higher values increase landing probability but use more resources.
+   * @default 2
+   */
+  fanout?: number;
+
+  /**
+   * API route URL for browser environments.
+   * When running in the browser, transactions are sent to this
+   * endpoint which forwards them via the native TPU client.
+   * @default '/api/tpu'
+   */
+  apiRoute?: string;
+}
+
+/**
  * Execution strategy presets.
- * - 'standard': Default RPC submission only (no Jito, no parallel)
+ * - 'standard': Default RPC submission only (no Jito, no parallel, no TPU)
  * - 'economical': Jito bundle only (good balance of speed and cost)
  * - 'fast': Jito + parallel RPC race (maximum landing probability)
+ * - 'ultra': Direct TPU + Jito race (fastest possible, requires @pipeit/tpu-native)
  */
-export type ExecutionPreset = 'standard' | 'economical' | 'fast';
+export type ExecutionPreset = 'standard' | 'economical' | 'fast' | 'ultra';
 
 /**
  * Full execution configuration.
@@ -82,6 +127,7 @@ export type ExecutionConfig =
   | {
       jito?: JitoConfig;
       parallel?: ParallelConfig;
+      tpu?: TpuConfig;
     };
 
 /**
@@ -98,6 +144,13 @@ export interface ResolvedExecutionConfig {
     enabled: boolean;
     endpoints: string[];
     raceWithDefault: boolean;
+  };
+  tpu: {
+    enabled: boolean;
+    rpcUrl: string;
+    wsUrl: string;
+    fanout: number;
+    apiRoute: string;
   };
 }
 
@@ -138,7 +191,7 @@ export interface ExecutionResult {
   /**
    * Which execution path landed the transaction.
    */
-  landedVia: 'jito' | 'rpc' | 'parallel';
+  landedVia: 'jito' | 'rpc' | 'parallel' | 'tpu';
 
   /**
    * Time from submission to confirmation in milliseconds.
@@ -154,6 +207,11 @@ export interface ExecutionResult {
    * Which endpoint landed the transaction (for parallel).
    */
   endpoint?: string;
+
+  /**
+   * Number of leaders the transaction was sent to (for TPU).
+   */
+  leaderCount?: number;
 }
 
 // ============================================================================
@@ -259,5 +317,6 @@ export interface ParallelSubmitResult {
    */
   latencyMs: number;
 }
+
 
 

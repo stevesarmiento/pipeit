@@ -42,10 +42,19 @@ import type {
  *   .execute();
  * ```
  */
+interface ResolvedFlowConfig {
+  rpc: FlowConfig['rpc'];
+  rpcSubscriptions: FlowConfig['rpcSubscriptions'];
+  signer: FlowConfig['signer'];
+  strategy: NonNullable<FlowConfig['strategy']>;
+  commitment: NonNullable<FlowConfig['commitment']>;
+  execution?: FlowConfig['execution'];
+}
+
 export class TransactionFlow {
   private steps: FlowStep[] = [];
   private hooks: FlowHooks = {};
-  private config: Required<FlowConfig>;
+  private config: ResolvedFlowConfig;
 
   constructor(config: FlowConfig) {
     this.config = {
@@ -55,6 +64,9 @@ export class TransactionFlow {
       strategy: config.strategy ?? 'auto',
       commitment: config.commitment ?? 'confirmed',
     };
+    if (config.execution !== undefined) {
+      this.config.execution = config.execution;
+    }
   }
 
   /**

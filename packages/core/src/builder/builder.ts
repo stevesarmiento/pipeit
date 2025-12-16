@@ -747,8 +747,8 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
     // Get base64 encoded transaction for execution strategies
     const base64Tx = getBase64EncodedWireTransaction(signedTransaction);
     
-    // Check if we should use execution strategies (Jito or parallel enabled)
-    const useExecutionStrategy = executionConfig.jito.enabled || executionConfig.parallel.enabled;
+    // Check if we should use execution strategies (Jito, parallel, or TPU enabled)
+    const useExecutionStrategy = executionConfig.jito.enabled || executionConfig.parallel.enabled || executionConfig.tpu.enabled;
     
     if (useExecutionStrategy) {
       // Use execution strategy
@@ -785,11 +785,21 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
       return result.signature;
     }
     
-    // Standard execution path (no Jito, no parallel)
+    // Standard execution path (no Jito, no parallel, no TPU)
+    if (this.config.logLevel !== 'silent') {
+      console.log('\n┌─────────────────────────────────────────────────────────────┐');
+      console.log('│ 📡 RPC SUBMISSION (Kit sendAndConfirm)                      │');
+      console.log('├─────────────────────────────────────────────────────────────┤');
+      console.log(`│ Protocol: HTTP/JSON-RPC via @solana/kit                     │`);
+      console.log(`│ Method: sendAndConfirmTransaction                           │`);
+    }
+    
     const sendAndConfirm = sendAndConfirmTransactionFactory({ 
       rpc, 
       rpcSubscriptions 
     });
+    
+    const rpcStartTime = performance.now();
     
     // Add retry logic if enabled
     if (this.config.autoRetry) {
@@ -809,6 +819,14 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
     
     await sendAndConfirm(signedTransaction, sendOptions);
     const signature = getSignatureFromTransaction(signedTransaction);
+    
+    if (this.config.logLevel !== 'silent') {
+      const rpcLatency = Math.round(performance.now() - rpcStartTime);
+      console.log(`│ Result: ✅ SUCCESS                                          │`);
+      console.log(`│ Latency: ${rpcLatency}ms`.padEnd(62) + '│');
+      console.log(`│ Signature: ${signature.slice(0, 20)}...`.padEnd(62) + '│');
+      console.log('└─────────────────────────────────────────────────────────────┘\n');
+    }
     
     // Verify transaction execution status (catch false positives)
     await this.verifyTransactionSuccess(rpc, signature);

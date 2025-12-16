@@ -1,0 +1,64 @@
+{
+  "name": "@pipeit/tpu-native",
+  "version": "0.1.0",
+  "description": "Native QUIC client for direct Solana TPU transaction submission",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "browser": "./browser.js",
+      "default": "./index.js"
+    },
+    "./browser": "./browser.js"
+  },
+  "browser": "./browser.js",
+  "napi": {
+    "name": "tpu-native",
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "aarch64-unknown-linux-musl"
+      ]
+    }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stevesarmiento/pipeit.git",
+    "directory": "packages/tpu-native"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "browser.js",
+    "*.node"
+  ],
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "prepublishOnly": "napi prepublish -t npm",
+    "test": "node --test test.mjs",
+    "universal": "napi universal",
+    "version": "napi version"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0"
+  },
+  "engines": {
+    "node": ">= 18"
+  },
+  "optionalDependencies": {
+    "@pipeit/tpu-native-win32-x64-msvc": "0.1.0",
+    "@pipeit/tpu-native-darwin-x64": "0.1.0",
+    "@pipeit/tpu-native-darwin-arm64": "0.1.0",
+    "@pipeit/tpu-native-linux-x64-gnu": "0.1.0",
+    "@pipeit/tpu-native-linux-x64-musl": "0.1.0",
+    "@pipeit/tpu-native-linux-arm64-gnu": "0.1.0",
+    "@pipeit/tpu-native-linux-arm64-musl": "0.1.0"
+  }
+}
+
+

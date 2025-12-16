@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig((options) => ({
-  entry: ['src/index.ts'],
+  entry: ['src/index.ts', 'src/server/index.ts'],
   format: ['cjs', 'esm'],
   dts: options.watch ? false : {
     resolve: true,
@@ -25,6 +25,7 @@ export default defineConfig((options) => ({
     '@solana/signers',
     '@solana/transaction-messages',
     '@solana/transactions',
+    '@pipeit/tpu-native', // Optional native dependency
   ],
 }));
 

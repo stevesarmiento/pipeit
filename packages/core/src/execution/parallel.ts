@@ -311,6 +311,24 @@ export async function submitToRpc(
     abortSignal,
   } = options;
 
+  const startTime = performance.now();
+  
+  // Parse RPC URL for display
+  const rpcHost = (() => {
+    try {
+      return new URL(rpcUrl).hostname;
+    } catch {
+      return rpcUrl;
+    }
+  })();
+
+  console.log('\n┌─────────────────────────────────────────────────────────────┐');
+  console.log('│ 📡 RPC SUBMISSION (Standard)                                │');
+  console.log('├─────────────────────────────────────────────────────────────┤');
+  console.log(`│ Protocol: HTTP/JSON-RPC                                     │`);
+  console.log(`│ Target: ${rpcHost}`.slice(0, 61).padEnd(62) + '│');
+  console.log(`│ Method: sendTransaction                                     │`);
+
   const params: Record<string, unknown> = {
     encoding: 'base64',
     skipPreflight,
@@ -345,20 +363,35 @@ export async function submitToRpc(
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.log(`│ Result: ❌ FAILED (${response.status})`.padEnd(62) + '│');
+    console.log('└─────────────────────────────────────────────────────────────┘\n');
     throw new Error(`RPC error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
 
   if (data.error) {
+    console.log(`│ Result: ❌ FAILED`.padEnd(62) + '│');
+    console.log('└─────────────────────────────────────────────────────────────┘\n');
     throw new Error(data.error.message || JSON.stringify(data.error));
   }
 
   if (!data.result) {
+    console.log(`│ Result: ❌ No signature`.padEnd(62) + '│');
+    console.log('└─────────────────────────────────────────────────────────────┘\n');
     throw new Error('No signature returned from RPC');
   }
 
+  const latencyMs = Math.round(performance.now() - startTime);
+  console.log(`│ Result: ✅ SUCCESS`.padEnd(62) + '│');
+  console.log(`│ Latency: ${latencyMs}ms`.padEnd(62) + '│');
+  console.log(`│ Signature: ${data.result.slice(0, 20)}...`.padEnd(62) + '│');
+  console.log('└─────────────────────────────────────────────────────────────┘\n');
+
   return data.result;
 }
+
+
+
 
 

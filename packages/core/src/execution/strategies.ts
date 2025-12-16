@@ -26,12 +26,22 @@ import { submitParallel, submitToRpc } from './parallel.js';
 // Strategy Presets
 // ============================================================================
 
+/** Default TPU configuration values. */
+const TPU_DEFAULTS = {
+  // Default to public mainnet RPC - users should override for better performance
+  rpcUrl: 'https://api.mainnet-beta.solana.com',
+  wsUrl: 'wss://api.mainnet-beta.solana.com',
+  fanout: 2,
+  apiRoute: '/api/tpu',
+};
+
 /**
  * Default configurations for each execution preset.
  *
- * - 'standard': Default RPC only, no Jito, no parallel
+ * - 'standard': Default RPC only, no Jito, no parallel, no TPU
  * - 'economical': Jito bundle only (good balance)
  * - 'fast': Jito + parallel RPC race (max speed)
+ * - 'ultra': TPU + Jito race (fastest possible)
  */
 const PRESET_CONFIGS: Record<ExecutionPreset, ResolvedExecutionConfig> = {
   standard: {
@@ -46,6 +56,10 @@ const PRESET_CONFIGS: Record<ExecutionPreset, ResolvedExecutionConfig> = {
       endpoints: [],
       raceWithDefault: true,
     },
+    tpu: {
+      enabled: false,
+      ...TPU_DEFAULTS,
+    },
   },
   economical: {
     jito: {
@@ -59,6 +73,10 @@ const PRESET_CONFIGS: Record<ExecutionPreset, ResolvedExecutionConfig> = {
       endpoints: [],
       raceWithDefault: true,
     },
+    tpu: {
+      enabled: false,
+      ...TPU_DEFAULTS,
+    },
   },
   fast: {
     jito: {
@@ -71,6 +89,27 @@ const PRESET_CONFIGS: Record<ExecutionPreset, ResolvedExecutionConfig> = {
       enabled: true,
       endpoints: [],
       raceWithDefault: true,
+    },
+    tpu: {
+      enabled: false,
+      ...TPU_DEFAULTS,
+    },
+  },
+  ultra: {
+    jito: {
+      enabled: true,
+      tipLamports: JITO_DEFAULT_TIP_LAMPORTS,
+      blockEngineUrl: JITO_BLOCK_ENGINES.mainnet,
+      mevProtection: true,
+    },
+    parallel: {
+      enabled: false,
+      endpoints: [],
+      raceWithDefault: true,
+    },
+    tpu: {
+      enabled: true,
+      ...TPU_DEFAULTS,
     },
   },
 };
@@ -122,6 +161,7 @@ export function resolveExecutionConfig(
   // Merge user config with defaults
   const jitoConfig = config.jito;
   const parallelConfig = config.parallel;
+  const tpuConfig = config.tpu;
 
   return {
     jito: {
@@ -139,6 +179,13 @@ export function resolveExecutionConfig(
       endpoints: parallelConfig?.endpoints ?? [],
       raceWithDefault: parallelConfig?.raceWithDefault ?? true,
     },
+    tpu: {
+      enabled: tpuConfig?.enabled ?? false,
+      rpcUrl: tpuConfig?.rpcUrl ?? TPU_DEFAULTS.rpcUrl,
+      wsUrl: tpuConfig?.wsUrl ?? TPU_DEFAULTS.wsUrl,
+      fanout: tpuConfig?.fanout ?? TPU_DEFAULTS.fanout,
+      apiRoute: tpuConfig?.apiRoute ?? TPU_DEFAULTS.apiRoute,
+    },
   };
 }
 
@@ -152,15 +199,17 @@ export function resolveExecutionConfig(
 export class ExecutionStrategyError extends Error {
   readonly jitoError: Error | undefined;
   readonly parallelError: Error | undefined;
+  readonly tpuError: Error | undefined;
 
   constructor(
     message: string,
-    options?: { jitoError?: Error; parallelError?: Error }
+    options?: { jitoError?: Error; parallelError?: Error; tpuError?: Error }
   ) {
     super(message);
     this.name = 'ExecutionStrategyError';
     this.jitoError = options?.jitoError;
     this.parallelError = options?.parallelError;
+    this.tpuError = options?.tpuError;
   }
 }
 
@@ -189,12 +238,17 @@ export async function executeWithStrategy(
   config: ResolvedExecutionConfig,
   context: ExecutionContext & { rpcUrl?: string }
 ): Promise<ExecutionResult> {
-  const { jito, parallel } = config;
+  const { jito, parallel, tpu } = config;
   const { rpcUrl, abortSignal } = context;
 
   const startTime = performance.now();
 
-  // Case 1: Neither Jito nor parallel enabled - standard RPC submission
+  // Case 1: TPU enabled - use direct TPU submission (possibly racing with others)
+  if (tpu.enabled) {
+    return executeTpuStrategy(transaction, config, context, startTime);
+  }
+
+  // Case 2: Neither Jito nor parallel enabled - standard RPC submission
   if (!jito.enabled && !parallel.enabled) {
     if (!rpcUrl) {
       throw new ExecutionStrategyError(
@@ -214,7 +268,7 @@ export async function executeWithStrategy(
     };
   }
 
-  // Case 2: Jito only - submit bundle
+  // Case 3: Jito only - submit bundle
   if (jito.enabled && !parallel.enabled) {
     const bundleId = await sendBundle([transaction], {
       blockEngineUrl: jito.blockEngineUrl,
@@ -236,7 +290,7 @@ export async function executeWithStrategy(
     };
   }
 
-  // Case 3: Parallel only - submit to multiple RPCs
+  // Case 4: Parallel only - submit to multiple RPCs
   if (!jito.enabled && parallel.enabled) {
     const endpoints = buildEndpointList(rpcUrl, parallel);
 
@@ -261,7 +315,7 @@ export async function executeWithStrategy(
     };
   }
 
-  // Case 4: Both Jito and parallel - race them
+  // Case 5: Both Jito and parallel - race them
   return executeRaceStrategy(transaction, config, context, startTime);
 }
 
@@ -459,6 +513,312 @@ function combineAbortSignals(
 }
 
 // ============================================================================
+// TPU Execution
+// ============================================================================
+
+/**
+ * Check if we're running in a browser environment.
+ */
+function isBrowser(): boolean {
+  return typeof window !== 'undefined' && typeof window.document !== 'undefined';
+}
+
+/**
+ * Submit transaction via TPU (direct or through API route).
+ *
+ * In browser environments, this sends to the configured API route.
+ * In server environments, this uses the native TPU client directly.
+ */
+async function submitToTpu(
+  transaction: string,
+  tpuConfig: ResolvedExecutionConfig['tpu'],
+  abortSignal?: AbortSignal
+): Promise<{ delivered: boolean; latencyMs: number; leaderCount: number }> {
+  if (isBrowser()) {
+    // Browser: route through API with config
+    const response = await fetch(tpuConfig.apiRoute, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transaction,
+        config: {
+          rpcUrl: tpuConfig.rpcUrl,
+          wsUrl: tpuConfig.wsUrl,
+          fanout: tpuConfig.fanout,
+        },
+      }),
+      ...(abortSignal && { signal: abortSignal }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`TPU API error: ${response.status} - ${error}`);
+    }
+
+    return response.json();
+  }
+
+  // Server: use native client
+  // Dynamic import to avoid bundling native module in browser builds
+  try {
+    // @ts-ignore - Optional dependency loaded at runtime
+    // webpackIgnore tells bundlers to skip resolving this import
+    const tpuNative = await import(/* webpackIgnore: true */ '@pipeit/tpu-native');
+    
+    // Get or create singleton client
+    const client = await getTpuClientSingleton(tpuConfig);
+    
+    // Convert base64 transaction to Buffer
+    const txBuffer = Buffer.from(transaction, 'base64');
+    
+    const result = await client.sendTransaction(txBuffer);
+    
+    return {
+      delivered: result.delivered,
+      latencyMs: result.latencyMs,
+      leaderCount: result.leaderCount,
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND') {
+      throw new ExecutionStrategyError(
+        'TPU submission requires @pipeit/tpu-native package. Install it with: npm install @pipeit/tpu-native'
+      );
+    }
+    throw error;
+  }
+}
+
+// Singleton TPU client instance
+let tpuClientInstance: unknown = null;
+let tpuClientConfig: ResolvedExecutionConfig['tpu'] | null = null;
+
+/**
+ * Get or create a singleton TPU client.
+ */
+async function getTpuClientSingleton(config: ResolvedExecutionConfig['tpu']): Promise<{
+  sendTransaction: (tx: Buffer) => Promise<{ delivered: boolean; latencyMs: number; leaderCount: number }>;
+  waitReady: () => Promise<void>;
+}> {
+  // Check if config changed
+  if (tpuClientInstance && tpuClientConfig &&
+      tpuClientConfig.rpcUrl === config.rpcUrl &&
+      tpuClientConfig.wsUrl === config.wsUrl) {
+    return tpuClientInstance as {
+      sendTransaction: (tx: Buffer) => Promise<{ delivered: boolean; latencyMs: number; leaderCount: number }>;
+      waitReady: () => Promise<void>;
+    };
+  }
+
+  // Create new client
+  // @ts-ignore - Optional dependency loaded at runtime
+  // webpackIgnore tells bundlers to skip resolving this import
+  const tpuNative = await import(/* webpackIgnore: true */ '@pipeit/tpu-native');
+  const { TpuClient } = tpuNative;
+  
+  const client = new (TpuClient as any)({
+    rpcUrl: config.rpcUrl,
+    wsUrl: config.wsUrl,
+    fanout: config.fanout,
+  });
+
+  await client.waitReady();
+  
+  tpuClientInstance = client;
+  tpuClientConfig = config;
+  
+  return client;
+}
+
+/**
+ * Execute TPU strategy, optionally racing with Jito.
+ */
+async function executeTpuStrategy(
+  transaction: string,
+  config: ResolvedExecutionConfig,
+  context: ExecutionContext & { rpcUrl?: string },
+  startTime: number
+): Promise<ExecutionResult> {
+  const { jito, tpu } = config;
+  const { abortSignal, rpcUrl: contextRpcUrl } = context;
+
+  // Merge context rpcUrl into tpu config if not set
+  const tpuConfig = {
+    ...tpu,
+    rpcUrl: tpu.rpcUrl || contextRpcUrl || '',
+    wsUrl: tpu.wsUrl || (contextRpcUrl ? contextRpcUrl.replace('https://', 'wss://').replace('http://', 'ws://') : ''),
+  };
+
+  // If Jito is also enabled, race TPU vs Jito
+  if (jito.enabled) {
+    return executeTpuJitoRace(transaction, { ...config, tpu: tpuConfig }, context, startTime);
+  }
+
+  // TPU only
+  const result = await submitToTpu(transaction, tpuConfig, abortSignal);
+
+  if (!result.delivered) {
+    throw new ExecutionStrategyError('TPU submission failed - transaction not delivered to any leader');
+  }
+
+  // Extract signature from the transaction
+  // The signature is the first 64 bytes after the signature count
+  const signature = extractSignatureFromTransaction(transaction);
+
+  return {
+    signature,
+    landedVia: 'tpu',
+    latencyMs: result.latencyMs,
+    leaderCount: result.leaderCount,
+  };
+}
+
+/**
+ * Extract the first signature from a base64-encoded serialized transaction.
+ * 
+ * Solana transaction format starts with a compact array of signatures.
+ * For a single-signer transaction, this is: [1, ...64 bytes of signature...]
+ */
+function extractSignatureFromTransaction(base64Tx: string): string {
+  const bytes = Buffer.from(base64Tx, 'base64');
+  
+  // First byte is the number of signatures (for single signer, it's 1)
+  const numSignatures = bytes[0];
+  if (numSignatures < 1) {
+    throw new ExecutionStrategyError('Transaction has no signatures');
+  }
+  
+  // Extract the first signature (64 bytes starting at offset 1)
+  const signatureBytes = bytes.slice(1, 65);
+  
+  // Convert to base58 for the signature string
+  return encodeBase58(signatureBytes);
+}
+
+/**
+ * Encode bytes to base58 string (Solana's signature format).
+ */
+function encodeBase58(bytes: Uint8Array): string {
+  const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  
+  // Convert bytes to a big integer
+  let num = BigInt(0);
+  for (const byte of bytes) {
+    num = num * 256n + BigInt(byte);
+  }
+  
+  // Convert to base58
+  let result = '';
+  while (num > 0n) {
+    const remainder = Number(num % 58n);
+    num = num / 58n;
+    result = ALPHABET[remainder] + result;
+  }
+  
+  // Add leading '1's for leading zero bytes
+  for (const byte of bytes) {
+    if (byte === 0) {
+      result = '1' + result;
+    } else {
+      break;
+    }
+  }
+  
+  return result || '1';
+}
+
+/**
+ * Race TPU vs Jito submission.
+ */
+async function executeTpuJitoRace(
+  transaction: string,
+  config: ResolvedExecutionConfig,
+  context: ExecutionContext & { rpcUrl?: string },
+  startTime: number
+): Promise<ExecutionResult> {
+  const { jito, tpu } = config;
+  const { abortSignal } = context;
+
+  // Create abort controller to cancel the loser
+  const abortController = new AbortController();
+  const combinedSignal = abortSignal
+    ? combineAbortSignals(abortSignal, abortController.signal)
+    : abortController.signal;
+
+  let tpuError: Error | undefined;
+  let jitoError: Error | undefined;
+
+  // TPU submission promise
+  const tpuPromise = (async (): Promise<ExecutionResult> => {
+    try {
+      const result = await submitToTpu(transaction, tpu, combinedSignal);
+      
+      if (!result.delivered) {
+        throw new Error('TPU submission failed');
+      }
+
+      const signature = extractSignatureFromTransaction(transaction);
+
+      return {
+        signature,
+        landedVia: 'tpu',
+        latencyMs: result.latencyMs,
+        leaderCount: result.leaderCount,
+      };
+    } catch (error) {
+      tpuError = error instanceof Error ? error : new Error(String(error));
+      throw error;
+    }
+  })();
+
+  // Jito submission promise
+  const jitoPromise = (async (): Promise<ExecutionResult> => {
+    try {
+      const bundleId = await sendBundle([transaction], {
+        blockEngineUrl: jito.blockEngineUrl,
+        abortSignal: combinedSignal,
+      });
+
+      const signature = await waitForBundleSignature(bundleId, {
+        blockEngineUrl: jito.blockEngineUrl,
+        abortSignal: combinedSignal,
+      });
+
+      return {
+        signature,
+        landedVia: 'jito',
+        latencyMs: Math.round(performance.now() - startTime),
+        bundleId,
+      };
+    } catch (error) {
+      jitoError = error instanceof Error ? error : new Error(String(error));
+      throw error;
+    }
+  })();
+
+  try {
+    // Race TPU vs Jito
+    const result = await Promise.any([tpuPromise, jitoPromise]);
+
+    // Cancel the loser
+    abortController.abort();
+
+    return result;
+  } catch {
+    // Both failed
+    abortController.abort();
+
+    const errorOptions: { tpuError?: Error; jitoError?: Error } = {};
+    if (tpuError) errorOptions.tpuError = tpuError;
+    if (jitoError) errorOptions.jitoError = jitoError;
+    
+    throw new ExecutionStrategyError(
+      'All execution paths failed (TPU + Jito)',
+      errorOptions
+    );
+  }
+}
+
+// ============================================================================
 // Utility Exports
 // ============================================================================
 
@@ -479,6 +839,14 @@ export function isParallelEnabled(config: ExecutionConfig | undefined): boolean 
 }
 
 /**
+ * Check if an execution config enables TPU submission.
+ */
+export function isTpuEnabled(config: ExecutionConfig | undefined): boolean {
+  const resolved = resolveExecutionConfig(config);
+  return resolved.tpu.enabled;
+}
+
+/**
  * Get the tip amount for an execution config.
  * Returns 0 if Jito is not enabled.
  */
@@ -486,5 +854,6 @@ export function getTipAmount(config: ExecutionConfig | undefined): bigint {
   const resolved = resolveExecutionConfig(config);
   return resolved.jito.enabled ? resolved.jito.tipLamports : 0n;
 }
+
 
 

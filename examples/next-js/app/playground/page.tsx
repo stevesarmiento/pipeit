@@ -21,6 +21,8 @@ import {
   pipeMultiSwapCode,
   useJitoBundlePipeline,
   jitoBundleCode,
+  useTpuDirectPipeline,
+  tpuDirectCode,
 } from '@/components/pipeline/examples';
 import { ConnectButton } from '@/components/connector';
 import { PipelineHeaderButton } from '@/components/pipeline/pipeline-header-button';
@@ -75,6 +77,13 @@ const pipelineExamples: PipelineExampleConfig[] = [
     description: 'MEV-protected bundle submission with Jito tip instructions',
     hook: useJitoBundlePipeline,
     code: jitoBundleCode,
+  },
+  {
+    id: 'tpu-direct',
+    name: 'TPU Direct',
+    description: 'Direct QUIC submission to validator TPU - bypass RPC queues for maximum speed',
+    hook: useTpuDirectPipeline,
+    code: tpuDirectCode,
   },
   // {
   //   id: 'raydium-kamino',

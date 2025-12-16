@@ -19,6 +19,7 @@ import type {
   SignatureNotificationsApi,
   SlotNotificationsApi,
 } from '@solana/rpc-subscriptions';
+import type { ExecutionConfig } from '../execution/types.js';
 
 // =============================================================================
 // Shared RPC Types (used by both core and actions)
@@ -165,5 +166,11 @@ export interface FlowConfig extends BaseContext {
    * Commitment level for confirmations. Defaults to 'confirmed'.
    */
   commitment?: 'processed' | 'confirmed' | 'finalized';
+
+  /**
+   * Execution configuration for advanced submission strategies.
+   * Supports Jito bundles, parallel RPC, and direct TPU submission.
+   */
+  execution?: ExecutionConfig;
 }
 
