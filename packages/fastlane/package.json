@@ -47,10 +47,5 @@
     },
     "engines": {
         "node": ">= 18"
-    },
-    "optionalDependencies": {
-        "@pipeit/fastlane-win32-x64-msvc": "0.1.0",
-        "@pipeit/fastlane-darwin-arm64": "0.1.0",
-        "@pipeit/fastlane-linux-x64-gnu": "0.1.0"
     }
 }
