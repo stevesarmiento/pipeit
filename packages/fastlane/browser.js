@@ -1,5 +1,5 @@
 /**
- * Browser stub for @pipeit/tpu-native.
+ * Browser stub for @pipeit/fastlane.
  * 
  * This module provides empty exports for browser environments
  * where the native QUIC client cannot run.
@@ -12,7 +12,7 @@
 export class TpuClient {
   constructor() {
     throw new Error(
-      '@pipeit/tpu-native cannot be used in the browser. ' +
+      '@pipeit/fastlane cannot be used in the browser. ' +
       'TPU submission should route through the API endpoint. ' +
       'Configure tpu.apiRoute in your execution config.'
     );

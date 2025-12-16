@@ -445,7 +445,7 @@ async function main(): Promise<void> {
   
   try {
     const tpuStart = performance.now();
-    const { TpuClient } = await import('@pipeit/tpu-native');
+    const { TpuClient } = await import('@pipeit/fastlane');
     const tpuClientInstance = new TpuClient({
       rpcUrl,
       wsUrl,

@@ -1,8 +1,8 @@
 # GitHub Actions Workflows
 
-## build-tpu-native.yml
+## build-fastlane.yml
 
-Builds the `@pipeit/tpu-native` package for multiple platforms using NAPI-RS.
+Builds the `@pipeit/fastlane` package for multiple platforms using NAPI-RS.
 
 ### Supported Platforms
 
@@ -41,7 +41,7 @@ Builds the `@pipeit/tpu-native` package for multiple platforms using NAPI-RS.
 - **Push to main**: Runs full workflow including publish
 - **Pull requests**: Runs build and test only
 - **Manual dispatch**: Can be triggered manually from GitHub Actions UI
-- **Path filters**: Only runs when `packages/tpu-native/**` changes
+- **Path filters**: Only runs when `packages/fastlane/**` changes
 
 ### Environment Variables
 
@@ -59,7 +59,7 @@ Builds the `@pipeit/tpu-native` package for multiple platforms using NAPI-RS.
 To build locally:
 
 ```bash
-cd packages/tpu-native
+cd packages/fastlane
 pnpm install
 pnpm build
 ```

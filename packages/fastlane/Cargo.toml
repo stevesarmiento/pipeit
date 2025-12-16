@@ -1,5 +1,5 @@
 [package]
-name = "pipeit-tpu-native"
+name = "pipeit-fastlane"
 version = "0.1.0"
 edition = "2021"
 description = "Native QUIC client for direct Solana TPU transaction submission"

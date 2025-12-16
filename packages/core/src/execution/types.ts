@@ -72,7 +72,7 @@ export interface ParallelConfig {
  * and sends transactions directly to validator QUIC endpoints.
  * This provides lower latency and higher landing probability.
  *
- * Requires the `@pipeit/tpu-native` package and a server-side
+ * Requires the `@pipeit/fastlane` package and a server-side
  * API route for browser environments.
  */
 export interface TpuConfig {
@@ -114,7 +114,7 @@ export interface TpuConfig {
  * - 'standard': Default RPC submission only (no Jito, no parallel, no TPU)
  * - 'economical': Jito bundle only (good balance of speed and cost)
  * - 'fast': Jito + parallel RPC race (maximum landing probability)
- * - 'ultra': Direct TPU + Jito race (fastest possible, requires @pipeit/tpu-native)
+ * - 'ultra': Direct TPU + Jito race (fastest possible, requires @pipeit/fastlane)
  */
 export type ExecutionPreset = 'standard' | 'economical' | 'fast' | 'ultra';
 

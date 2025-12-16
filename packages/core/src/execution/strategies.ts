@@ -563,7 +563,7 @@ async function submitToTpu(
   try {
     // @ts-ignore - Optional dependency loaded at runtime
     // webpackIgnore tells bundlers to skip resolving this import
-    const tpuNative = await import(/* webpackIgnore: true */ '@pipeit/tpu-native');
+    const tpuNative = await import(/* webpackIgnore: true */ '@pipeit/fastlane');
     
     // Get or create singleton client
     const client = await getTpuClientSingleton(tpuConfig);
@@ -581,7 +581,7 @@ async function submitToTpu(
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND') {
       throw new ExecutionStrategyError(
-        'TPU submission requires @pipeit/tpu-native package. Install it with: npm install @pipeit/tpu-native'
+        'TPU submission requires @pipeit/fastlane package. Install it with: npm install @pipeit/fastlane'
       );
     }
     throw error;
@@ -612,7 +612,7 @@ async function getTpuClientSingleton(config: ResolvedExecutionConfig['tpu']): Pr
   // Create new client
   // @ts-ignore - Optional dependency loaded at runtime
   // webpackIgnore tells bundlers to skip resolving this import
-  const tpuNative = await import(/* webpackIgnore: true */ '@pipeit/tpu-native');
+  const tpuNative = await import(/* webpackIgnore: true */ '@pipeit/fastlane');
   const { TpuClient } = tpuNative;
   
   const client = new (TpuClient as any)({

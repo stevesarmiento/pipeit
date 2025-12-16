@@ -38,9 +38,9 @@ importers:
       '@pipeit/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@pipeit/tpu-native':
+      '@pipeit/fastlane':
         specifier: workspace:*
-        version: link:../../packages/tpu-native
+        version: link:../../packages/fastlane
       '@radix-ui/react-avatar':
         specifier: ^1.1.10
         version: 1.1.10(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
@@ -256,7 +256,7 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@24.10.0)(@vitest/ui@3.2.4)(happy-dom@20.0.10)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.1)
 
-  packages/tpu-native:
+  packages/fastlane:
     devDependencies:
       '@napi-rs/cli':
         specifier: ^2.18.0

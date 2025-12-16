@@ -1,4 +1,4 @@
-//! @pipeit/tpu-native
+//! @pipeit/fastlane
 //!
 //! Native QUIC client for direct Solana TPU transaction submission.
 //! Provides Node.js bindings via NAPI-RS for maximum performance.
@@ -13,7 +13,7 @@
 //! ## Usage
 //!
 //! ```typescript
-//! import { TpuClient } from '@pipeit/tpu-native';
+//! import { TpuClient } from '@pipeit/fastlane';
 //!
 //! const client = new TpuClient({
 //!   rpcUrl: 'https://api.mainnet-beta.solana.com',

@@ -25,7 +25,7 @@ export default defineConfig((options) => ({
     '@solana/signers',
     '@solana/transaction-messages',
     '@solana/transactions',
-    '@pipeit/tpu-native', // Optional native dependency
+    '@pipeit/fastlane', // Optional native dependency
   ],
 }));
 

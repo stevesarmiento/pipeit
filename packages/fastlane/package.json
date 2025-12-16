@@ -1,5 +1,5 @@
 {
-  "name": "@pipeit/tpu-native",
+  "name": "@pipeit/fastlane",
   "version": "0.1.0",
   "description": "Native QUIC client for direct Solana TPU transaction submission",
   "main": "index.js",
@@ -13,7 +13,7 @@
   },
   "browser": "./browser.js",
   "napi": {
-    "name": "tpu-native",
+    "name": "fastlane",
     "triples": {
       "defaults": true,
       "additional": [
@@ -27,7 +27,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/stevesarmiento/pipeit.git",
-    "directory": "packages/tpu-native"
+    "directory": "packages/fastlane"
   },
   "files": [
     "index.js",
@@ -51,13 +51,13 @@
     "node": ">= 18"
   },
   "optionalDependencies": {
-    "@pipeit/tpu-native-win32-x64-msvc": "0.1.0",
-    "@pipeit/tpu-native-darwin-x64": "0.1.0",
-    "@pipeit/tpu-native-darwin-arm64": "0.1.0",
-    "@pipeit/tpu-native-linux-x64-gnu": "0.1.0",
-    "@pipeit/tpu-native-linux-x64-musl": "0.1.0",
-    "@pipeit/tpu-native-linux-arm64-gnu": "0.1.0",
-    "@pipeit/tpu-native-linux-arm64-musl": "0.1.0"
+    "@pipeit/fastlane-win32-x64-msvc": "0.1.0",
+    "@pipeit/fastlane-darwin-x64": "0.1.0",
+    "@pipeit/fastlane-darwin-arm64": "0.1.0",
+    "@pipeit/fastlane-linux-x64-gnu": "0.1.0",
+    "@pipeit/fastlane-linux-x64-musl": "0.1.0",
+    "@pipeit/fastlane-linux-arm64-gnu": "0.1.0",
+    "@pipeit/fastlane-linux-arm64-musl": "0.1.0"
   }
 }
 

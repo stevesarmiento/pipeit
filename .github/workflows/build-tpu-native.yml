@@ -5,17 +5,17 @@ on:
     branches:
       - main
     paths:
-      - 'packages/tpu-native/**'
-      - '.github/workflows/build-tpu-native.yml'
+      - 'packages/fastlane/**'
+      - '.github/workflows/build-fastlane.yml'
   pull_request:
     paths:
-      - 'packages/tpu-native/**'
-      - '.github/workflows/build-tpu-native.yml'
+      - 'packages/fastlane/**'
+      - '.github/workflows/build-fastlane.yml'
   workflow_dispatch:
 
 env:
   DEBUG: napi:*
-  APP_NAME: tpu-native
+  APP_NAME: fastlane
   MACOSX_DEPLOYMENT_TARGET: '10.13'
 
 permissions:
@@ -124,13 +124,13 @@ jobs:
         run: ${{ matrix.settings.build }}
         if: ${{ !matrix.settings.docker }}
         shell: bash
-        working-directory: packages/tpu-native
+        working-directory: packages/fastlane
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: bindings-${{ matrix.settings.target }}
-          path: packages/tpu-native/*.node
+          path: packages/fastlane/*.node
           if-no-files-found: error
 
   test-bindings:
@@ -175,15 +175,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: bindings-${{ matrix.settings.target }}
-          path: packages/tpu-native
+          path: packages/fastlane
 
       - name: List packages
-        run: ls -R packages/tpu-native
+        run: ls -R packages/fastlane
         shell: bash
 
       - name: Test bindings
         run: pnpm test
-        working-directory: packages/tpu-native
+        working-directory: packages/fastlane
 
   universal-macOS:
     name: Build universal macOS binary
@@ -212,23 +212,23 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: bindings-x86_64-apple-darwin
-          path: packages/tpu-native/artifacts
+          path: packages/fastlane/artifacts
 
       - name: Download macOS arm64 artifact
         uses: actions/download-artifact@v4
         with:
           name: bindings-aarch64-apple-darwin
-          path: packages/tpu-native/artifacts
+          path: packages/fastlane/artifacts
 
       - name: Combine binaries
         run: pnpm universal
-        working-directory: packages/tpu-native
+        working-directory: packages/fastlane
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: bindings-universal-apple-darwin
-          path: packages/tpu-native/*.node
+          path: packages/fastlane/*.node
           if-no-files-found: error
 
   publish:
@@ -260,14 +260,14 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: packages/tpu-native/artifacts
+          path: packages/fastlane/artifacts
 
       - name: Move artifacts
         run: pnpm artifacts
-        working-directory: packages/tpu-native
+        working-directory: packages/fastlane
 
       - name: List packages
-        run: ls -R packages/tpu-native/npm
+        run: ls -R packages/fastlane/npm
         shell: bash
 
       - name: Publish
@@ -279,7 +279,7 @@ jobs:
           else
             echo "Not a release commit, skipping publish"
           fi
-        working-directory: packages/tpu-native
+        working-directory: packages/fastlane
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
