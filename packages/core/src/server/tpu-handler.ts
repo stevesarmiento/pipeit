@@ -57,6 +57,8 @@ export interface TpuHandlerResponse {
 // Singleton TPU client instance
 let tpuClient: TpuClientInstance | null = null;
 let currentConfig: ResolvedExecutionConfig['tpu'] | null = null;
+// Promise-based lock to prevent concurrent initialization
+let inFlightInit: Promise<TpuClientInstance> | null = null;
 
 interface TpuClientInstance {
   sendTransaction: (tx: Buffer) => Promise<{
@@ -74,6 +76,9 @@ interface TpuClientInstance {
  * The client is created lazily on the first request and reused for
  * subsequent requests. If the configuration changes, the old client
  * is shut down and a new one is created.
+ *
+ * Uses a promise-based lock to ensure only one client instance is
+ * created even when multiple concurrent callers request initialization.
  */
 async function getTpuClient(config: {
   rpcUrl: string;
@@ -82,18 +87,32 @@ async function getTpuClient(config: {
 }): Promise<TpuClientInstance> {
   // Check if we need to recreate the client
   const configChanged =
-    !currentConfig ||
-    currentConfig.rpcUrl !== config.rpcUrl ||
-    currentConfig.wsUrl !== config.wsUrl ||
-    currentConfig.fanout !== config.fanout;
+    currentConfig &&
+    (currentConfig.rpcUrl !== config.rpcUrl ||
+      currentConfig.wsUrl !== config.wsUrl ||
+      currentConfig.fanout !== config.fanout);
 
   if (configChanged && tpuClient) {
-    // Shut down old client
+    // Shut down old client before creating a new one
     tpuClient.shutdown();
     tpuClient = null;
+    currentConfig = null;
+    // Also clear any in-flight init since config changed
+    inFlightInit = null;
   }
 
-  if (!tpuClient) {
+  // Fast path: return existing client if available
+  if (tpuClient) {
+    return tpuClient;
+  }
+
+  // If another caller is already initializing, wait for that to complete
+  if (inFlightInit) {
+    return inFlightInit;
+  }
+
+  // Start initialization and set the lock
+  inFlightInit = (async (): Promise<TpuClientInstance> => {
     try {
       // Dynamic import to avoid bundling issues
       // @ts-ignore - Optional dependency loaded at runtime
@@ -110,12 +129,15 @@ async function getTpuClient(config: {
       // Wait for client to be ready (fetch initial leader schedule, etc.)
       await client.waitReady();
 
+      // Assign to singleton
       tpuClient = client;
       currentConfig = {
         ...config,
         enabled: true,
         apiRoute: '/api/tpu',
       };
+
+      return client;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND') {
         throw new Error(
@@ -124,10 +146,13 @@ async function getTpuClient(config: {
         );
       }
       throw error;
+    } finally {
+      // Clear the lock on both success and failure
+      inFlightInit = null;
     }
-  }
+  })();
 
-  return tpuClient;
+  return inFlightInit;
 }
 
 /**
