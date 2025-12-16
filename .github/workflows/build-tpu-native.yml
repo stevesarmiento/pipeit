@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - tpu-addon
     paths:
       - 'packages/fastlane/**'
       - '.github/workflows/build-tpu-native.yml'
@@ -13,6 +12,12 @@ on:
       - 'packages/fastlane/**'
       - '.github/workflows/build-tpu-native.yml'
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish to npm'
+        required: false
+        type: boolean
+        default: false
 
 env:
   DEBUG: napi:*
@@ -138,7 +143,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - test-bindings
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/tpu-addon')
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -172,12 +177,7 @@ jobs:
       - name: Publish
         run: |
           npm config set provenance true
-          if git log -1 --pretty=%B | grep "^[0-9]\+\.[0-9]\+\.[0-9]\+$"; then
-            echo "Publishing to npm..."
-            pnpm publish --access public --no-git-checks
-          else
-            echo "Not a release commit, skipping publish"
-          fi
+          pnpm publish --access public --no-git-checks
         working-directory: packages/fastlane
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
