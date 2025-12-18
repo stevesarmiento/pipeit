@@ -13,6 +13,7 @@ const navItems = [
     { href: '/', label: 'Home' },
     // { href: '/transactions', label: 'Transactions' },
     { href: '/playground', label: 'Playground' },
+    { href: '/builder', label: 'Builder' },
 ];
 
 export const AppNav = React.memo(() => {
