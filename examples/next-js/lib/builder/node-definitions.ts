@@ -20,9 +20,11 @@ import type {
     TransferTokenNodeData,
     CreateAtaNodeData,
     MemoNodeData,
+    ExecuteNodeData,
     CompileContext,
     NodeCompileResult,
 } from './types';
+import { HANDLE_NAMES } from './types';
 
 // =============================================================================
 // Wallet Node
@@ -39,14 +41,14 @@ export const walletNodeDef: NodeDefinition<WalletNodeData> = {
     },
     inputs: {},
     outputs: {
-        address: { type: 'address', label: 'Address' },
+        [HANDLE_NAMES.FLOW_OUT]: { type: 'any', label: 'Output' },
     },
     compile: async (_data, _inputs, ctx): Promise<NodeCompileResult> => {
         // Wallet node doesn't produce instructions, just provides address
         return {
             instructions: [],
             outputs: {
-                address: ctx.walletAddress,
+                [HANDLE_NAMES.FLOW_OUT]: ctx.walletAddress,
             },
         };
     },
@@ -67,9 +69,13 @@ export const transferSolNodeDef: NodeDefinition<TransferSolNodeData> = {
         destination: '',
     },
     inputs: {
-        source: { type: 'address', label: 'From', defaultFromWallet: true },
+        [HANDLE_NAMES.FLOW_IN]: { type: 'any', label: 'Input' },
+        [HANDLE_NAMES.BATCH_IN]: { type: 'any', label: 'Batch In' },
     },
-    outputs: {},
+    outputs: {
+        [HANDLE_NAMES.FLOW_OUT]: { type: 'any', label: 'Output' },
+        [HANDLE_NAMES.BATCH_OUT]: { type: 'any', label: 'Batch Out' },
+    },
     compile: async (data, _inputs, ctx): Promise<NodeCompileResult> => {
         if (!data.amount || !data.destination) {
             return { instructions: [], outputs: {} };
@@ -87,6 +93,8 @@ export const transferSolNodeDef: NodeDefinition<TransferSolNodeData> = {
         return {
             instructions: [instruction],
             outputs: {},
+            computeUnits: 300, // SOL transfer is very cheap
+            solTransferLamports: amountLamports,
         };
     },
 };
@@ -108,9 +116,13 @@ export const transferTokenNodeDef: NodeDefinition<TransferTokenNodeData> = {
         decimals: 9,
     },
     inputs: {
-        source: { type: 'address', label: 'From', defaultFromWallet: true },
+        [HANDLE_NAMES.FLOW_IN]: { type: 'any', label: 'Input' },
+        [HANDLE_NAMES.BATCH_IN]: { type: 'any', label: 'Batch In' },
     },
-    outputs: {},
+    outputs: {
+        [HANDLE_NAMES.FLOW_OUT]: { type: 'any', label: 'Output' },
+        [HANDLE_NAMES.BATCH_OUT]: { type: 'any', label: 'Batch Out' },
+    },
     compile: async (data, _inputs, ctx): Promise<NodeCompileResult> => {
         if (!data.mint || !data.amount || !data.destination) {
             return { instructions: [], outputs: {} };
@@ -151,9 +163,12 @@ export const createAtaNodeDef: NodeDefinition<CreateAtaNodeData> = {
         owner: '',
     },
     inputs: {
-        payer: { type: 'address', label: 'Payer', defaultFromWallet: true },
+        [HANDLE_NAMES.FLOW_IN]: { type: 'any', label: 'Input' },
+        [HANDLE_NAMES.BATCH_IN]: { type: 'any', label: 'Batch In' },
     },
     outputs: {
+        [HANDLE_NAMES.FLOW_OUT]: { type: 'any', label: 'Output' },
+        [HANDLE_NAMES.BATCH_OUT]: { type: 'any', label: 'Batch Out' },
         ata: { type: 'address', label: 'ATA Address' },
     },
     compile: async (data, _inputs, ctx): Promise<NodeCompileResult> => {
@@ -198,8 +213,14 @@ export const memoNodeDef: NodeDefinition<MemoNodeData> = {
     defaultData: {
         message: '',
     },
-    inputs: {},
-    outputs: {},
+    inputs: {
+        [HANDLE_NAMES.FLOW_IN]: { type: 'any', label: 'Input' },
+        [HANDLE_NAMES.BATCH_IN]: { type: 'any', label: 'Batch In' },
+    },
+    outputs: {
+        [HANDLE_NAMES.FLOW_OUT]: { type: 'any', label: 'Output' },
+        [HANDLE_NAMES.BATCH_OUT]: { type: 'any', label: 'Batch Out' },
+    },
     compile: async (data, _inputs, ctx): Promise<NodeCompileResult> => {
         if (!data.message) {
             return { instructions: [], outputs: {} };
@@ -220,6 +241,69 @@ export const memoNodeDef: NodeDefinition<MemoNodeData> = {
         return {
             instructions: [instruction],
             outputs: {},
+            computeUnits: 200, // Memo is very cheap
+        };
+    },
+};
+
+// =============================================================================
+// Execute Node
+// =============================================================================
+
+/**
+ * Strategy descriptions for UI display.
+ */
+export const STRATEGY_INFO: Record<string, { label: string; description: string; features: string[] }> = {
+    standard: {
+        label: 'Standard RPC',
+        description: 'Default RPC submission. Simple and reliable.',
+        features: ['No extra cost', 'Works on all clusters', 'Standard confirmation'],
+    },
+    economical: {
+        label: 'Jito Bundle',
+        description: 'MEV-protected bundle submission via Jito.',
+        features: ['MEV protection', 'Configurable tip', 'Mainnet only'],
+    },
+    fast: {
+        label: 'Fast (Jito + RPC)',
+        description: 'Race Jito bundle against parallel RPC submissions.',
+        features: ['Maximum landing probability', 'Jito + RPC race', 'Higher cost'],
+    },
+    ultra: {
+        label: 'Ultra (TPU Direct)',
+        description: 'Direct TPU submission via native QUIC. Fastest possible.',
+        features: ['Lowest latency', 'Native QUIC protocol', 'Requires @pipeit/fastlane'],
+    },
+};
+
+export const executeNodeDef: NodeDefinition<ExecuteNodeData> = {
+    type: 'execute',
+    label: 'Execute',
+    category: 'execution',
+    description: 'Configure how the transaction is submitted',
+    icon: 'rocket',
+    defaultData: {
+        strategy: 'standard',
+        jitoTipLamports: '10000',
+        jitoRegion: 'mainnet',
+        tpuEnabled: false,
+    },
+    inputs: {
+        [HANDLE_NAMES.FLOW_IN]: { type: 'any', label: 'Input' },
+    },
+    outputs: {},
+    compile: async (data, _inputs, _ctx): Promise<NodeCompileResult> => {
+        // Execute node doesn't produce instructions
+        // It's a configuration node that the toolbar reads
+        console.log('[Execute] Strategy configured:', data.strategy);
+        return {
+            instructions: [],
+            outputs: {
+                strategy: data.strategy,
+                jitoTipLamports: data.jitoTipLamports,
+                jitoRegion: data.jitoRegion,
+                tpuEnabled: data.tpuEnabled,
+            },
         };
     },
 };
@@ -237,6 +321,7 @@ export const nodeDefinitions: Record<NodeType, NodeDefinition<any>> = {
     'transfer-token': transferTokenNodeDef,
     'create-ata': createAtaNodeDef,
     'memo': memoNodeDef,
+    'execute': executeNodeDef,
 };
 
 /**

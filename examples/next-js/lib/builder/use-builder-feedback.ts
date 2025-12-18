@@ -12,7 +12,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { TransactionBuilder } from '@pipeit/core';
 import { useBuilderStore } from './store';
 import { compileGraph, validateGraph } from './compiler';
-import type { CompileContext, SizeInfo, BuilderFeedback } from './types';
+import type { CompileContext, SizeInfo, BuilderFeedback, ComputeUnitInfo } from './types';
 
 // =============================================================================
 // Constants
@@ -36,6 +36,7 @@ export function useBuilderFeedback(
         isCompiling: false,
         isSimulating: false,
         sizeInfo: null,
+        computeUnitInfo: null,
         simulation: null,
         error: null,
     });
@@ -51,6 +52,7 @@ export function useBuilderFeedback(
                 isCompiling: false,
                 isSimulating: false,
                 sizeInfo: null,
+                computeUnitInfo: null,
                 simulation: null,
                 error: null,
             });
@@ -65,6 +67,7 @@ export function useBuilderFeedback(
                 isCompiling: false,
                 isSimulating: false,
                 sizeInfo: null,
+                computeUnitInfo: null,
                 simulation: null,
                 error: validationErrors[0],
             });
@@ -83,6 +86,7 @@ export function useBuilderFeedback(
                     isCompiling: false,
                     isSimulating: false,
                     sizeInfo: null,
+                    computeUnitInfo: null,
                     simulation: null,
                     error: 'No instructions generated. Fill in the configuration fields for your nodes.',
                 });
@@ -103,6 +107,19 @@ export function useBuilderFeedback(
             const sizeInfo = await builder.getSizeInfo();
             console.log('[Feedback] Size info:', sizeInfo);
 
+            // Build CU info from compiled estimates
+            const DEFAULT_CU_LIMIT = 200_000;
+            const estimatedCU = compiled.computeUnits ?? 0;
+            const computeUnitInfo: ComputeUnitInfo | null = estimatedCU > 0
+                ? {
+                    estimated: estimatedCU,
+                    limit: DEFAULT_CU_LIMIT,
+                    percentUsed: Math.round((estimatedCU / DEFAULT_CU_LIMIT) * 100),
+                }
+                : null;
+
+            console.log('[Feedback] CU info:', computeUnitInfo);
+
             setFeedback({
                 isCompiling: false,
                 isSimulating: false,
@@ -113,6 +130,7 @@ export function useBuilderFeedback(
                     percentUsed: sizeInfo.percentUsed,
                     canFitMore: sizeInfo.canFitMore,
                 },
+                computeUnitInfo,
                 simulation: null,
                 error: null,
             });
@@ -122,6 +140,7 @@ export function useBuilderFeedback(
                 isCompiling: false,
                 isSimulating: false,
                 sizeInfo: null,
+                computeUnitInfo: null,
                 simulation: null,
                 error: error instanceof Error ? error.message : 'Unknown error',
             });

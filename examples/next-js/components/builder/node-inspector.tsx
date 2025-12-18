@@ -3,9 +3,9 @@
 import { useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { useBuilderStore } from '@/lib/builder/store';
-import { getNodeDefinition } from '@/lib/builder/node-definitions';
-import type { NodeType, BuilderNodeData } from '@/lib/builder/types';
-import { Trash2, X } from 'lucide-react';
+import { getNodeDefinition, STRATEGY_INFO } from '@/lib/builder/node-definitions';
+import type { NodeType, BuilderNodeData, ExecutionStrategy, JitoRegion } from '@/lib/builder/types';
+import { Trash2, X, Info, Zap, Shield, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 // =============================================================================
@@ -62,6 +62,36 @@ function TextAreaField({ label, value, onChange, placeholder, rows = 3 }: TextAr
                     'placeholder:text-gray-400 resize-none'
                 )}
             />
+        </div>
+    );
+}
+
+interface SelectFieldProps<T extends string> {
+    label: string;
+    value: T;
+    onChange: (value: T) => void;
+    options: { value: T; label: string }[];
+}
+
+function SelectField<T extends string>({ label, value, onChange, options }: SelectFieldProps<T>) {
+    return (
+        <div className="space-y-1.5">
+            <label className="text-xs font-medium text-gray-700">{label}</label>
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value as T)}
+                className={cn(
+                    'w-full px-3 py-2 text-sm rounded-md border border-gray-300',
+                    'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                    'bg-white'
+                )}
+            >
+                {options.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                    </option>
+                ))}
+            </select>
         </div>
     );
 }
@@ -186,6 +216,120 @@ function MemoForm({ data, onUpdate }: FormProps) {
     );
 }
 
+function ExecuteForm({ data, onUpdate }: FormProps) {
+    const execData = data as {
+        strategy?: ExecutionStrategy;
+        jitoTipLamports?: string;
+        jitoRegion?: JitoRegion;
+        tpuEnabled?: boolean;
+    };
+
+    const strategy = execData.strategy ?? 'standard';
+    // Only show Jito settings for economical and fast (NOT ultra - that's TPU only)
+    const showJitoSettings = strategy === 'economical' || strategy === 'fast';
+    const showTpuSettings = strategy === 'ultra';
+    const strategyInfo = STRATEGY_INFO[strategy];
+
+    const strategyOptions: { value: ExecutionStrategy; label: string }[] = [
+        { value: 'standard', label: 'Standard RPC' },
+        { value: 'economical', label: 'Jito Bundle' },
+        { value: 'fast', label: 'Fast (Jito + RPC)' },
+        { value: 'ultra', label: 'Ultra (TPU Direct)' },
+    ];
+
+    const regionOptions: { value: JitoRegion; label: string }[] = [
+        { value: 'mainnet', label: 'Auto (Load Balanced)' },
+        { value: 'ny', label: 'New York' },
+        { value: 'amsterdam', label: 'Amsterdam' },
+        { value: 'frankfurt', label: 'Frankfurt' },
+        { value: 'tokyo', label: 'Tokyo' },
+        { value: 'singapore', label: 'Singapore' },
+        { value: 'slc', label: 'Salt Lake City' },
+    ];
+
+    // Get icon based on strategy
+    const StrategyIcon = strategy === 'ultra' ? Rocket : strategy === 'fast' ? Zap : strategy === 'economical' ? Shield : Info;
+
+    return (
+        <div className="space-y-4">
+            <SelectField
+                label="Execution Strategy"
+                value={strategy}
+                onChange={(value) => onUpdate({ strategy: value })}
+                options={strategyOptions}
+            />
+
+            {/* Strategy info card */}
+            <div className={cn(
+                'p-3 rounded-lg border',
+                strategy === 'standard' && 'bg-gray-50 border-gray-200',
+                strategy === 'economical' && 'bg-blue-50 border-blue-200',
+                strategy === 'fast' && 'bg-amber-50 border-amber-200',
+                strategy === 'ultra' && 'bg-purple-50 border-purple-200'
+            )}>
+                <div className="flex items-start gap-2">
+                    <StrategyIcon className={cn(
+                        'w-4 h-4 mt-0.5',
+                        strategy === 'standard' && 'text-gray-500',
+                        strategy === 'economical' && 'text-blue-500',
+                        strategy === 'fast' && 'text-amber-500',
+                        strategy === 'ultra' && 'text-purple-500'
+                    )} />
+                    <div className="flex-1">
+                        <p className="text-xs font-medium text-gray-700">
+                            {strategyInfo?.description}
+                        </p>
+                        <ul className="mt-1.5 space-y-0.5">
+                            {strategyInfo?.features.map((feature, i) => (
+                                <li key={i} className="text-xs text-gray-500 flex items-center gap-1">
+                                    <span className="w-1 h-1 rounded-full bg-gray-400" />
+                                    {feature}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            {/* Jito settings */}
+            {showJitoSettings && (
+                <div className="space-y-3 pt-2 border-t border-gray-200">
+                    <p className="text-xs font-medium text-gray-700">Jito Settings</p>
+                    
+                    <TextField
+                        label="Tip Amount (lamports)"
+                        value={execData.jitoTipLamports ?? '10000'}
+                        onChange={(value) => onUpdate({ jitoTipLamports: value })}
+                        placeholder="10000"
+                        type="number"
+                    />
+                    <p className="text-xs text-gray-500">
+                        1 SOL = 1,000,000,000 lamports. Default: 10,000 (0.00001 SOL)
+                    </p>
+
+                    <SelectField
+                        label="Block Engine Region"
+                        value={execData.jitoRegion ?? 'mainnet'}
+                        onChange={(value) => onUpdate({ jitoRegion: value })}
+                        options={regionOptions}
+                    />
+                </div>
+            )}
+
+            {/* TPU info */}
+            {showTpuSettings && (
+                <div className="space-y-2 pt-2 border-t border-gray-200">
+                    <p className="text-xs font-medium text-gray-700">TPU Direct</p>
+                    <p className="text-xs text-gray-500">
+                        Ultra mode sends transactions directly to validator TPU ports for lowest latency.
+                        Requires <code className="px-1 py-0.5 bg-gray-100 rounded text-xs">@pipeit/fastlane</code> package.
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // =============================================================================
 // Form Registry
 // =============================================================================
@@ -196,6 +340,7 @@ const formComponents: Record<NodeType, React.ComponentType<FormProps>> = {
     'transfer-token': TransferTokenForm,
     'create-ata': CreateAtaForm,
     'memo': MemoForm,
+    'execute': ExecuteForm,
 };
 
 // =============================================================================

@@ -21,6 +21,11 @@ export const AppNav = React.memo(() => {
     const pathname = usePathname();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
+    // Hide nav on builder page (it has its own toolbar)
+    if (pathname?.startsWith('/builder')) {
+        return null;
+    }
+
     const toggleMobileMenu = () => {
         setIsMobileMenuOpen(!isMobileMenuOpen);
     };

@@ -20,6 +20,7 @@ export const nodeTypes: NodeTypes = {
     'transfer-token': BaseNode,
     'create-ata': BaseNode,
     'memo': BaseNode,
+    'execute': BaseNode,
 };
 
 export { BaseNode } from './base-node';

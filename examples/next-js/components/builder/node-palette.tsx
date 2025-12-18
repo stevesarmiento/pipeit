@@ -11,6 +11,7 @@ import {
     PlusCircle,
     MessageSquare,
     GripVertical,
+    Rocket,
 } from 'lucide-react';
 
 // =============================================================================
@@ -23,6 +24,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
     'coins': Coins,
     'plus-circle': PlusCircle,
     'message-square': MessageSquare,
+    'rocket': Rocket,
 };
 
 // =============================================================================
@@ -34,9 +36,10 @@ const categoryLabels: Record<NodeCategory, string> = {
     transfer: 'Transfers',
     token: 'Token Operations',
     utility: 'Utilities',
+    execution: 'Execution',
 };
 
-const categoryOrder: NodeCategory[] = ['source', 'transfer', 'token', 'utility'];
+const categoryOrder: NodeCategory[] = ['source', 'transfer', 'token', 'utility', 'execution'];
 
 // =============================================================================
 // Palette Item Component

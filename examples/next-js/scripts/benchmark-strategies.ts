@@ -71,7 +71,7 @@ interface BenchmarkResult {
 // Configuration
 // ============================================================================
 
-const TX_COUNT = Number(process.env.TX_COUNT) || 5; // Number of transactions per strategy
+const TX_COUNT = Number(process.env.TX_COUNT) || 40; // Number of transactions per strategy
 const TRANSFER_AMOUNT = BigInt(1000); // 0.000001 SOL - minimal amount for self-transfer
 const BASE_TX_FEE = 0.000005; // Base transaction fee in SOL
 const JITO_TIP_SOL = Number(JITO_DEFAULT_TIP_LAMPORTS) / 1e9;

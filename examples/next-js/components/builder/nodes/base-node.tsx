@@ -3,8 +3,9 @@
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { cn } from '@/lib/utils';
-import { useBuilderStore } from '@/lib/builder/store';
-import type { BuilderNodeData, NodeType, BuilderNode } from '@/lib/builder/types';
+import { useBuilderStore, useHasAnySequence } from '@/lib/builder/store';
+import type { BuilderNodeData, NodeType } from '@/lib/builder/types';
+import { HANDLE_NAMES } from '@/lib/builder/types';
 import { getNodeDefinition } from '@/lib/builder/node-definitions';
 import {
     Wallet,
@@ -12,6 +13,7 @@ import {
     Coins,
     PlusCircle,
     MessageSquare,
+    Rocket,
 } from 'lucide-react';
 
 // =============================================================================
@@ -24,6 +26,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
     'coins': Coins,
     'plus-circle': PlusCircle,
     'message-square': MessageSquare,
+    'rocket': Rocket,
 };
 
 // =============================================================================
@@ -51,6 +54,11 @@ const categoryColors: Record<string, { bg: string; border: string; icon: string 
         border: 'border-orange-300',
         icon: 'text-orange-600',
     },
+    execution: {
+        bg: 'bg-gradient-to-r from-indigo-50 to-purple-50',
+        border: 'border-indigo-400',
+        icon: 'text-indigo-600',
+    },
 };
 
 // =============================================================================
@@ -66,12 +74,24 @@ interface BaseNodeProps {
 
 function BaseNodeComponent({ id, data, type, selected }: BaseNodeProps) {
     const selectNode = useBuilderStore(state => state.selectNode);
+    const hasAnySequence = useHasAnySequence();
     const def = getNodeDefinition(type);
     const colors = categoryColors[def.category] ?? categoryColors.utility;
     const IconComponent = iconMap[def.icon] ?? MessageSquare;
 
-    const hasInputs = Object.keys(def.inputs).length > 0;
-    const hasOutputs = Object.keys(def.outputs).length > 0;
+    // Determine if this node type has flow handles
+    const hasFlowIn = HANDLE_NAMES.FLOW_IN in def.inputs;
+    const hasFlowOut = HANDLE_NAMES.FLOW_OUT in def.outputs;
+    
+    // Check if this is an instruction node (not wallet or execute)
+    const isInstructionNode = type !== 'wallet' && type !== 'execute';
+    
+    // Batch handles are shown on ALL instruction nodes if:
+    // 1. The node definition includes them
+    // 2. ANY vertical sequence exists in the graph (progressive disclosure)
+    // Once user builds any flow, all instruction nodes get batch handles
+    const hasBatchHandles = HANDLE_NAMES.BATCH_IN in def.inputs;
+    const showBatchHandles = hasBatchHandles && isInstructionNode && hasAnySequence;
 
     return (
         <div
@@ -83,12 +103,23 @@ function BaseNodeComponent({ id, data, type, selected }: BaseNodeProps) {
             )}
             onClick={() => selectNode(id)}
         >
-            {/* Input handles */}
-            {hasInputs && (
+            {/* Flow Input Handle - TOP (vertical sequential) */}
+            {hasFlowIn && (
                 <Handle
+                    id={HANDLE_NAMES.FLOW_IN}
+                    type="target"
+                    position={Position.Top}
+                    className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white"
+                />
+            )}
+
+            {/* Batch Input Handle - LEFT (horizontal batch) - only visible when in sequence */}
+            {showBatchHandles && (
+                <Handle
+                    id={HANDLE_NAMES.BATCH_IN}
                     type="target"
                     position={Position.Left}
-                    className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white"
+                    className="!w-2.5 !h-2.5 !bg-amber-400 !border-2 !border-white !top-1/2 !-translate-y-1/2"
                 />
             )}
 
@@ -106,11 +137,22 @@ function BaseNodeComponent({ id, data, type, selected }: BaseNodeProps) {
                 <NodePreview type={type} data={data} />
             </div>
 
-            {/* Output handles */}
-            {hasOutputs && (
+            {/* Batch Output Handle - RIGHT (horizontal batch) - only visible when in sequence */}
+            {showBatchHandles && (
                 <Handle
+                    id={HANDLE_NAMES.BATCH_OUT}
                     type="source"
                     position={Position.Right}
+                    className="!w-2.5 !h-2.5 !bg-amber-400 !border-2 !border-white !top-1/2 !-translate-y-1/2"
+                />
+            )}
+
+            {/* Flow Output Handle - BOTTOM (vertical sequential) */}
+            {hasFlowOut && (
+                <Handle
+                    id={HANDLE_NAMES.FLOW_OUT}
+                    type="source"
+                    position={Position.Bottom}
                     className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white"
                 />
             )}
@@ -198,6 +240,21 @@ function NodePreview({ type, data }: NodePreviewProps) {
                     ) : (
                         <span className="italic">Configure...</span>
                     )}
+                </div>
+            );
+        }
+
+        case 'execute': {
+            const execData = data as { strategy?: string };
+            const strategyLabels: Record<string, string> = {
+                standard: 'Standard RPC',
+                economical: 'Jito Bundle',
+                fast: 'Fast (Jito + RPC)',
+                ultra: 'TPU Direct',
+            };
+            return (
+                <div className="text-[10px] text-gray-500 font-medium">
+                    {strategyLabels[execData.strategy ?? 'standard'] ?? 'Standard'}
                 </div>
             );
         }
