@@ -2,17 +2,26 @@
 /**
  * Benchmark script for comparing transaction submission strategies.
  *
- * Runs real mainnet transactions using three different strategies:
- * 1. Simple Transfer - Standard RPC submission
- * 2. Jito Bundle - MEV-protected bundle submission
- * 3. TPU Direct - Direct QUIC submission to validators
+ * Sends multiple transactions per strategy and tracks:
+ * - Landed vs sent count
+ * - Drop rate percentage
+ * - Min/avg/max send times
+ *
+ * Strategies:
+ * 1. Helius RPC - Standard RPC submission via Helius
+ * 2. Triton RPC - Standard RPC submission via Triton
+ * 3. QuickNode RPC - Standard RPC submission via QuickNode
+ * 4. TPU Direct - Direct QUIC submission to validators
  *
  * Usage:
- *   SOLANA_PRIVATE_KEY=<base58_key> RPC_URL=<mainnet_url> npx tsx scripts/benchmark-strategies.ts
+ *   SOLANA_PRIVATE_KEY=<key> RPC_URL=<helius_url> TRITON_RPC_URL=<triton_url> QUICKNODE_RPC_URL=<quicknode_url> npx tsx scripts/benchmark-strategies.ts
  *
  * Environment Variables:
  *   SOLANA_PRIVATE_KEY - Base58 encoded private key
- *   RPC_URL - Mainnet RPC URL (e.g., Helius, Triton, etc.)
+ *   RPC_URL - Helius RPC URL
+ *   TRITON_RPC_URL - Triton RPC URL (e.g., https://xxx.mainnet.rpcpool.com/token)
+ *   QUICKNODE_RPC_URL - QuickNode RPC URL (e.g., https://xxx.solana-mainnet.quiknode.pro/token/)
+ *   TX_COUNT - Number of transactions per strategy (default: 5)
  */
 
 import {
@@ -36,20 +45,33 @@ import {
 // Types
 // ============================================================================
 
+interface TransactionAttempt {
+    status: 'success' | 'failed';
+    sendTimeMs: number;
+    totalTimeMs: number;
+    signature: string;
+    error?: string;
+}
+
 interface BenchmarkResult {
     strategy: string;
-    status: 'success' | 'failed';
-    sendTimeMs: number; // Time to send/submit transaction
-    totalTimeMs: number; // Total time including confirmation
-    signature: string;
+    sent: number;
+    landed: number;
+    dropRate: number; // percentage
+    avgSendTimeMs: number;
+    avgTotalTimeMs: number;
+    minSendTimeMs: number;
+    maxSendTimeMs: number;
     costSol: number;
-    error?: string;
+    signatures: string[];
+    errors: string[];
 }
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
+const TX_COUNT = Number(process.env.TX_COUNT) || 5; // Number of transactions per strategy
 const TRANSFER_AMOUNT = BigInt(1000); // 0.000001 SOL - minimal amount for self-transfer
 const BASE_TX_FEE = 0.000005; // Base transaction fee in SOL
 const JITO_TIP_SOL = Number(JITO_DEFAULT_TIP_LAMPORTS) / 1e9;
@@ -130,132 +152,179 @@ async function runSimpleTransfer(
     rpc: ReturnType<typeof createSolanaRpc>,
     rpcSubscriptions: ReturnType<typeof createSolanaRpcSubscriptions>,
     signer: KeyPairSigner,
+    strategyName: string,
+    txCount: number,
 ): Promise<BenchmarkResult> {
-    const startTime = performance.now();
+    const attempts: TransactionAttempt[] = [];
 
-    try {
-        // Build transaction first
-        const instruction = getTransferSolInstruction({
-            source: signer,
-            destination: signer.address,
-            amount: lamports(TRANSFER_AMOUNT),
-        });
+    for (let i = 0; i < txCount; i++) {
+        const startTime = performance.now();
 
-        const builder = new TransactionBuilder({
-            rpc,
-            priorityFee: 'medium',
-            logLevel: 'silent', // Suppress internal logs during benchmark
-        })
-            .setFeePayerSigner(signer)
-            .addInstruction(instruction);
+        try {
+            // Build transaction
+            const instruction = getTransferSolInstruction({
+                source: signer,
+                destination: signer.address,
+                amount: lamports(TRANSFER_AMOUNT),
+            });
 
-        // Time just the send+confirm
-        const sendStart = performance.now();
-        const signature = await builder.execute({
-            rpcSubscriptions,
-            commitment: 'confirmed',
-        });
-        const sendTime = performance.now() - sendStart;
+            const builder = new TransactionBuilder({
+                rpc,
+                priorityFee: 'medium',
+                logLevel: 'silent',
+            })
+                .setFeePayerSigner(signer)
+                .addInstruction(instruction);
 
-        return {
-            strategy: 'RPC (Standard)',
-            status: 'success',
-            sendTimeMs: Math.round(sendTime),
-            totalTimeMs: Math.round(performance.now() - startTime),
-            signature,
-            costSol: BASE_TX_FEE,
-        };
-    } catch (error) {
-        return {
-            strategy: 'RPC (Standard)',
-            status: 'failed',
-            sendTimeMs: 0,
-            totalTimeMs: Math.round(performance.now() - startTime),
-            signature: '',
-            costSol: 0,
-            error: error instanceof Error ? error.message : String(error),
-        };
+            // Time just the send+confirm
+            const sendStart = performance.now();
+            const signature = await builder.execute({
+                rpcSubscriptions,
+                commitment: 'confirmed',
+            });
+            const sendTime = performance.now() - sendStart;
+
+            attempts.push({
+                status: 'success',
+                sendTimeMs: Math.round(sendTime),
+                totalTimeMs: Math.round(performance.now() - startTime),
+                signature,
+            });
+        } catch (error) {
+            attempts.push({
+                status: 'failed',
+                sendTimeMs: 0,
+                totalTimeMs: Math.round(performance.now() - startTime),
+                signature: '',
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+
+        // Small delay between transactions to avoid rate limiting
+        if (i < txCount - 1) {
+            await new Promise(r => setTimeout(r, 100));
+        }
     }
+
+    return aggregateResults(strategyName, attempts);
+}
+
+function aggregateResults(strategy: string, attempts: TransactionAttempt[]): BenchmarkResult {
+    const successful = attempts.filter(a => a.status === 'success');
+    const failed = attempts.filter(a => a.status === 'failed');
+
+    const sendTimes = successful.map(a => a.sendTimeMs);
+    const avgSendTime = sendTimes.length > 0 ? sendTimes.reduce((a, b) => a + b, 0) / sendTimes.length : 0;
+    const minSendTime = sendTimes.length > 0 ? Math.min(...sendTimes) : 0;
+    const maxSendTime = sendTimes.length > 0 ? Math.max(...sendTimes) : 0;
+
+    const totalTimes = successful.map(a => a.totalTimeMs);
+    const avgTotalTime = totalTimes.length > 0 ? totalTimes.reduce((a, b) => a + b, 0) / totalTimes.length : 0;
+
+    return {
+        strategy,
+        sent: attempts.length,
+        landed: successful.length,
+        dropRate: attempts.length > 0 ? ((attempts.length - successful.length) / attempts.length) * 100 : 0,
+        avgSendTimeMs: Math.round(avgSendTime),
+        avgTotalTimeMs: Math.round(avgTotalTime),
+        minSendTimeMs: minSendTime,
+        maxSendTimeMs: maxSendTime,
+        costSol: successful.length * BASE_TX_FEE,
+        signatures: successful.map(a => a.signature),
+        errors: failed.map(a => a.error || 'Unknown error'),
+    };
 }
 
 async function runJitoBundle(
     rpc: ReturnType<typeof createSolanaRpc>,
-    rpcSubscriptions: ReturnType<typeof createSolanaRpcSubscriptions>,
+    _rpcSubscriptions: ReturnType<typeof createSolanaRpcSubscriptions>,
     signer: KeyPairSigner,
+    txCount: number,
 ): Promise<BenchmarkResult> {
-    const startTime = performance.now();
+    const attempts: TransactionAttempt[] = [];
 
-    try {
-        // Single simple transfer (same as other strategies)
-        const transfer = getTransferSolInstruction({
-            source: signer,
-            destination: signer.address,
-            amount: lamports(TRANSFER_AMOUNT),
-        });
+    for (let i = 0; i < txCount; i++) {
+        const startTime = performance.now();
 
-        // Add Jito tip
-        const tipInstruction = createTipInstruction(signer.address, JITO_DEFAULT_TIP_LAMPORTS);
+        try {
+            // Single simple transfer (same as other strategies)
+            const transfer = getTransferSolInstruction({
+                source: signer,
+                destination: signer.address,
+                amount: lamports(TRANSFER_AMOUNT),
+            });
 
-        // Build and export transaction as base64
-        const exported = await new TransactionBuilder({
-            rpc,
-            priorityFee: 'medium',
-            logLevel: 'silent',
-        })
-            .setFeePayerSigner(signer)
-            .addInstruction(transfer)
-            .addInstruction(tipInstruction)
-            .export('base64');
+            // Add Jito tip
+            const tipInstruction = createTipInstruction(signer.address, JITO_DEFAULT_TIP_LAMPORTS);
 
-        const base64Tx = exported.data as string;
+            // Build and export transaction as base64
+            const exported = await new TransactionBuilder({
+                rpc,
+                priorityFee: 'medium',
+                logLevel: 'silent',
+            })
+                .setFeePayerSigner(signer)
+                .addInstruction(transfer)
+                .addInstruction(tipInstruction)
+                .export('base64');
 
-        // Time just the bundle submission
-        const sendStart = performance.now();
+            const base64Tx = exported.data as string;
 
-        // Submit to Jito with retry on rate limit
-        let bundleId: string | null = null;
-        let lastError: Error | null = null;
+            // Time just the bundle submission
+            const sendStart = performance.now();
 
-        for (let attempt = 1; attempt <= 3; attempt++) {
-            try {
-                bundleId = await sendBundle([base64Tx], {
-                    blockEngineUrl: 'mainnet',
-                });
-                break;
-            } catch (err) {
-                lastError = err as Error;
-                const isRateLimit = lastError.message.includes('429') || lastError.message.includes('rate');
-                if (isRateLimit && attempt < 3) {
-                    await new Promise(r => setTimeout(r, 1000 * attempt)); // backoff
-                } else {
-                    throw lastError;
+            // Submit to Jito with retry on rate limit
+            let bundleId: string | null = null;
+            let lastError: Error | null = null;
+
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    bundleId = await sendBundle([base64Tx], {
+                        blockEngineUrl: 'mainnet',
+                    });
+                    break;
+                } catch (err) {
+                    lastError = err as Error;
+                    const isRateLimit = lastError.message.includes('429') || lastError.message.includes('rate');
+                    if (isRateLimit && attempt < 3) {
+                        await new Promise(r => setTimeout(r, 1000 * attempt)); // backoff
+                    } else {
+                        throw lastError;
+                    }
                 }
             }
+
+            if (!bundleId) throw lastError;
+
+            const sendTime = performance.now() - sendStart;
+
+            attempts.push({
+                status: 'success',
+                sendTimeMs: Math.round(sendTime),
+                totalTimeMs: Math.round(performance.now() - startTime),
+                signature: bundleId,
+            });
+        } catch (error) {
+            attempts.push({
+                status: 'failed',
+                sendTimeMs: 0,
+                totalTimeMs: Math.round(performance.now() - startTime),
+                signature: '',
+                error: error instanceof Error ? error.message : String(error),
+            });
         }
 
-        if (!bundleId) throw lastError;
-
-        const sendTime = performance.now() - sendStart;
-
-        return {
-            strategy: 'Jito Bundle',
-            status: 'success',
-            sendTimeMs: Math.round(sendTime),
-            totalTimeMs: Math.round(performance.now() - startTime),
-            signature: bundleId,
-            costSol: BASE_TX_FEE + JITO_TIP_SOL,
-        };
-    } catch (error) {
-        return {
-            strategy: 'Jito Bundle',
-            status: 'failed',
-            sendTimeMs: 0,
-            totalTimeMs: Math.round(performance.now() - startTime),
-            signature: '',
-            costSol: 0,
-            error: error instanceof Error ? error.message : String(error),
-        };
+        // Delay between transactions
+        if (i < txCount - 1) {
+            await new Promise(r => setTimeout(r, 500)); // longer delay for Jito rate limits
+        }
     }
+
+    // Adjust cost for Jito tip
+    const result = aggregateResults('Jito Bundle', attempts);
+    result.costSol = result.landed * (BASE_TX_FEE + JITO_TIP_SOL);
+    return result;
 }
 
 // TPU Client type for pre-warming
@@ -267,133 +336,163 @@ interface TpuClientInstance {
 async function runTpuDirect(
     rpc: ReturnType<typeof createSolanaRpc>,
     signer: KeyPairSigner,
-    tpuClient: TpuClientInstance | null, // Pre-warmed client passed in
+    tpuClient: TpuClientInstance | null,
+    txCount: number,
 ): Promise<BenchmarkResult> {
-    const startTime = performance.now();
-
     if (!tpuClient) {
         return {
             strategy: 'TPU Direct',
-            status: 'failed',
-            sendTimeMs: 0,
-            totalTimeMs: 0,
-            signature: '',
+            sent: txCount,
+            landed: 0,
+            dropRate: 100,
+            avgSendTimeMs: 0,
+            avgTotalTimeMs: 0,
+            minSendTimeMs: 0,
+            maxSendTimeMs: 0,
             costSol: 0,
-            error: 'TPU client not available',
+            signatures: [],
+            errors: ['TPU client not available'],
         };
     }
 
-    try {
-        // Build a simple transfer transaction
-        const instruction = getTransferSolInstruction({
-            source: signer,
-            destination: signer.address,
-            amount: lamports(TRANSFER_AMOUNT),
-        });
+    const attempts: TransactionAttempt[] = [];
 
-        // Export as bytes for TPU submission
-        const exported = await new TransactionBuilder({
-            rpc,
-            priorityFee: 'medium',
-            logLevel: 'silent',
-        })
-            .setFeePayerSigner(signer)
-            .addInstruction(instruction)
-            .export('bytes');
+    for (let i = 0; i < txCount; i++) {
+        const startTime = performance.now();
 
-        const txBytes = Buffer.from(exported.data);
+        try {
+            // Build a simple transfer transaction
+            const instruction = getTransferSolInstruction({
+                source: signer,
+                destination: signer.address,
+                amount: lamports(TRANSFER_AMOUNT),
+            });
 
-        // Time just the TPU send
-        const sendStart = performance.now();
-        const result = await tpuClient.sendTransaction(txBytes);
-        const sendTime = performance.now() - sendStart;
+            // Export as bytes for TPU submission
+            const exported = await new TransactionBuilder({
+                rpc,
+                priorityFee: 'medium',
+                logLevel: 'silent',
+            })
+                .setFeePayerSigner(signer)
+                .addInstruction(instruction)
+                .export('bytes');
 
-        // Extract signature from the signed transaction bytes
-        // Format: [num_sigs (1 byte)][sig1 (64 bytes)]...[message]
-        const signatureBytes = txBytes.slice(1, 65);
-        const sigBase58 = encodeBase58(signatureBytes);
+            const txBytes = Buffer.from(exported.data);
 
-        return {
-            strategy: 'TPU Direct',
-            status: result.delivered ? 'success' : 'failed',
-            sendTimeMs: Math.round(sendTime),
-            totalTimeMs: Math.round(performance.now() - startTime),
-            signature: result.delivered ? sigBase58 : '',
-            costSol: BASE_TX_FEE,
-            error: result.delivered ? undefined : `Not delivered (leaders: ${result.leaderCount})`,
-        };
-    } catch (error) {
-        return {
-            strategy: 'TPU Direct',
-            status: 'failed',
-            sendTimeMs: 0,
-            totalTimeMs: Math.round(performance.now() - startTime),
-            signature: '',
-            costSol: 0,
-            error: error instanceof Error ? error.message : String(error),
-        };
+            // Time just the TPU send
+            const sendStart = performance.now();
+            const result = await tpuClient.sendTransaction(txBytes);
+            const sendTime = performance.now() - sendStart;
+
+            // Extract signature from the signed transaction bytes
+            const signatureBytes = txBytes.slice(1, 65);
+            const sigBase58 = encodeBase58(signatureBytes);
+
+            attempts.push({
+                status: result.delivered ? 'success' : 'failed',
+                sendTimeMs: Math.round(sendTime),
+                totalTimeMs: Math.round(performance.now() - startTime),
+                signature: result.delivered ? sigBase58 : '',
+                error: result.delivered ? undefined : `Not delivered (leaders: ${result.leaderCount})`,
+            });
+        } catch (error) {
+            attempts.push({
+                status: 'failed',
+                sendTimeMs: 0,
+                totalTimeMs: Math.round(performance.now() - startTime),
+                signature: '',
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+
+        // Small delay between transactions
+        if (i < txCount - 1) {
+            await new Promise(r => setTimeout(r, 50));
+        }
     }
+
+    return aggregateResults('TPU Direct', attempts);
 }
 
 // ============================================================================
 // Output Formatting
 // ============================================================================
 
-function printResults(results: BenchmarkResult[]): void {
+function printResults(results: BenchmarkResult[], txCount: number): void {
     console.log('\n');
-    console.log('┌───────────────────┬──────────┬────────────┬────────────┬────────────┐');
-    console.log('│ Strategy          │ Status   │  Send (ms) │ Total (ms) │ Cost (SOL) │');
-    console.log('├───────────────────┼──────────┼────────────┼────────────┼────────────┤');
+    console.log('┌───────────────────┬────────────┬────────────┬────────────┬────────────┬────────────┬────────────┐');
+    console.log('│ Strategy          │ Landed     │ Drop Rate  │ Avg Send   │ Min Send   │ Max Send   │ Cost (SOL) │');
+    console.log('├───────────────────┼────────────┼────────────┼────────────┼────────────┼────────────┼────────────┤');
 
     for (const result of results) {
         const strategy = result.strategy.padEnd(17);
-        const status = (result.status === 'success' ? '✓ OK' : '✗ FAIL').padEnd(8);
-        const sendTime = String(result.sendTimeMs).padStart(10);
-        const totalTime = String(result.totalTimeMs).padStart(10);
+        const landed = `${result.landed}/${result.sent}`.padStart(10);
+        const dropRate = `${result.dropRate.toFixed(1)}%`.padStart(10);
+        const avgSend = `${result.avgSendTimeMs}ms`.padStart(10);
+        const minSend = `${result.minSendTimeMs}ms`.padStart(10);
+        const maxSend = `${result.maxSendTimeMs}ms`.padStart(10);
         const cost = result.costSol.toFixed(6).padStart(10);
 
-        console.log(`│ ${strategy} │ ${status} │ ${sendTime} │ ${totalTime} │ ${cost} │`);
+        console.log(`│ ${strategy} │ ${landed} │ ${dropRate} │ ${avgSend} │ ${minSend} │ ${maxSend} │ ${cost} │`);
     }
 
-    console.log('└───────────────────┴──────────┴────────────┴────────────┴────────────┘');
+    console.log('└───────────────────┴────────────┴────────────┴────────────┴────────────┴────────────┴────────────┘');
 
-    // Print signatures separately (full length for explorer)
-    console.log('\nSignatures (for Solscan/Explorer):');
-    for (const result of results) {
-        const status = result.status === 'success' ? '✓' : '✗';
-        const sig = result.signature || '-';
-        console.log(`  ${status} ${result.strategy}: ${sig}`);
-    }
-
-    // Print any errors
-    const failures = results.filter(r => r.status === 'failed' && r.error);
-    if (failures.length > 0) {
+    // Print any errors (summarized)
+    const resultsWithErrors = results.filter(r => r.errors.length > 0);
+    if (resultsWithErrors.length > 0) {
         console.log('\nErrors:');
-        for (const f of failures) {
-            console.log(`  ${f.strategy}: ${f.error}`);
+        for (const r of resultsWithErrors) {
+            const uniqueErrors = [...new Set(r.errors)];
+            for (const err of uniqueErrors.slice(0, 3)) {
+                console.log(`  ${r.strategy}: ${err}`);
+            }
+            if (uniqueErrors.length > 3) {
+                console.log(`  ${r.strategy}: ... and ${uniqueErrors.length - 3} more unique errors`);
+            }
         }
     }
 
     // Print summary
-    const successCount = results.filter(r => r.status === 'success').length;
-    const totalCost = results.filter(r => r.status === 'success').reduce((sum, r) => sum + r.costSol, 0);
+    const totalSent = results.reduce((sum, r) => sum + r.sent, 0);
+    const totalLanded = results.reduce((sum, r) => sum + r.landed, 0);
+    const totalCost = results.reduce((sum, r) => sum + r.costSol, 0);
+    const overallDropRate = totalSent > 0 ? ((totalSent - totalLanded) / totalSent) * 100 : 0;
 
-    // Find fastest by SEND time (apples to apples comparison)
-    const successfulResults = results.filter(r => r.status === 'success');
-    const fastestSend =
-        successfulResults.length > 0 ? successfulResults.reduce((a, b) => (a.sendTimeMs < b.sendTimeMs ? a : b)) : null;
+    // Find fastest by AVG send time
+    const successfulResults = results.filter(r => r.landed > 0);
+    const fastestAvg =
+        successfulResults.length > 0
+            ? successfulResults.reduce((a, b) => (a.avgSendTimeMs < b.avgSendTimeMs ? a : b))
+            : null;
+    const lowestDropRate =
+        successfulResults.length > 0 ? successfulResults.reduce((a, b) => (a.dropRate < b.dropRate ? a : b)) : null;
 
     console.log('\nSummary:');
-    console.log(`  Successful: ${successCount}/${results.length}`);
+    console.log(`  Transactions per strategy: ${txCount}`);
+    console.log(`  Total sent: ${totalSent}, Total landed: ${totalLanded}`);
+    console.log(`  Overall drop rate: ${overallDropRate.toFixed(1)}%`);
     console.log(`  Total cost: ${totalCost.toFixed(6)} SOL`);
-    if (fastestSend) {
-        console.log(`  Fastest (send): ${fastestSend.strategy} (${fastestSend.sendTimeMs}ms)`);
+    if (fastestAvg) {
+        console.log(`  Fastest avg send: ${fastestAvg.strategy} (${fastestAvg.avgSendTimeMs}ms)`);
+    }
+    if (lowestDropRate && lowestDropRate.dropRate < 100) {
+        console.log(`  Most reliable: ${lowestDropRate.strategy} (${lowestDropRate.dropRate.toFixed(1)}% drop rate)`);
     }
 
     console.log('\nNotes:');
-    console.log('  • Send time = just the network request (no confirmation wait)');
-    console.log('  • RPC Total includes confirmation wait (~400ms slot time)');
-    console.log('  • TPU/Jito send fire-and-forget (faster but no confirmation)');
+    console.log('  • Send time = network request + confirmation wait');
+    console.log('  • TPU send is fire-and-forget (faster but reports "delivered" not "confirmed")');
+    console.log('  • Set TX_COUNT env var to change number of transactions (default: 5)');
+
+    // Print sample signatures for verification
+    console.log('\nSample signatures (for Solscan/Explorer):');
+    for (const result of results) {
+        if (result.signatures.length > 0) {
+            console.log(`  ${result.strategy}: ${result.signatures[0]}`);
+        }
+    }
 }
 
 // ============================================================================
@@ -406,26 +505,50 @@ async function main(): Promise<void> {
     console.log('╚═══════════════════════════════════════════════════════════════╝\n');
 
     // Validate environment
-    const rpcUrl = process.env.RPC_URL;
-    if (!rpcUrl) {
+    const heliusRpcUrl = process.env.RPC_URL;
+    if (!heliusRpcUrl) {
         console.error('Error: RPC_URL environment variable is required');
         process.exit(1);
     }
 
-    console.log(`RPC: ${rpcUrl.replace(/api-key=\w+/, 'api-key=***')}`);
+    const tritonRpcUrl = process.env.TRITON_RPC_URL;
+    if (!tritonRpcUrl) {
+        console.error('Error: TRITON_RPC_URL environment variable is required');
+        process.exit(1);
+    }
+
+    const quicknodeRpcUrl = process.env.QUICKNODE_RPC_URL;
+    if (!quicknodeRpcUrl) {
+        console.error('Error: QUICKNODE_RPC_URL environment variable is required');
+        process.exit(1);
+    }
+
+    console.log(`Helius RPC: ${heliusRpcUrl.replace(/api-key=\w+/, 'api-key=***')}`);
+    console.log(`Triton RPC: ${tritonRpcUrl.replace(/\/[a-f0-9-]{36}$/, '/***')}`);
+    console.log(`QuickNode RPC: ${quicknodeRpcUrl.replace(/\.pro\/[a-f0-9]+\/?$/, '.pro/***')}`);
 
     // Load signer
-    console.log('Loading signer...');
+    console.log('\nLoading signer...');
     const signer = await loadSigner();
     console.log(`Wallet: ${signer.address}\n`);
 
-    // Create RPC clients
-    const rpc = createSolanaRpc(rpcUrl);
-    const wsUrl = deriveWsUrl(rpcUrl);
-    const rpcSubscriptions = createSolanaRpcSubscriptions(wsUrl);
+    // Create RPC clients for Helius
+    const heliusRpc = createSolanaRpc(heliusRpcUrl);
+    const heliusWsUrl = deriveWsUrl(heliusRpcUrl);
+    const heliusRpcSubscriptions = createSolanaRpcSubscriptions(heliusWsUrl);
 
-    // Check balance
-    const balanceResponse = await rpc.getBalance(signer.address).send();
+    // Create RPC clients for Triton
+    const tritonRpc = createSolanaRpc(tritonRpcUrl);
+    const tritonWsUrl = deriveWsUrl(tritonRpcUrl);
+    const tritonRpcSubscriptions = createSolanaRpcSubscriptions(tritonWsUrl);
+
+    // Create RPC clients for QuickNode
+    const quicknodeRpc = createSolanaRpc(quicknodeRpcUrl);
+    const quicknodeWsUrl = deriveWsUrl(quicknodeRpcUrl);
+    const quicknodeRpcSubscriptions = createSolanaRpcSubscriptions(quicknodeWsUrl);
+
+    // Check balance (using Helius)
+    const balanceResponse = await heliusRpc.getBalance(signer.address).send();
     const balanceSol = Number(balanceResponse.value) / 1e9;
     console.log(`Balance: ${balanceSol.toFixed(4)} SOL\n`);
 
@@ -443,8 +566,8 @@ async function main(): Promise<void> {
         const tpuStart = performance.now();
         const { TpuClient } = await import('@pipeit/fastlane');
         const tpuClientInstance = new TpuClient({
-            rpcUrl,
-            wsUrl,
+            rpcUrl: heliusRpcUrl,
+            wsUrl: heliusWsUrl,
             fanout: 2,
         });
         await tpuClientInstance.waitReady();
@@ -456,12 +579,13 @@ async function main(): Promise<void> {
     }
 
     // Run all strategies IN PARALLEL for accurate timing comparison
-    console.log('Running RPC vs TPU comparison...\n');
+    console.log(`Running benchmark with ${TX_COUNT} transactions per strategy...\n`);
 
-    const [simpleResult, tpuResult] = await Promise.all([
-        runSimpleTransfer(rpc, rpcSubscriptions, signer),
-        // runJitoBundle(rpc, rpcSubscriptions, signer), // Disabled - Jito rate limits skew results
-        runTpuDirect(rpc, signer, tpuClient),
+    const [heliusResult, tritonResult, quicknodeResult, tpuResult] = await Promise.all([
+        runSimpleTransfer(heliusRpc, heliusRpcSubscriptions, signer, 'Helius RPC', TX_COUNT),
+        runSimpleTransfer(tritonRpc, tritonRpcSubscriptions, signer, 'Triton RPC', TX_COUNT),
+        runSimpleTransfer(quicknodeRpc, quicknodeRpcSubscriptions, signer, 'QuickNode RPC', TX_COUNT),
+        runTpuDirect(heliusRpc, signer, tpuClient, TX_COUNT),
     ]);
 
     // Shutdown TPU client
@@ -469,10 +593,10 @@ async function main(): Promise<void> {
         (tpuClient as any).shutdown?.();
     }
 
-    const results: BenchmarkResult[] = [simpleResult, tpuResult];
+    const results: BenchmarkResult[] = [heliusResult, tritonResult, quicknodeResult, tpuResult];
 
     // Print comparison table
-    printResults(results);
+    printResults(results, TX_COUNT);
 
     if (tpuWarmupTime > 0) {
         console.log(`\nTPU warmup time (one-time): ${tpuWarmupTime}ms`);
