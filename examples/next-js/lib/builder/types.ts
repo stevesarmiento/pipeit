@@ -11,7 +11,7 @@ import type { Instruction, TransactionSigner, Rpc, RpcSubscriptions } from '@sol
  * Priority fee level for transaction configuration.
  * Matches the levels from @pipeit/core.
  */
-export type PriorityFeeLevel = 'low' | 'medium' | 'high' | 'veryHigh' | 'unsafeMax';
+export type PriorityFeeLevel = 'none' | 'low' | 'medium' | 'high' | 'veryHigh';
 
 /**
  * Address type alias for Solana addresses.

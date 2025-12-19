@@ -237,8 +237,8 @@ export function BuilderToolbar({ compileContext, onSimulate }: BuilderToolbarPro
                 rpc: compileContext.rpc,
                 priorityFee: config.priorityFee,
                 computeUnits: config.computeUnits === 'auto' ? 200_000 : config.computeUnits,
-                autoRetry: { maxAttempts: 3, backoff: 'exponential' },
-                logLevel: 'verbose',
+                autoRetry: { maxAttempts: 3, backoff: 'exponential' as const },
+                logLevel: 'verbose' as const,
             };
 
             const builder = new TransactionBuilder(builderConfig)
