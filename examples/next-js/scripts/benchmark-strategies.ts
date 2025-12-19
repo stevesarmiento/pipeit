@@ -37,7 +37,7 @@ import {
     lamports,
     createSolanaRpc,
     createSolanaRpcSubscriptions,
-    getBase58Encoder,
+    getBase58Codec,
     type KeyPairSigner,
 } from '@solana/kit';
 
@@ -71,7 +71,7 @@ interface BenchmarkResult {
 // Configuration
 // ============================================================================
 
-const TX_COUNT = Number(process.env.TX_COUNT) || 40; // Number of transactions per strategy
+const TX_COUNT = Number(process.env.TX_COUNT) || 50; // Number of transactions per strategy
 const TRANSFER_AMOUNT = BigInt(1000); // 0.000001 SOL - minimal amount for self-transfer
 const BASE_TX_FEE = 0.000005; // Base transaction fee in SOL
 const JITO_TIP_SOL = Number(JITO_DEFAULT_TIP_LAMPORTS) / 1e9;
@@ -80,41 +80,8 @@ const JITO_TIP_SOL = Number(JITO_DEFAULT_TIP_LAMPORTS) / 1e9;
 // Helpers
 // ============================================================================
 
-function formatSignature(sig: string): string {
-    if (!sig || sig === '-') return '-';
-    return sig;
-}
-
-// Base58 alphabet for encoding signatures
-const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-
-function encodeBase58(bytes: Uint8Array | Buffer): string {
-    const byteArray = Array.from(bytes);
-    const digits = [0];
-    for (let j = 0; j < byteArray.length; j++) {
-        let carry = byteArray[j];
-        for (let i = 0; i < digits.length; i++) {
-            carry += digits[i] << 8;
-            digits[i] = carry % 58;
-            carry = Math.floor(carry / 58);
-        }
-        while (carry > 0) {
-            digits.push(carry % 58);
-            carry = Math.floor(carry / 58);
-        }
-    }
-    // Handle leading zeros
-    let str = '';
-    for (let j = 0; j < byteArray.length; j++) {
-        if (byteArray[j] === 0) str += BASE58_ALPHABET[0];
-        else break;
-    }
-    // Convert digits to string (reverse order)
-    for (let i = digits.length - 1; i >= 0; i--) {
-        str += BASE58_ALPHABET[digits[i]];
-    }
-    return str;
-}
+// Use @solana/kit codec for base58 encoding
+const base58Codec = getBase58Codec();
 
 function deriveWsUrl(rpcUrl: string): string {
     const url = new URL(rpcUrl);
@@ -136,9 +103,8 @@ async function loadSigner(): Promise<KeyPairSigner> {
         const bytes = JSON.parse(privateKey) as number[];
         keyBytes = new Uint8Array(bytes);
     } else {
-        // Base58 encoded string
-        const encoder = getBase58Encoder();
-        keyBytes = encoder.encode(privateKey) as Uint8Array;
+        // Base58 encoded string - use codec to decode base58 → bytes
+        keyBytes = Uint8Array.from(base58Codec.encode(privateKey));
     }
 
     return createKeyPairSignerFromBytes(keyBytes);
@@ -387,7 +353,7 @@ async function runTpuDirect(
 
             // Extract signature from the signed transaction bytes
             const signatureBytes = txBytes.slice(1, 65);
-            const sigBase58 = encodeBase58(signatureBytes);
+            const sigBase58 = base58Codec.decode(signatureBytes);
 
             attempts.push({
                 status: result.delivered ? 'success' : 'failed',

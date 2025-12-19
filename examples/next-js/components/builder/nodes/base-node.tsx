@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { useBuilderStore, useHasAnySequence } from '@/lib/builder/store';
 import type { BuilderNodeData, NodeType } from '@/lib/builder/types';
 import { HANDLE_NAMES } from '@/lib/builder/types';
-import { getNodeDefinition } from '@/lib/builder/node-definitions';
+import { getNodeDefinition, COMMON_TOKENS } from '@/lib/builder/node-definitions';
 import {
     Wallet,
     Send,
@@ -161,6 +161,19 @@ function BaseNodeComponent({ id, data, type, selected }: BaseNodeProps) {
 }
 
 // =============================================================================
+// Helper Functions
+// =============================================================================
+
+function getDisplaySymbol(mint: string | undefined, tokenSymbol: string | undefined): string | null {
+    if (tokenSymbol) return tokenSymbol;
+    if (!mint) return null;
+    if (mint === COMMON_TOKENS.SOL) return 'SOL';
+    if (mint === COMMON_TOKENS.USDC) return 'USDC';
+    if (mint === COMMON_TOKENS.USDT) return 'USDT';
+    return mint.slice(0, 4) + '...';
+}
+
+// =============================================================================
 // Node Preview (shows key data in the node)
 // =============================================================================
 
@@ -198,18 +211,52 @@ function NodePreview({ type, data }: NodePreviewProps) {
         }
 
         case 'transfer-token': {
-            const tokenData = data as { amount?: string; mint?: string };
+            const tokenData = data as { amount?: string; mint?: string; tokenSymbol?: string };
             return (
                 <div className="text-[10px] text-gray-500 space-y-0.5">
-                    {tokenData.amount && (
+                    {tokenData.amount && tokenData.tokenSymbol && (
+                        <div>{tokenData.amount} {tokenData.tokenSymbol}</div>
+                    )}
+                    {tokenData.amount && !tokenData.tokenSymbol && (
                         <div>{tokenData.amount} tokens</div>
                     )}
-                    {tokenData.mint && (
+                    {!tokenData.amount && tokenData.tokenSymbol && (
+                        <div>{tokenData.tokenSymbol}</div>
+                    )}
+                    {!tokenData.amount && !tokenData.tokenSymbol && tokenData.mint && (
                         <div className="truncate max-w-[120px]">
                             {tokenData.mint.slice(0, 8)}...
                         </div>
                     )}
                     {!tokenData.amount && !tokenData.mint && (
+                        <div className="italic">Configure...</div>
+                    )}
+                </div>
+            );
+        }
+
+        case 'swap': {
+            const swapData = data as { 
+                amount?: string; 
+                inputMint?: string; 
+                outputMint?: string;
+                inputTokenSymbol?: string;
+                outputTokenSymbol?: string;
+            };
+            const fromSymbol = getDisplaySymbol(swapData.inputMint, swapData.inputTokenSymbol);
+            const toSymbol = getDisplaySymbol(swapData.outputMint, swapData.outputTokenSymbol);
+            return (
+                <div className="text-[10px] text-gray-500 space-y-0.5">
+                    {swapData.amount && fromSymbol && toSymbol && (
+                        <div>{swapData.amount} {fromSymbol} → {toSymbol}</div>
+                    )}
+                    {swapData.amount && fromSymbol && !toSymbol && (
+                        <div>{swapData.amount} {fromSymbol}</div>
+                    )}
+                    {!swapData.amount && fromSymbol && toSymbol && (
+                        <div>{fromSymbol} → {toSymbol}</div>
+                    )}
+                    {!swapData.amount && !fromSymbol && !toSymbol && (
                         <div className="italic">Configure...</div>
                     )}
                 </div>
@@ -265,3 +312,4 @@ function NodePreview({ type, data }: NodePreviewProps) {
 }
 
 export const BaseNode = memo(BaseNodeComponent);
+

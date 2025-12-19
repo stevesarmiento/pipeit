@@ -6,7 +6,6 @@ import {
     ReactFlowProvider,
     Background,
     Controls,
-    MiniMap,
     Panel,
     addEdge,
     useReactFlow,
@@ -228,6 +227,7 @@ export function BuilderCanvas() {
                 }}
                 connectionLineStyle={{ stroke: '#94a3b8', strokeWidth: 2 }}
                 connectionLineType={ConnectionLineType.SmoothStep}
+                proOptions={{ hideAttribution: true }}
             >
                 <Background
                     variant={BackgroundVariant.Dots}
@@ -240,29 +240,6 @@ export function BuilderCanvas() {
                     showFitView
                     showInteractive={false}
                     position="bottom-left"
-                />
-                <MiniMap
-                    position="bottom-right"
-                    nodeColor={(node) => {
-                        switch (node.type) {
-                            case 'wallet':
-                                return '#9333ea';
-                            case 'transfer-sol':
-                            case 'transfer-token':
-                                return '#2563eb';
-                            case 'create-ata':
-                                return '#16a34a';
-                            case 'memo':
-                                return '#ea580c';
-                            case 'execute':
-                                return '#6366f1';
-                            default:
-                                return '#64748b';
-                        }
-                    }}
-                    maskColor="rgba(0, 0, 0, 0.1)"
-                    pannable
-                    zoomable
                 />
                 
                 {/* Batch group overlays */}
@@ -282,3 +259,4 @@ export function BuilderCanvas() {
         </div>
     );
 }
+

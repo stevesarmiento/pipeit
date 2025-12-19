@@ -18,9 +18,11 @@ export const nodeTypes: NodeTypes = {
     'wallet': BaseNode,
     'transfer-sol': BaseNode,
     'transfer-token': BaseNode,
+    'swap': BaseNode,
     'create-ata': BaseNode,
     'memo': BaseNode,
     'execute': BaseNode,
 };
 
 export { BaseNode } from './base-node';
+

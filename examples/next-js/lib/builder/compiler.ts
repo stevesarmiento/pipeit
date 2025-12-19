@@ -22,6 +22,7 @@ import type {
     ExecuteNodeData,
     ExtractedExecutionConfig,
     BatchGroup,
+    TokenTransferInfo,
 } from './types';
 import { isVerticalEdge, isHorizontalEdge, HANDLE_NAMES } from './types';
 import { getNodeDefinition } from './node-definitions';
@@ -298,6 +299,7 @@ export async function compileGraph(
     // Collect all instructions
     const allInstructions: Instruction[] = [];
     const allALTs: Address[] = [];
+    const allTokenTransfers: TokenTransferInfo[] = [];
     let totalComputeUnits = 0;
     let totalSolTransferLamports = BigInt(0);
 
@@ -350,6 +352,11 @@ export async function compileGraph(
                 if (result.solTransferLamports) {
                     totalSolTransferLamports += result.solTransferLamports;
                 }
+
+                // Track token transfers
+                if (result.tokenTransfer) {
+                    allTokenTransfers.push(result.tokenTransfer);
+                }
             } catch (error) {
                 console.error(`[Compiler] Error compiling node ${node.id}:`, error);
                 throw new Error(
@@ -366,11 +373,15 @@ export async function compileGraph(
 
     console.log('[Compiler] Total instructions:', allInstructions.length);
     console.log('[Compiler] Total SOL transfer:', Number(totalSolTransferLamports) / 1_000_000_000, 'SOL');
+    if (allTokenTransfers.length > 0) {
+        console.log('[Compiler] Token transfers:', allTokenTransfers.length);
+    }
     return {
         instructions: allInstructions,
         computeUnits: totalComputeUnits > 0 ? totalComputeUnits : undefined,
         addressLookupTables: allALTs.length > 0 ? allALTs : undefined,
         totalSolTransferLamports: totalSolTransferLamports > 0 ? totalSolTransferLamports : undefined,
+        tokenTransfers: allTokenTransfers.length > 0 ? allTokenTransfers : undefined,
     };
 }
 
@@ -442,3 +453,4 @@ export function validateGraph(
 
     return errors;
 }
+

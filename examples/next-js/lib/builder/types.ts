@@ -29,7 +29,7 @@ export type NodeType =
     | 'wallet'
     | 'transfer-sol'
     | 'transfer-token'
-    | 'create-ata'
+    | 'swap'
     | 'memo'
     | 'execute';
 
@@ -78,14 +78,38 @@ export interface TransferTokenNodeData extends BaseNodeData {
     amount: string;
     destination: string;
     decimals: number;
+    /** Token symbol for display (populated from TokenListElement) */
+    tokenSymbol?: string;
+    /** Token logo URL for display (populated from TokenListElement) */
+    tokenLogo?: string;
+    /** Token balance in UI units (populated from TokenListElement) */
+    tokenBalance?: string;
 }
 
 /**
- * Data structure for create ATA node.
+ * Data structure for swap node (Jupiter).
  */
-export interface CreateAtaNodeData extends BaseNodeData {
-    mint: string;
-    owner: string;
+export interface SwapNodeData extends BaseNodeData {
+    /** Token mint to swap from */
+    inputMint: string;
+    /** Token mint to swap to */
+    outputMint: string;
+    /** Amount to swap (in UI units, e.g., "1.5" for 1.5 SOL) */
+    amount: string;
+    /** Slippage tolerance in basis points (default 50 = 0.5%) */
+    slippageBps: number;
+    /** Input token symbol for display (populated from TokenListElement) */
+    inputTokenSymbol?: string;
+    /** Input token logo URL for display (populated from TokenListElement) */
+    inputTokenLogo?: string;
+    /** Input token balance in UI units (populated from TokenListElement) */
+    inputTokenBalance?: string;
+    /** Input token decimals (populated from TokenListElement) */
+    inputTokenDecimals?: number;
+    /** Output token symbol for display */
+    outputTokenSymbol?: string;
+    /** Output token logo URL for display */
+    outputTokenLogo?: string;
 }
 
 /**
@@ -117,7 +141,7 @@ export type BuilderNodeData =
     | WalletNodeData
     | TransferSolNodeData
     | TransferTokenNodeData
-    | CreateAtaNodeData
+    | SwapNodeData
     | MemoNodeData
     | ExecuteNodeData;
 
@@ -185,6 +209,20 @@ export interface CompileContext {
 }
 
 /**
+ * Token transfer information for display purposes.
+ */
+export interface TokenTransferInfo {
+    /** Token mint address */
+    mint: Address;
+    /** Amount in smallest units */
+    amount: bigint;
+    /** Token decimals for formatting */
+    decimals: number;
+    /** Destination address */
+    destination: Address;
+}
+
+/**
  * Result from compiling a single node.
  */
 export interface NodeCompileResult {
@@ -194,6 +232,8 @@ export interface NodeCompileResult {
     addressLookupTables?: Address[];
     /** SOL amount transferred by this node (in lamports) */
     solTransferLamports?: bigint;
+    /** Token transfer info for this node */
+    tokenTransfer?: TokenTransferInfo;
 }
 
 /**
@@ -205,6 +245,8 @@ export interface GraphCompileResult {
     addressLookupTables?: Address[];
     /** Total SOL being transferred across all instructions (in lamports) */
     totalSolTransferLamports?: bigint;
+    /** All token transfers in this transaction */
+    tokenTransfers?: TokenTransferInfo[];
 }
 
 // =============================================================================
@@ -381,3 +423,4 @@ export function isVerticalEdge(edge: BuilderEdge): boolean {
 export function isHorizontalEdge(edge: BuilderEdge): boolean {
     return getEdgeDirection(edge) === 'horizontal';
 }
+

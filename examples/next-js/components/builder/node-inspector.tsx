@@ -3,10 +3,22 @@
 import { useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { useBuilderStore } from '@/lib/builder/store';
-import { getNodeDefinition, STRATEGY_INFO } from '@/lib/builder/node-definitions';
+import { getNodeDefinition, STRATEGY_INFO, COMMON_TOKENS } from '@/lib/builder/node-definitions';
 import type { NodeType, BuilderNodeData, ExecutionStrategy, JitoRegion } from '@/lib/builder/types';
-import { Trash2, X, Info, Zap, Shield, Rocket } from 'lucide-react';
+import { Trash2, X, Info, Zap, Shield, Rocket, Coins } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { TokenListElement } from '@solana/connector/react';
+import { ChevronDown, Check } from 'lucide-react';
 
 // =============================================================================
 // Form Field Components
@@ -23,17 +35,12 @@ interface TextFieldProps {
 function TextField({ label, value, onChange, placeholder, type = 'text' }: TextFieldProps) {
     return (
         <div className="space-y-1.5">
-            <label className="text-xs font-medium text-gray-700">{label}</label>
-            <input
+            <Label className="text-xs">{label}</Label>
+            <Input
                 type={type}
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 placeholder={placeholder}
-                className={cn(
-                    'w-full px-3 py-2 text-sm rounded-md border border-gray-300',
-                    'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-                    'placeholder:text-gray-400'
-                )}
             />
         </div>
     );
@@ -50,16 +57,18 @@ interface TextAreaFieldProps {
 function TextAreaField({ label, value, onChange, placeholder, rows = 3 }: TextAreaFieldProps) {
     return (
         <div className="space-y-1.5">
-            <label className="text-xs font-medium text-gray-700">{label}</label>
+            <Label className="text-xs">{label}</Label>
             <textarea
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 placeholder={placeholder}
                 rows={rows}
                 className={cn(
-                    'w-full px-3 py-2 text-sm rounded-md border border-gray-300',
-                    'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-                    'placeholder:text-gray-400 resize-none'
+                    'flex w-full rounded-[12px] border border-input bg-muted px-3 py-2 text-sm shadow-xs',
+                    'placeholder:text-muted-foreground',
+                    'focus-visible:outline-none focus-visible:border-ring focus-visible:ring-ring/30 focus-visible:ring-[3px]',
+                    'disabled:cursor-not-allowed disabled:opacity-50',
+                    'resize-none'
                 )}
             />
         </div>
@@ -76,22 +85,19 @@ interface SelectFieldProps<T extends string> {
 function SelectField<T extends string>({ label, value, onChange, options }: SelectFieldProps<T>) {
     return (
         <div className="space-y-1.5">
-            <label className="text-xs font-medium text-gray-700">{label}</label>
-            <select
-                value={value}
-                onChange={(e) => onChange(e.target.value as T)}
-                className={cn(
-                    'w-full px-3 py-2 text-sm rounded-md border border-gray-300',
-                    'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-                    'bg-white'
-                )}
-            >
-                {options.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                    </option>
-                ))}
-            </select>
+            <Label className="text-xs">{label}</Label>
+            <Select value={value} onValueChange={(val: string) => onChange(val as T)}>
+                <SelectTrigger>
+                    <SelectValue placeholder="Select an option..." />
+                </SelectTrigger>
+                <SelectContent>
+                    {options.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
         </div>
     );
 }
@@ -142,23 +148,163 @@ function TransferTokenForm({ data, onUpdate }: FormProps) {
         amount?: string;
         destination?: string;
         decimals?: number;
+        tokenSymbol?: string;
+        tokenLogo?: string;
+        tokenBalance?: string;
     };
+
+    // Calculate amount from percentage of balance
+    const setAmountFromPercent = (percent: number) => {
+        const balance = parseFloat(tokenData.tokenBalance ?? '0');
+        if (balance > 0) {
+            const amount = (balance * percent / 100).toString();
+            onUpdate({ amount });
+        }
+    };
+
+    const percentPresets = [25, 50, 75, 100] as const;
 
     return (
         <div className="space-y-4">
-            <TextField
-                label="Token Mint Address"
-                value={tokenData.mint ?? ''}
-                onChange={(value) => onUpdate({ mint: value })}
-                placeholder="Enter token mint..."
-            />
-            <TextField
-                label="Amount"
-                value={tokenData.amount ?? ''}
-                onChange={(value) => onUpdate({ amount: value })}
-                placeholder="100"
-                type="number"
-            />
+            {/* Token Selector using TokenListElement */}
+            <div className="space-y-1.5">
+                <Label className="text-xs">Select Token</Label>
+                <TokenListElement
+                    render={({ tokens, isLoading }) => {
+                        if (isLoading) {
+                            return (
+                                <div className="flex h-11 w-full items-center justify-between rounded-[12px] border border-input bg-muted px-3 py-1 text-base text-muted-foreground md:text-sm">
+                                    Loading tokens...
+                                </div>
+                            );
+                        }
+
+                        if (tokens.length === 0) {
+                            return (
+                                <div className="flex h-11 w-full items-center justify-between rounded-[12px] border border-input bg-muted px-3 py-1 text-base text-muted-foreground md:text-sm">
+                                    No tokens found
+                                </div>
+                            );
+                        }
+
+                        const selectedToken = tokenData.mint ? tokens.find(t => t.mint === tokenData.mint) : null;
+                        const displayLogo = selectedToken?.logo || tokenData.tokenLogo;
+                        const displaySymbol = selectedToken?.symbol || tokenData.tokenSymbol;
+
+                        return (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <button className="flex h-11 w-full items-center justify-between rounded-[12px] border border-input bg-muted px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none hover:border-border-medium focus:border-ring focus:ring-ring/30 focus:ring-[3px] transition-all duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50 md:text-sm">
+                                        <span className="flex items-center gap-2">
+                                            {displayLogo ? (
+                                                <img
+                                                    src={displayLogo}
+                                                    alt={displaySymbol || 'Token'}
+                                                    className="w-5 h-5 rounded-full flex-shrink-0"
+                                                />
+                                            ) : tokenData.mint ? (
+                                                <Coins className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                                            ) : null}
+                                            <span>{displaySymbol || 'Select a token...'}</span>
+                                        </span>
+                                        <ChevronDown className="h-4 w-4 opacity-50" />
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className="w-[280px]" align="start">
+                                    {tokens.map(token => (
+                                        <DropdownMenuItem
+                                            key={token.mint}
+                                            className="py-2 cursor-pointer"
+                                            onClick={() => {
+                                                onUpdate({
+                                                    mint: token.mint,
+                                                    decimals: token.decimals,
+                                                    tokenSymbol: token.symbol,
+                                                    tokenLogo: token.logo,
+                                                    tokenBalance: token.formatted,
+                                                });
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-2 w-full">
+                                                {token.logo ? (
+                                                    <img
+                                                        src={token.logo}
+                                                        alt={token.symbol}
+                                                        className="w-5 h-5 rounded-full flex-shrink-0"
+                                                    />
+                                                ) : (
+                                                    <Coins className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-medium text-sm">{token.symbol}</div>
+                                                    <div className="text-xs text-gray-500 truncate">{token.name}</div>
+                                                </div>
+                                                <div className="text-right ml-2 flex-shrink-0">
+                                                    <div className="text-sm font-mono">{token.formatted}</div>
+                                                </div>
+                                                {tokenData.mint === token.mint && (
+                                                    <Check className="h-4 w-4 text-primary flex-shrink-0" />
+                                                )}
+                                            </div>
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        );
+                    }}
+                />
+            </div>
+
+            {/* Manual mint input as fallback */}
+            <div className="space-y-1.5">
+                <Label className="text-xs">
+                    Or enter mint address manually
+                </Label>
+                <Input
+                    type="text"
+                    value={tokenData.mint ?? ''}
+                    onChange={(e) => onUpdate({ mint: e.target.value, tokenSymbol: undefined, tokenLogo: undefined, tokenBalance: undefined })}
+                    placeholder="Enter token mint..."
+                />
+            </div>
+
+            {/* Amount with percentage presets */}
+            <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                    <Label className="text-xs">Amount</Label>
+                    {tokenData.tokenBalance && (
+                        <span className="text-xs text-gray-500">
+                            Balance: {tokenData.tokenBalance}
+                        </span>
+                    )}
+                </div>
+                
+                {/* Percentage presets */}
+                {tokenData.tokenBalance && parseFloat(tokenData.tokenBalance) > 0 && (
+                    <div className="flex gap-1">
+                        {percentPresets.map(percent => (
+                            <Button
+                                key={percent}
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setAmountFromPercent(percent)}
+                                className="flex-1"
+                            >
+                                {percent}%
+                            </Button>
+                        ))}
+                    </div>
+                )}
+
+                <Input
+                    type="number"
+                    value={tokenData.amount ?? ''}
+                    onChange={(e) => onUpdate({ amount: e.target.value })}
+                    placeholder="100"
+                />
+            </div>
+
             <TextField
                 label="Decimals"
                 value={String(tokenData.decimals ?? 9)}
@@ -166,6 +312,7 @@ function TransferTokenForm({ data, onUpdate }: FormProps) {
                 placeholder="9"
                 type="number"
             />
+
             <TextField
                 label="Destination Address"
                 value={tokenData.destination ?? ''}
@@ -176,23 +323,347 @@ function TransferTokenForm({ data, onUpdate }: FormProps) {
     );
 }
 
-function CreateAtaForm({ data, onUpdate }: FormProps) {
-    const ataData = data as { mint?: string; owner?: string };
+/**
+ * Common token options for swap form dropdowns.
+ */
+const TOKEN_OPTIONS = [
+    { value: COMMON_TOKENS.SOL, label: 'SOL' },
+    { value: COMMON_TOKENS.USDC, label: 'USDC' },
+    { value: COMMON_TOKENS.USDT, label: 'USDT' },
+    { value: 'custom', label: 'Custom...' },
+] as const;
+
+/**
+ * Token select field with custom mint input option.
+ */
+function TokenSelectField({
+    label,
+    value,
+    onChange,
+    placeholder,
+}: {
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+}) {
+    // Check if the current value matches a known token
+    const isKnownToken = TOKEN_OPTIONS.some(
+        (opt) => opt.value !== 'custom' && opt.value === value
+    );
+    const showCustomInput = !isKnownToken && value !== '';
+
+    return (
+        <div className="space-y-1.5">
+            <Label className="text-xs">{label}</Label>
+            <Select
+                value={isKnownToken ? value : 'custom'}
+                onValueChange={(selectedValue: string) => {
+                    if (selectedValue === 'custom') {
+                        onChange('');
+                    } else {
+                        onChange(selectedValue);
+                    }
+                }}
+            >
+                <SelectTrigger>
+                    <SelectValue placeholder="Select token..." />
+                </SelectTrigger>
+                <SelectContent>
+                    {TOKEN_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+            {(showCustomInput || (!isKnownToken && value === '')) && (
+                <Input
+                    type="text"
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    placeholder={placeholder ?? 'Enter token mint address...'}
+                    className="mt-1.5"
+                />
+            )}
+        </div>
+    );
+}
+
+function SwapForm({ data, onUpdate }: FormProps) {
+    const swapData = data as {
+        inputMint?: string;
+        outputMint?: string;
+        amount?: string;
+        slippageBps?: number;
+        inputTokenSymbol?: string;
+        inputTokenLogo?: string;
+        inputTokenBalance?: string;
+        inputTokenDecimals?: number;
+        outputTokenSymbol?: string;
+        outputTokenLogo?: string;
+    };
+
+    // Calculate amount from percentage of balance
+    const setAmountFromPercent = (percent: number) => {
+        const balance = parseFloat(swapData.inputTokenBalance ?? '0');
+        if (balance > 0) {
+            const amount = (balance * percent / 100).toString();
+            onUpdate({ amount });
+        }
+    };
+
+    const percentPresets = [25, 50, 75, 100] as const;
 
     return (
         <div className="space-y-4">
-            <TextField
-                label="Token Mint Address"
-                value={ataData.mint ?? ''}
-                onChange={(value) => onUpdate({ mint: value })}
-                placeholder="Enter token mint..."
-            />
-            <TextField
-                label="Owner Address (optional)"
-                value={ataData.owner ?? ''}
-                onChange={(value) => onUpdate({ owner: value })}
-                placeholder="Defaults to your wallet..."
-            />
+            {/* Input Token Selector using TokenListElement */}
+            <div className="space-y-1.5">
+                <Label className="text-xs">From Token</Label>
+                <TokenListElement
+                    render={({ tokens, isLoading }) => {
+                        if (isLoading) {
+                            return (
+                                <div className="flex h-11 w-full items-center justify-between rounded-[12px] border border-input bg-muted px-3 py-1 text-base text-muted-foreground md:text-sm">
+                                    Loading tokens...
+                                </div>
+                            );
+                        }
+
+                        if (tokens.length === 0) {
+                            return (
+                                <div className="flex h-11 w-full items-center justify-between rounded-[12px] border border-input bg-muted px-3 py-1 text-base text-muted-foreground md:text-sm">
+                                    No tokens found
+                                </div>
+                            );
+                        }
+
+                        const selectedToken = swapData.inputMint ? tokens.find(t => t.mint === swapData.inputMint) : null;
+                        const displayLogo = selectedToken?.logo || swapData.inputTokenLogo;
+                        const displaySymbol = selectedToken?.symbol || swapData.inputTokenSymbol;
+
+                        return (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <button className="flex h-11 w-full items-center justify-between rounded-[12px] border border-input bg-muted px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none hover:border-border-medium focus:border-ring focus:ring-ring/30 focus:ring-[3px] transition-all duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50 md:text-sm">
+                                        <span className="flex items-center gap-2">
+                                            {displayLogo ? (
+                                                <img
+                                                    src={displayLogo}
+                                                    alt={displaySymbol || 'Token'}
+                                                    className="w-5 h-5 rounded-full flex-shrink-0"
+                                                />
+                                            ) : swapData.inputMint ? (
+                                                <Coins className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                                            ) : null}
+                                            <span>{displaySymbol || 'Select input token...'}</span>
+                                        </span>
+                                        <ChevronDown className="h-4 w-4 opacity-50" />
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className="w-[280px]" align="start">
+                                    {tokens.map(token => (
+                                        <DropdownMenuItem
+                                            key={token.mint}
+                                            className="py-2 cursor-pointer"
+                                            onClick={() => {
+                                                onUpdate({
+                                                    inputMint: token.mint,
+                                                    inputTokenSymbol: token.symbol,
+                                                    inputTokenLogo: token.logo,
+                                                    inputTokenBalance: token.formatted,
+                                                    inputTokenDecimals: token.decimals,
+                                                });
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-2 w-full">
+                                                {token.logo ? (
+                                                    <img
+                                                        src={token.logo}
+                                                        alt={token.symbol}
+                                                        className="w-5 h-5 rounded-full flex-shrink-0"
+                                                    />
+                                                ) : (
+                                                    <Coins className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-medium text-sm">{token.symbol}</div>
+                                                    <div className="text-xs text-gray-500 truncate">{token.name}</div>
+                                                </div>
+                                                <div className="text-right ml-2 flex-shrink-0">
+                                                    <div className="text-sm font-mono">{token.formatted}</div>
+                                                </div>
+                                                {swapData.inputMint === token.mint && (
+                                                    <Check className="h-4 w-4 text-primary flex-shrink-0" />
+                                                )}
+                                            </div>
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        );
+                    }}
+                />
+            </div>
+
+            {/* Output Token Selector using TokenListElement */}
+            <div className="space-y-1.5">
+                <Label className="text-xs">To Token</Label>
+                <TokenListElement
+                    render={({ tokens, isLoading }) => {
+                        if (isLoading) {
+                            return (
+                                <div className="flex h-11 w-full items-center justify-between rounded-[12px] border border-input bg-muted px-3 py-1 text-base text-muted-foreground md:text-sm">
+                                    Loading tokens...
+                                </div>
+                            );
+                        }
+
+                        if (tokens.length === 0) {
+                            return (
+                                <div className="flex h-11 w-full items-center justify-between rounded-[12px] border border-input bg-muted px-3 py-1 text-base text-muted-foreground md:text-sm">
+                                    No tokens found
+                                </div>
+                            );
+                        }
+
+                        const selectedToken = swapData.outputMint ? tokens.find(t => t.mint === swapData.outputMint) : null;
+                        const displayLogo = selectedToken?.logo || swapData.outputTokenLogo;
+                        const displaySymbol = selectedToken?.symbol || swapData.outputTokenSymbol;
+
+                        return (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <button className="flex h-11 w-full items-center justify-between rounded-[12px] border border-input bg-muted px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none hover:border-border-medium focus:border-ring focus:ring-ring/30 focus:ring-[3px] transition-all duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50 md:text-sm">
+                                        <span className="flex items-center gap-2">
+                                            {displayLogo ? (
+                                                <img
+                                                    src={displayLogo}
+                                                    alt={displaySymbol || 'Token'}
+                                                    className="w-5 h-5 rounded-full flex-shrink-0"
+                                                />
+                                            ) : swapData.outputMint ? (
+                                                <Coins className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                                            ) : null}
+                                            <span>{displaySymbol || 'Select output token...'}</span>
+                                        </span>
+                                        <ChevronDown className="h-4 w-4 opacity-50" />
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className="w-[280px]" align="start">
+                                    {tokens.map(token => (
+                                        <DropdownMenuItem
+                                            key={token.mint}
+                                            className="py-2 cursor-pointer"
+                                            onClick={() => {
+                                                onUpdate({
+                                                    outputMint: token.mint,
+                                                    outputTokenSymbol: token.symbol,
+                                                    outputTokenLogo: token.logo,
+                                                });
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-2 w-full">
+                                                {token.logo ? (
+                                                    <img
+                                                        src={token.logo}
+                                                        alt={token.symbol}
+                                                        className="w-5 h-5 rounded-full flex-shrink-0"
+                                                    />
+                                                ) : (
+                                                    <Coins className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-medium text-sm">{token.symbol}</div>
+                                                    <div className="text-xs text-gray-500 truncate">{token.name}</div>
+                                                </div>
+                                                <div className="text-right ml-2 flex-shrink-0">
+                                                    <div className="text-sm font-mono">{token.formatted}</div>
+                                                </div>
+                                                {swapData.outputMint === token.mint && (
+                                                    <Check className="h-4 w-4 text-primary flex-shrink-0" />
+                                                )}
+                                            </div>
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        );
+                    }}
+                />
+            </div>
+
+            {/* Amount with percentage presets */}
+            <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                    <Label className="text-xs">Amount</Label>
+                    {swapData.inputTokenBalance && (
+                        <span className="text-xs text-gray-500">
+                            Balance: {swapData.inputTokenBalance}
+                        </span>
+                    )}
+                </div>
+                
+                {/* Percentage presets */}
+                {swapData.inputTokenBalance && parseFloat(swapData.inputTokenBalance) > 0 && (
+                    <div className="flex gap-1">
+                        {percentPresets.map(percent => (
+                            <Button
+                                key={percent}
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setAmountFromPercent(percent)}
+                                className="flex-1"
+                            >
+                                {percent}%
+                            </Button>
+                        ))}
+                    </div>
+                )}
+
+                <Input
+                    type="number"
+                    value={swapData.amount ?? ''}
+                    onChange={(e) => onUpdate({ amount: e.target.value })}
+                    placeholder="1.0"
+                />
+            </div>
+
+            <div className="space-y-1.5">
+                <Label className="text-xs">
+                    Slippage Tolerance
+                </Label>
+                <div className="flex items-center gap-2">
+                    <Input
+                        type="number"
+                        value={((swapData.slippageBps ?? 50) / 100).toFixed(2)}
+                        onChange={(e) => {
+                            const percent = parseFloat(e.target.value);
+                            if (!isNaN(percent)) {
+                                onUpdate({ slippageBps: Math.round(percent * 100) });
+                            }
+                        }}
+                        step="0.1"
+                        min="0"
+                        max="50"
+                        className="w-20"
+                    />
+                    <span className="text-sm text-gray-500">%</span>
+                </div>
+                <p className="text-xs text-gray-500">
+                    Default: 0.5%. Higher slippage may result in worse rates.
+                </p>
+            </div>
+
+            {/* Info card */}
+            <Card className="bg-blue-50 border-blue-200">
+                <CardContent className="p-3">
+                    <p className="text-xs text-blue-700">
+                        Swaps are powered by Jupiter. Quote will be fetched at execution time for best rates.
+                    </p>
+                </CardContent>
+            </Card>
         </div>
     );
 }
@@ -260,41 +731,43 @@ function ExecuteForm({ data, onUpdate }: FormProps) {
             />
 
             {/* Strategy info card */}
-            <div className={cn(
-                'p-3 rounded-lg border',
+            <Card className={cn(
+                'rounded-lg',
                 strategy === 'standard' && 'bg-gray-50 border-gray-200',
                 strategy === 'economical' && 'bg-blue-50 border-blue-200',
                 strategy === 'fast' && 'bg-amber-50 border-amber-200',
                 strategy === 'ultra' && 'bg-purple-50 border-purple-200'
             )}>
-                <div className="flex items-start gap-2">
-                    <StrategyIcon className={cn(
-                        'w-4 h-4 mt-0.5',
-                        strategy === 'standard' && 'text-gray-500',
-                        strategy === 'economical' && 'text-blue-500',
-                        strategy === 'fast' && 'text-amber-500',
-                        strategy === 'ultra' && 'text-purple-500'
-                    )} />
-                    <div className="flex-1">
-                        <p className="text-xs font-medium text-gray-700">
-                            {strategyInfo?.description}
-                        </p>
-                        <ul className="mt-1.5 space-y-0.5">
-                            {strategyInfo?.features.map((feature, i) => (
-                                <li key={i} className="text-xs text-gray-500 flex items-center gap-1">
-                                    <span className="w-1 h-1 rounded-full bg-gray-400" />
-                                    {feature}
-                                </li>
-                            ))}
-                        </ul>
+                <CardContent className="p-3">
+                    <div className="flex items-start gap-2">
+                        <StrategyIcon className={cn(
+                            'w-4 h-4 mt-0.5',
+                            strategy === 'standard' && 'text-gray-500',
+                            strategy === 'economical' && 'text-blue-500',
+                            strategy === 'fast' && 'text-amber-500',
+                            strategy === 'ultra' && 'text-purple-500'
+                        )} />
+                        <div className="flex-1">
+                            <p className="text-xs font-medium text-gray-700">
+                                {strategyInfo?.description}
+                            </p>
+                            <ul className="mt-1.5 space-y-0.5">
+                                {strategyInfo?.features.map((feature, i) => (
+                                    <li key={i} className="text-xs text-gray-500 flex items-center gap-1">
+                                        <span className="w-1 h-1 rounded-full bg-gray-400" />
+                                        {feature}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                     </div>
-                </div>
-            </div>
+                </CardContent>
+            </Card>
 
             {/* Jito settings */}
             {showJitoSettings && (
                 <div className="space-y-3 pt-2 border-t border-gray-200">
-                    <p className="text-xs font-medium text-gray-700">Jito Settings</p>
+                    <Label className="text-xs">Jito Settings</Label>
                     
                     <TextField
                         label="Tip Amount (lamports)"
@@ -319,7 +792,7 @@ function ExecuteForm({ data, onUpdate }: FormProps) {
             {/* TPU info */}
             {showTpuSettings && (
                 <div className="space-y-2 pt-2 border-t border-gray-200">
-                    <p className="text-xs font-medium text-gray-700">TPU Direct</p>
+                    <Label className="text-xs">TPU Direct</Label>
                     <p className="text-xs text-gray-500">
                         Ultra mode sends transactions directly to validator TPU ports for lowest latency.
                         Requires <code className="px-1 py-0.5 bg-gray-100 rounded text-xs">@pipeit/fastlane</code> package.
@@ -338,7 +811,7 @@ const formComponents: Record<NodeType, React.ComponentType<FormProps>> = {
     'wallet': WalletForm,
     'transfer-sol': TransferSolForm,
     'transfer-token': TransferTokenForm,
-    'create-ata': CreateAtaForm,
+    'swap': SwapForm,
     'memo': MemoForm,
     'execute': ExecuteForm,
 };
@@ -435,3 +908,4 @@ export function NodeInspector() {
         </div>
     );
 }
+

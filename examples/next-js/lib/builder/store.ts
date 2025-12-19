@@ -453,3 +453,4 @@ export function useBatchGroups(): BatchGroup[] {
     const edges = useBuilderStore(state => state.edges);
     return getBatchGroups(nodes, edges);
 }
+

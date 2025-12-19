@@ -6,6 +6,7 @@ import { useBuilderStore, useExecutionState } from '@/lib/builder/store';
 import { compileGraph, extractExecutionConfig } from '@/lib/builder/compiler';
 import { TransactionBuilder, JITO_BLOCK_ENGINES } from '@pipeit/core';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import {
     Play,
@@ -50,6 +51,7 @@ export function BuilderToolbar({ compileContext, onSimulate }: BuilderToolbarPro
         success: boolean;
         computeUnits?: number;
         solTransfer?: string; // SOL amount as formatted string
+        tokenTransfers?: Array<{ amount: string; symbol: string }>; // Token transfers
         error?: string;
     } | null>(null);
 
@@ -129,10 +131,38 @@ export function BuilderToolbar({ compileContext, onSimulate }: BuilderToolbarPro
                 }) + ' SOL';
             }
 
+            // Format token transfers if present
+            let tokenTransfers: Array<{ amount: string; symbol: string }> | undefined;
+            if (compiled.tokenTransfers && compiled.tokenTransfers.length > 0) {
+                // Known token symbols
+                const KNOWN_TOKENS: Record<string, string> = {
+                    'So11111111111111111111111111111111111111112': 'SOL',
+                    'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': 'USDC',
+                    'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': 'USDT',
+                };
+                
+                tokenTransfers = compiled.tokenTransfers.map(transfer => {
+                    const displayAmount = Number(transfer.amount) / Math.pow(10, transfer.decimals);
+                    // Use known symbol or truncate mint for display
+                    const symbol = KNOWN_TOKENS[transfer.mint] 
+                        ?? (transfer.mint.length > 10 
+                            ? `${transfer.mint.slice(0, 4)}...${transfer.mint.slice(-4)}`
+                            : transfer.mint);
+                    return {
+                        amount: displayAmount.toLocaleString(undefined, {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: Math.min(transfer.decimals, 6), // Cap at 6 decimals for readability
+                        }),
+                        symbol,
+                    };
+                });
+            }
+
             setSimulationResult({
                 success: result.err === null,
                 computeUnits: result.unitsConsumed ? Number(result.unitsConsumed) : undefined,
                 solTransfer,
+                tokenTransfers,
                 error: result.err ? JSON.stringify(result.err) : undefined,
             });
         } catch (error) {
@@ -354,32 +384,37 @@ export function BuilderToolbar({ compileContext, onSimulate }: BuilderToolbarPro
                     {instructionNodeCount} instruction{instructionNodeCount !== 1 ? 's' : ''}
                 </span>
                 {cluster && (
-                    <span className={cn(
-                        'px-2 py-0.5 rounded text-xs font-medium',
-                        cluster.id?.includes('mainnet') 
-                            ? 'bg-green-100 text-green-700'
-                            : cluster.id?.includes('devnet')
-                                ? 'bg-purple-100 text-purple-700'
-                                : 'bg-gray-100 text-gray-700'
-                    )}>
+                    <Badge 
+                        variant="secondary"
+                        className={cn(
+                            cluster.id?.includes('mainnet') 
+                                ? 'bg-green-100 text-green-700 border-green-200'
+                                : cluster.id?.includes('devnet')
+                                    ? 'bg-purple-100 text-purple-700 border-purple-200'
+                                    : 'bg-gray-100 text-gray-700 border-gray-200'
+                        )}
+                    >
                         {cluster.label || cluster.id?.replace('solana:', '')}
-                    </span>
+                    </Badge>
                 )}
                 {/* Execution mode badge */}
                 {executionConfig.strategy !== 'standard' && (
-                    <span className={cn(
-                        'px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1',
-                        executionConfig.strategy === 'economical' && 'bg-blue-100 text-blue-700',
-                        executionConfig.strategy === 'fast' && 'bg-amber-100 text-amber-700',
-                        executionConfig.strategy === 'ultra' && 'bg-purple-100 text-purple-700'
-                    )}>
+                    <Badge 
+                        variant="secondary"
+                        className={cn(
+                            'flex items-center gap-1',
+                            executionConfig.strategy === 'economical' && 'bg-blue-100 text-blue-700 border-blue-200',
+                            executionConfig.strategy === 'fast' && 'bg-amber-100 text-amber-700 border-amber-200',
+                            executionConfig.strategy === 'ultra' && 'bg-purple-100 text-purple-700 border-purple-200'
+                        )}
+                    >
                         {executionConfig.strategy === 'economical' && <Shield className="w-3 h-3" />}
                         {executionConfig.strategy === 'fast' && <Zap className="w-3 h-3" />}
                         {executionConfig.strategy === 'ultra' && <Rocket className="w-3 h-3" />}
                         {executionConfig.strategy === 'economical' && 'Jito'}
                         {executionConfig.strategy === 'fast' && 'Fast'}
                         {executionConfig.strategy === 'ultra' && 'TPU'}
-                    </span>
+                    </Badge>
                 )}
             </div>
 
@@ -389,7 +424,7 @@ export function BuilderToolbar({ compileContext, onSimulate }: BuilderToolbarPro
                 {simulationResult && (
                     <div 
                         className={cn(
-                            'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium max-w-sm',
+                            'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium max-w-md',
                             simulationResult.success
                                 ? 'bg-green-100 text-green-700'
                                 : 'bg-amber-100 text-amber-700'
@@ -400,13 +435,29 @@ export function BuilderToolbar({ compileContext, onSimulate }: BuilderToolbarPro
                             <>
                                 <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
                                 <span>
+                                    {/* SOL transfers */}
                                     {simulationResult.solTransfer && (
                                         <span className="font-semibold">{simulationResult.solTransfer}</span>
                                     )}
-                                    {simulationResult.solTransfer && simulationResult.computeUnits && ' · '}
+                                    {/* Token transfers */}
+                                    {simulationResult.tokenTransfers && simulationResult.tokenTransfers.length > 0 && (
+                                        <>
+                                            {simulationResult.solTransfer && ' + '}
+                                            {simulationResult.tokenTransfers.map((t, i) => (
+                                                <span key={i}>
+                                                    {i > 0 && ', '}
+                                                    <span className="font-semibold">{t.amount}</span>
+                                                    <span className="opacity-75 ml-0.5">{t.symbol}</span>
+                                                </span>
+                                            ))}
+                                        </>
+                                    )}
+                                    {/* Separator before CU */}
+                                    {(simulationResult.solTransfer || simulationResult.tokenTransfers) && simulationResult.computeUnits && ' · '}
+                                    {/* Compute units */}
                                     {simulationResult.computeUnits
                                         ? `${simulationResult.computeUnits.toLocaleString()} CU`
-                                        : !simulationResult.solTransfer ? 'Valid' : ''}
+                                        : (!simulationResult.solTransfer && !simulationResult.tokenTransfers) ? 'Valid' : ''}
                                 </span>
                             </>
                         ) : (
@@ -493,3 +544,4 @@ export function BuilderToolbar({ compileContext, onSimulate }: BuilderToolbarPro
         </div>
     );
 }
+
