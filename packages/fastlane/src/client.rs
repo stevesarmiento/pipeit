@@ -337,9 +337,36 @@ impl TpuClient {
         let mut total_leaders_sent = 0u32;
         let slot_duration = Duration::from_millis(400);
         
+        // Staleness detection - track if slot hasn't changed between rounds
+        let mut last_slot: u64 = 0;
+        let mut stale_rounds: u32 = 0;
+        
         // Send loop - continues until confirmed or timeout
         while start.elapsed() < timeout {
             rounds += 1;
+            
+            // Check for stale slot (same slot for multiple rounds)
+            let current_slot = self.leader_tracker.current_slot().await;
+            if current_slot == last_slot && current_slot != 0 {
+                stale_rounds += 1;
+                if stale_rounds >= 2 {
+                    eprintln!(
+                        "[TPU] ⚠️ Slot stale for {} rounds (stuck at {}), refreshing via RPC",
+                        stale_rounds, current_slot
+                    );
+                    match self.leader_tracker.refresh_slot_from_rpc().await {
+                        Ok(fresh_slot) => {
+                            eprintln!("[TPU] 🔄 Refreshed slot: {} -> {}", current_slot, fresh_slot);
+                        }
+                        Err(e) => {
+                            warn!("Failed to refresh slot from RPC: {}", e);
+                        }
+                    }
+                }
+            } else {
+                stale_rounds = 0;
+                last_slot = current_slot;
+            }
             
             // 1. Get slot-aware leaders (1 or 2 based on slot position)
             let (leaders, slot_position) = self.leader_tracker.get_slot_aware_leaders().await;

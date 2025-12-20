@@ -97,6 +97,24 @@ impl LeaderTracker {
         self.slots_tracker.read().await.current_slot()
     }
 
+    /// Refreshes the current slot from RPC when WebSocket is stale.
+    /// 
+    /// This is a fallback mechanism when the WebSocket subscription lags
+    /// and the slot tracker reports the same slot for multiple rounds.
+    pub async fn refresh_slot_from_rpc(&self) -> Result<Slot> {
+        let rpc_client = RpcClient::new(self.rpc_url.clone());
+        let slot = rpc_client
+            .get_slot()
+            .await
+            .context("Failed to fetch slot from RPC")?;
+        
+        // Update the slots tracker with this fresh value
+        let mut tracker = self.slots_tracker.write().await;
+        tracker.record(SlotEvent::Start(slot));
+        
+        Ok(slot)
+    }
+
     /// Get slot position within leader's 4-slot window (0-3).
     /// 
     /// Solana leaders get 4 consecutive slots (NUM_CONSECUTIVE_LEADER_SLOTS = 4).
@@ -371,10 +389,27 @@ impl LeaderTracker {
         Ok(())
     }
 
-    /// Starts the slot updates listener.
+    /// Starts the slot updates listener with automatic reconnection.
     ///
-    /// This should be spawned as a background task.
+    /// This should be spawned as a background task. If the WebSocket
+    /// connection drops, it will automatically reconnect after a short delay.
     pub async fn run_slot_listener(self: Arc<Self>) -> Result<()> {
+        loop {
+            match self.run_slot_listener_inner().await {
+                Ok(_) => {
+                    warn!("WebSocket slot listener ended unexpectedly, reconnecting...");
+                }
+                Err(e) => {
+                    error!("WebSocket error: {}, reconnecting in 1s...", e);
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
+    }
+
+    /// Inner slot listener that handles the WebSocket connection.
+    /// Returns when the connection ends (either normally or due to error).
+    async fn run_slot_listener_inner(&self) -> Result<()> {
         let ws_client = PubsubClient::new(&self.ws_url)
             .await
             .context("Failed to connect to WebSocket")?;
@@ -398,6 +433,7 @@ impl LeaderTracker {
             }
         }
 
+        // Stream ended - will trigger reconnect in the outer loop
         Ok(())
     }
 
