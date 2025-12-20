@@ -370,7 +370,7 @@ export async function tpuHandler(
         console.log('│ 🚀 TPU CONTINUOUS SUBMISSION (until confirmed)              │');
         console.log('├─────────────────────────────────────────────────────────────┤');
         console.log(`│ Protocol: QUIC (native)                                     │`);
-        console.log(`│ Mode: Send until confirmed (like yellowstone-jet)           │`);
+        console.log(`│ Mode: Send until confirmed                                   │`);
         console.log(`│ Transaction size: ${txBuffer.length} bytes`.padEnd(62) + '│');
         console.log(`│ Configured fanout: ${config.fanout}`.padEnd(62) + '│');
         console.log(`│ Timeout: 30 seconds                                         │`);

@@ -25,7 +25,7 @@ use crate::tracker::{LeaderInfo, LeaderTracker};
 const ALPN_TPU_PROTOCOL_ID: &[u8] = b"solana-tpu";
 
 /// Maximum idle timeout for QUIC connections.
-/// Yellowstone-jet uses 30s - longer timeout keeps connections warm longer.
+/// uses 30s - longer timeout keeps connections warm longer.
 const QUIC_MAX_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Keep-alive interval for QUIC connections.
@@ -36,7 +36,7 @@ const QUIC_KEEP_ALIVE: Duration = Duration::from_secs(4);
 /// Each endpoint has its own event loop for better parallelism.
 const NUM_ENDPOINTS: usize = 5;
 
-/// Maximum retry attempts per leader (yellowstone-jet uses 3).
+/// Maximum retry attempts per leader.
 const MAX_SEND_ATTEMPTS: usize = 3;
 
 /// Delay between retries in milliseconds.
@@ -52,7 +52,7 @@ const LEADER_SEND_TIMEOUT: Duration = Duration::from_secs(1);
 /// This format is required for validators to properly route QUIC connections.
 /// Using incorrect SNI can cause validators to reject or misroute connections.
 /// 
-/// Format follows yellowstone-jet: `{ip}.{port}.sol`
+/// Format: `{ip}.{port}.sol`
 fn socket_addr_to_quic_server_name(addr: &SocketAddr) -> String {
     format!("{}.{}.sol", addr.ip(), addr.port())
 }

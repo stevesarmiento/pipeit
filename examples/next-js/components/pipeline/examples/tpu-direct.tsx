@@ -359,25 +359,6 @@ export function TpuRealTimeVisualization({ tpuState, lastResult }: { tpuState: T
                     <TpuStatsPanel result={lastResult} />
                 </motion.div>
             )}
-
-            {/* Protocol info */}
-            <motion.div
-                className="mt-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-100"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.5 }}
-            >
-                <div className="flex items-start gap-3">
-                    <div className="text-2xl">🚀</div>
-                    <div>
-                        <div className="font-semibold text-gray-800 text-sm">Continuous TPU Resubmission</div>
-                        <div className="text-xs text-gray-600 mt-1">
-                            Transactions are sent continuously to fresh validator leaders every ~400ms until confirmed on-chain.
-                            Achieves 90%+ landing rate similar to yellowstone-jet and Jito.
-                        </div>
-                    </div>
-                </div>
-            </motion.div>
         </div>
         
     );

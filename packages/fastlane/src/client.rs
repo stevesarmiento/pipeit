@@ -203,7 +203,7 @@ impl TpuClient {
             });
 
             // Start connection pre-warmer (every 400ms = 1 slot time)
-            // Yellowstone-jet pre-warms connections every ~3 slots for optimal landing.
+            // pre-warms connections every ~3 slots for optimal landing.
             // We prewarm more aggressively (every slot) since we're frontend-facing.
             let prewarm_task = if prewarm {
                 Some(tokio::spawn(async move {
