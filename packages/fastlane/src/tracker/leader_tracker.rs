@@ -97,6 +97,11 @@ impl LeaderTracker {
         self.slots_tracker.read().await.current_slot()
     }
 
+    /// Returns the number of validators with known socket addresses.
+    pub async fn validator_count(&self) -> usize {
+        self.leader_sockets.read().await.len()
+    }
+
     /// Gets upcoming leaders for transaction routing.
     ///
     /// Prefers TPU forwards port (recommended by validators), falling back
@@ -119,6 +124,7 @@ impl LeaderTracker {
         let curr_slot = slot_tracker.current_slot();
 
         if curr_slot == 0 {
+            eprintln!("[TPU] ⚠️ Current slot is 0, cannot determine leaders");
             return vec![];
         }
 
@@ -126,8 +132,8 @@ impl LeaderTracker {
         if curr_slot < schedule_tracker.current_epoch_slot_start()
             || curr_slot >= schedule_tracker.next_epoch_slot_start()
         {
-            warn!(
-                "Current slot {} is outside epoch range [{}, {})",
+            eprintln!(
+                "[TPU] ⚠️ Current slot {} is outside epoch range [{}, {})",
                 curr_slot,
                 schedule_tracker.current_epoch_slot_start(),
                 schedule_tracker.next_epoch_slot_start()
@@ -137,6 +143,8 @@ impl LeaderTracker {
 
         let mut leaders = Vec::new();
         let mut seen = HashSet::new();
+        let mut missing_sockets = 0;
+        let mut no_usable_address = 0;
 
         for i in start..end {
             let target_slot = match curr_slot.checked_add(i) {
@@ -177,24 +185,90 @@ impl LeaderTracker {
                                 slot: curr_slot,
                             });
                         } else {
-                            debug!("Leader {} has no usable socket address", leader_pubkey);
+                            no_usable_address += 1;
+                            eprintln!(
+                                "[TPU] ⚠️ Leader {}... has socket entry but no usable address",
+                                &leader_pubkey[..8]
+                            );
                         }
                     }
                     None => {
-                        debug!("Leader {} has no known socket address", leader_pubkey);
+                        missing_sockets += 1;
+                        // Only print first few to avoid spam
+                        if missing_sockets <= 3 {
+                            eprintln!(
+                                "[TPU] ⚠️ Leader {}... for slot {} not in cluster nodes",
+                                &leader_pubkey[..8],
+                                target_slot
+                            );
+                        }
                     }
                 }
             }
         }
 
+        // Summary logging if we had issues
+        if missing_sockets > 3 {
+            eprintln!(
+                "[TPU] ⚠️ ...and {} more leaders missing from cluster nodes (total: {})",
+                missing_sockets - 3,
+                missing_sockets
+            );
+        }
+        if missing_sockets > 0 || no_usable_address > 0 {
+            eprintln!(
+                "[TPU] 📊 Leader lookup summary: found={}, missing_sockets={}, no_usable_addr={}",
+                leaders.len(),
+                missing_sockets,
+                no_usable_address
+            );
+        }
+
         leaders
     }
 
-    /// Gets the current leader and next leader (if close to leader switch).
+    /// Gets upcoming leaders for transaction routing.
     ///
     /// This is the main method for transaction routing.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `fanout` - Number of upcoming leaders to target (default: 4)
     pub async fn get_leaders(&self) -> Vec<LeaderInfo> {
-        self.get_future_leaders(0, 2).await
+        // Default to 4 leaders for better landing rates
+        self.get_leaders_with_fanout(4).await
+    }
+
+    /// Gets upcoming leaders with configurable fanout.
+    ///
+    /// # Arguments
+    /// 
+    /// * `fanout` - Number of upcoming leaders to target
+    pub async fn get_leaders_with_fanout(&self, fanout: u32) -> Vec<LeaderInfo> {
+        // Look ahead by fanout * 4 slots to capture enough unique leaders.
+        // Validators can have up to 4 consecutive slots (NUM_CONSECUTIVE_LEADER_SLOTS),
+        // so with fanout=4 we need to look at least 16 slots ahead to find 4 unique leaders.
+        let leaders = self.get_future_leaders(0, fanout as u64 * 4).await;
+        
+        // Always log leader discovery results (this is important for debugging)
+        if (leaders.len() as u32) < fanout {
+            let sockets_count = self.leader_sockets.read().await.len();
+            eprintln!(
+                "[TPU] ⚠️ LOW LEADER COUNT: Found {} leaders (wanted {}). \
+                Sockets available: {}. Check logs above for missing validators.",
+                leaders.len(),
+                fanout,
+                sockets_count
+            );
+        } else {
+            eprintln!(
+                "[TPU] ✅ Found {} leaders for fanout {}",
+                leaders.len(),
+                fanout
+            );
+        }
+        
+        leaders
     }
 
     /// Updates the leader socket addresses from cluster nodes.
@@ -237,7 +311,16 @@ impl LeaderTracker {
             }
         }
 
-        info!("Updated sockets for {} validators", new_sockets.len());
+        // Count validators with each type of socket
+        let with_forwards = new_sockets.values().filter(|s| s.tpu_forwards_socket.is_some()).count();
+        let with_tpu = new_sockets.values().filter(|s| s.tpu_socket.is_some()).count();
+        
+        info!(
+            "📡 Updated sockets for {} validators ({} with forwards, {} with tpu)",
+            new_sockets.len(),
+            with_forwards,
+            with_tpu
+        );
 
         let mut sockets = self.leader_sockets.write().await;
         *sockets = new_sockets;

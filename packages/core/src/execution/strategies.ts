@@ -26,7 +26,7 @@ const TPU_DEFAULTS = {
     // Default to public mainnet RPC - users should override for better performance
     rpcUrl: 'https://api.mainnet-beta.solana.com',
     wsUrl: 'wss://api.mainnet-beta.solana.com',
-    fanout: 2,
+    fanout: 8, // More leaders = higher landing rate (looks at 32 slots ahead)
     apiRoute: '/api/tpu',
 };
 
@@ -502,12 +502,39 @@ function isBrowser(): boolean {
  * In browser environments, this sends to the configured API route.
  * In server environments, this uses the native TPU client directly.
  */
+/** TPU submission result with per-leader details */
+interface TpuSubmissionResult {
+    delivered: boolean;
+    latencyMs: number;
+    leaderCount: number;
+    leaders?: Array<{
+        identity: string;
+        address: string;
+        success: boolean;
+        latencyMs: number;
+        error?: string;
+        errorCode?: string;
+        attempts: number;
+    }>;
+    retryCount?: number;
+}
+
 async function submitToTpu(
     transaction: string,
     tpuConfig: ResolvedExecutionConfig['tpu'],
     abortSignal?: AbortSignal,
-): Promise<{ delivered: boolean; latencyMs: number; leaderCount: number }> {
+): Promise<TpuSubmissionResult> {
+    console.log('🚀 [TPU] submitToTpu called, isBrowser:', isBrowser());
+
     if (isBrowser()) {
+        console.log('🌐 [TPU] Running in browser, dispatching start event');
+        // Emit start event
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('pipeit:tpu:start'));
+            console.log('✅ [TPU] Dispatched pipeit:tpu:start event');
+        }
+
+        console.log('📡 [TPU] Calling API route:', tpuConfig.apiRoute);
         // Browser: route through API with config
         const response = await fetch(tpuConfig.apiRoute, {
             method: 'POST',
@@ -523,12 +550,29 @@ async function submitToTpu(
             ...(abortSignal && { signal: abortSignal }),
         });
 
+        console.log('📬 [TPU] API response status:', response.status);
+
         if (!response.ok) {
             const error = await response.text();
+            console.error('❌ [TPU] API error:', error);
             throw new Error(`TPU API error: ${response.status} - ${error}`);
         }
 
-        return response.json();
+        const result: TpuSubmissionResult = await response.json();
+        console.log('📦 [TPU] API result:', result);
+
+        // Emit result event for UI components to listen to
+        if (typeof window !== 'undefined') {
+            console.log('🎯 [TPU] Dispatching pipeit:tpu:result event');
+            window.dispatchEvent(
+                new CustomEvent('pipeit:tpu:result', {
+                    detail: result,
+                }),
+            );
+            console.log('✅ [TPU] Dispatched pipeit:tpu:result event with', result.leaderCount, 'leaders');
+        }
+
+        return result;
     }
 
     // Server: use native client

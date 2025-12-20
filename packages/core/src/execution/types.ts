@@ -7,6 +7,7 @@
 import type { Address } from '@solana/addresses';
 import type { Rpc, SendTransactionApi } from '@solana/rpc';
 import type { RpcSubscriptions, SignatureNotificationsApi, SlotNotificationsApi } from '@solana/rpc-subscriptions';
+import type { TpuSubmissionDetails } from '../errors/tpu-errors.js';
 
 /**
  * Jito block engine regional endpoints.
@@ -212,6 +213,49 @@ export interface ExecutionResult {
      * Number of leaders the transaction was sent to (for TPU).
      */
     leaderCount?: number;
+
+    /**
+     * Enhanced TPU submission details with per-leader breakdown.
+     * Only present when transaction was submitted via TPU.
+     */
+    tpuDetails?: TpuSubmissionDetails;
+}
+
+/**
+ * Execution result with explicit confirmation status.
+ *
+ * This type is useful when the transaction was delivered but confirmation
+ * could not be verified within the timeout window. The transaction likely
+ * landed but should be verified on an explorer.
+ */
+export interface ExecutionResultWithStatus {
+    /**
+     * Transaction signature (base58 encoded).
+     */
+    signature: string;
+
+    /**
+     * Confirmation status of the transaction.
+     * - 'confirmed': Transaction was confirmed on-chain
+     * - 'pending': Transaction was delivered but confirmation timed out (likely landed)
+     * - 'failed': Transaction execution failed
+     */
+    status: 'confirmed' | 'pending' | 'failed';
+
+    /**
+     * Which execution path was used.
+     */
+    landedVia: 'tpu' | 'jito' | 'rpc' | 'parallel';
+
+    /**
+     * Time from submission to result in milliseconds.
+     */
+    latencyMs?: number;
+
+    /**
+     * Error message if status is 'failed'.
+     */
+    error?: string;
 }
 
 // ============================================================================

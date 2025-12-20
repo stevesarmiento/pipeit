@@ -16,6 +16,7 @@ import {
     SignatureRejectedError,
     AccountNotFoundError,
 } from './errors.js';
+import { isTpuRetryableError } from './tpu-errors.js';
 
 /**
  * Check if error is a Pipeit-specific error.
@@ -93,4 +94,25 @@ export function isNetworkError(error: unknown): boolean {
         code === 'ETIMEDOUT' ||
         code === 'ENOTFOUND'
     );
+}
+
+/**
+ * Check if error should trigger TPU retry.
+ *
+ * Combines TPU-specific retryable errors with general network errors.
+ * Use this with the withRetry middleware for TPU submission:
+ *
+ * @example
+ * ```typescript
+ * builder.withMiddleware(
+ *   withRetry({
+ *     attempts: 2,
+ *     baseDelay: 200,
+ *     retryOn: isTpuNetworkError,
+ *   })
+ * )
+ * ```
+ */
+export function isTpuNetworkError(error: unknown): boolean {
+    return isTpuRetryableError(error) || isNetworkError(error);
 }

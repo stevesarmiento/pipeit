@@ -459,6 +459,9 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
     
     // 2. Priority fee / compute unit price
     const priorityFee = await this.resolvePriorityFee();
+    if (this.config.logLevel !== 'silent') {
+      console.log(`[Pipeit] Priority fee: ${priorityFee.toLocaleString()} micro-lamports/CU (${(priorityFee / 1_000_000).toFixed(3)} lamports/CU)`);
+    }
     if (priorityFee > 0) {
       message = appendTransactionMessageInstruction(
         createSetComputeUnitPriceInstruction(priorityFee),
@@ -747,17 +750,19 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
     // Get base64 encoded transaction for execution strategies
     const base64Tx = getBase64EncodedWireTransaction(signedTransaction);
     
-    // Check if we should use execution strategies (Jito or parallel enabled)
-    const useExecutionStrategy = executionConfig.jito.enabled || executionConfig.parallel.enabled;
+    // Check if we should use execution strategies (Jito, parallel, or TPU enabled)
+    const useExecutionStrategy = executionConfig.jito.enabled || executionConfig.parallel.enabled || executionConfig.tpu.enabled;
     
     if (useExecutionStrategy) {
       // Use execution strategy
       if (this.config.logLevel !== 'silent') {
-        const strategyName = executionConfig.jito.enabled && executionConfig.parallel.enabled
-          ? 'Jito + Parallel'
-          : executionConfig.jito.enabled
-            ? 'Jito'
-            : 'Parallel';
+        const strategyName = executionConfig.tpu.enabled
+          ? 'TPU Direct'
+          : executionConfig.jito.enabled && executionConfig.parallel.enabled
+            ? 'Jito + Parallel'
+            : executionConfig.jito.enabled
+              ? 'Jito'
+              : 'Parallel';
         console.log(`[Pipeit] Using ${strategyName} execution strategy`);
       }
       
@@ -773,14 +778,63 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
       });
       
       if (this.config.logLevel !== 'silent') {
-        console.log(`[Pipeit] Transaction landed via ${result.landedVia}${result.latencyMs ? ` in ${result.latencyMs}ms` : ''}`);
+        console.log(`[Pipeit] Transaction delivered via ${result.landedVia}${result.latencyMs ? ` in ${result.latencyMs}ms` : ''}`);
+        if (result.landedVia === 'tpu') {
+          console.log(`[Pipeit] ⏳ Waiting for on-chain confirmation (delivered ≠ confirmed)...`);
+        }
       }
       
       // Now confirm the transaction using standard confirmation
-      await this.confirmTransaction(result.signature, rpcSubscriptions, commitment);
+      try {
+        await this.confirmTransaction(result.signature, rpcSubscriptions, commitment);
+        if (this.config.logLevel !== 'silent') {
+          console.log(`[Pipeit] ✅ Transaction confirmed via WebSocket subscription`);
+        }
+      } catch (confirmError) {
+        // For TPU submissions, log but don't fail if WebSocket confirmation fails
+        // The TPU already reported success, and we'll verify via polling below
+        if (result.landedVia === 'tpu') {
+          if (this.config.logLevel !== 'silent') {
+            console.log(`[Pipeit] WebSocket confirmation timed out, falling back to RPC polling...`);
+          }
+        } else {
+          throw confirmError;
+        }
+      }
       
-      // Verify transaction execution status (catch false positives)
-      await this.verifyTransactionSuccess(rpc, result.signature);
+      // Verify transaction execution status via polling (catch false positives)
+      if (this.config.logLevel !== 'silent' && result.landedVia === 'tpu') {
+        console.log(`[Pipeit] 🔍 Polling RPC for transaction status...`);
+      }
+      
+      try {
+        await this.verifyTransactionSuccess(rpc, result.signature);
+        if (this.config.logLevel !== 'silent') {
+          console.log(`[Pipeit] ✅ Transaction confirmed on-chain!`);
+        }
+      } catch (verifyError) {
+        // For TPU submissions with "delivered" status, the transaction may not have landed
+        // This is common - TPU "delivered" only means sent to validator, not processed
+        if (result.landedVia === 'tpu' && 
+            verifyError instanceof Error && 
+            verifyError.message.includes('Unable to verify')) {
+          if (this.config.logLevel !== 'silent') {
+            console.warn(
+              `[Pipeit] ⚠️ TPU delivery succeeded but transaction NOT confirmed on-chain.\n` +
+              `         This is common with TPU - "delivered" only means sent to validator.\n` +
+              `         Signature: ${result.signature}\n` +
+              `         Possible causes:\n` +
+              `         - Transaction dropped by validator (congestion)\n` +
+              `         - Blockhash expired before processing\n` +
+              `         - Insufficient priority fee\n` +
+              `         Consider: higher priority fee, more leader fanout, or retry with fresh blockhash.`
+            );
+          }
+          // Return signature anyway - let the caller decide what to do
+          return result.signature;
+        }
+        throw verifyError;
+      }
       
       return result.signature;
     }
@@ -862,18 +916,18 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
     rpc: Rpc<GetSignatureStatusesApi>,
     signature: string,
     options?: {
-      /** Maximum number of retry attempts (default: 5) */
+      /** Maximum number of retry attempts (default: 12) */
       maxAttempts?: number;
-      /** Initial delay in milliseconds before first retry (default: 500) */
+      /** Initial delay in milliseconds before first retry (default: 1000) */
       initialDelayMs?: number;
-      /** Maximum delay in milliseconds between retries (default: 4000) */
+      /** Maximum delay in milliseconds between retries (default: 8000) */
       maxDelayMs?: number;
     }
   ): Promise<void> {
     const {
-      maxAttempts = 5,
-      initialDelayMs = 500,
-      maxDelayMs = 4000,
+      maxAttempts = 12,      // Increased from 5 - gives more time for RPC to index
+      initialDelayMs = 1000, // Increased from 500 - start with longer delay
+      maxDelayMs = 8000,     // Increased from 4000 - longer max delay for slow RPCs
     } = options ?? {};
     
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {

@@ -1,14 +1,14 @@
 //! TpuClient - Main interface exposed to Node.js via NAPI.
 //!
 //! Provides a high-level API for sending transactions directly to
-//! Solana validator TPU endpoints.
+//! Solana validator TPU endpoints with per-leader results and retry logic.
 
 use anyhow::Context;
 use log::info;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::oneshot;
 
 use crate::connection_manager::TpuConnectionManager;
@@ -33,16 +33,58 @@ pub struct TpuClientConfig {
     pub prewarm_connections: Option<bool>,
 }
 
+/// Result for a single leader send attempt.
+#[napi(object)]
+#[derive(Debug, Clone)]
+pub struct LeaderSendResult {
+    /// Validator identity pubkey.
+    pub identity: String,
+    /// TPU socket address.
+    pub address: String,
+    /// Whether send succeeded.
+    pub success: bool,
+    /// Latency for this leader in milliseconds.
+    pub latency_ms: u32,
+    /// Error message if failed.
+    pub error: Option<String>,
+    /// Error code for programmatic handling.
+    pub error_code: Option<String>,
+    /// Number of attempts made for this leader.
+    pub attempts: u32,
+}
+
 /// Result from sending a transaction.
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct SendResult {
     /// Whether the transaction was successfully delivered.
     pub delivered: bool,
-    /// Latency in milliseconds.
+    /// Total latency in milliseconds.
     pub latency_ms: u32,
     /// Number of leaders the transaction was sent to.
     pub leader_count: u32,
+    /// Per-leader breakdown of send results.
+    pub leaders: Vec<LeaderSendResult>,
+    /// Total retry attempts made across all leaders.
+    pub retry_count: u32,
+}
+
+/// Client health and statistics.
+#[napi(object)]
+#[derive(Debug, Clone)]
+pub struct TpuClientStats {
+    /// Number of active QUIC connections.
+    pub connection_count: u32,
+    /// Current estimated slot.
+    pub current_slot: u32,
+    /// Number of QUIC endpoints.
+    pub endpoint_count: u32,
+    /// Client ready state: "initializing", "ready", or "error".
+    pub ready_state: String,
+    /// Seconds since client was created.
+    pub uptime_secs: u32,
+    /// Number of validators with known sockets.
+    pub known_validators: u32,
 }
 
 /// Native QUIC client for direct Solana TPU transaction submission.
@@ -56,6 +98,10 @@ pub struct TpuClient {
     runtime: tokio::runtime::Runtime,
     /// Shutdown signal sender.
     shutdown_tx: Option<oneshot::Sender<()>>,
+    /// Time when client was created.
+    start_time: Instant,
+    /// Number of leaders to fanout to.
+    fanout: u32,
 }
 
 #[napi]
@@ -103,7 +149,15 @@ impl TpuClient {
         let prewarm = config.prewarm_connections.unwrap_or(true);
 
         runtime.spawn(async move {
-            // Start slot listener
+            // IMPORTANT: Fetch validator sockets FIRST before starting slot listener
+            // This ensures we have socket data when is_ready() returns true
+            info!("Fetching initial validator sockets...");
+            match lt_clone.update_leader_sockets().await {
+                Ok(_) => info!("Initial socket update complete"),
+                Err(e) => log::error!("Initial socket update failed: {}", e),
+            }
+
+            // Start slot listener (this will set is_ready = true)
             let lt_for_slots = lt_clone.clone();
             let slot_listener = tokio::spawn(async move {
                 if let Err(e) = lt_for_slots.run_slot_listener().await {
@@ -119,22 +173,21 @@ impl TpuClient {
                     .await;
             });
 
-            // Start connection pre-warmer (every 2 seconds)
+            // Start connection pre-warmer (every 400ms = 1 slot time)
+            // Yellowstone-jet pre-warms connections every ~3 slots for optimal landing.
+            // We prewarm more aggressively (every slot) since we're frontend-facing.
             let prewarm_task = if prewarm {
                 Some(tokio::spawn(async move {
                     loop {
-                        cm_clone.prewarm_connections(40).await;
-                        tokio::time::sleep(Duration::from_secs(2)).await;
+                        // Prewarm connections to next 16 slots worth of leaders
+                        // (fanout * 4 to match leader lookahead)
+                        cm_clone.prewarm_connections(16).await;
+                        tokio::time::sleep(Duration::from_millis(400)).await;
                     }
                 }))
             } else {
                 None
             };
-
-            // Wait for initial socket update
-            if let Err(e) = lt_clone.update_leader_sockets().await {
-                log::error!("Initial socket update failed: {}", e);
-            }
 
             // Wait for shutdown signal
             let _ = shutdown_rx.await;
@@ -149,30 +202,58 @@ impl TpuClient {
 
         info!("TpuClient created successfully");
 
+        // Default fanout to 4 if not specified
+        let fanout = config.fanout.unwrap_or(4);
+        info!("TpuClient using fanout: {}", fanout);
+
         Ok(Self {
             leader_tracker,
             connection_manager,
             runtime,
             shutdown_tx: Some(shutdown_tx),
+            start_time: Instant::now(),
+            fanout,
         })
     }
 
     /// Sends a serialized transaction to TPU endpoints.
+    ///
+    /// Returns detailed per-leader results including retry statistics.
     #[napi]
     pub async fn send_transaction(&self, transaction: Buffer) -> napi::Result<SendResult> {
         let tx_data = transaction.as_ref();
         let cm = self.connection_manager.clone();
+        let fanout = self.fanout;
+
+        info!("Sending transaction to {} leaders via TPU", fanout);
 
         let result = cm
-            .send_transaction(tx_data)
+            .send_transaction_with_fanout(tx_data, fanout)
             .await
             .context("Failed to send transaction")
             .map_err(anyhow_to_napi)?;
+
+        // Convert internal LeaderDeliveryResult to NAPI LeaderSendResult
+        let leaders: Vec<LeaderSendResult> = result
+            .leaders
+            .into_iter()
+            .map(|lr| LeaderSendResult {
+                identity: lr.identity,
+                address: lr.address,
+                success: lr.success,
+                latency_ms: lr.latency_ms as u32,
+                error: lr.error,
+                error_code: lr.error_code.map(|c| c.to_string()),
+                attempts: lr.attempts as u32,
+            })
+            .collect();
 
         Ok(SendResult {
             delivered: result.delivered,
             latency_ms: result.latency_ms as u32,
             leader_count: result.leader_count as u32,
+            leaders,
+            retry_count: result.total_retries as u32,
         })
     }
 
@@ -187,6 +268,27 @@ impl TpuClient {
     #[napi]
     pub async fn get_connection_count(&self) -> u32 {
         self.connection_manager.connection_count() as u32
+    }
+
+    /// Gets comprehensive client statistics.
+    #[napi]
+    pub async fn get_stats(&self) -> TpuClientStats {
+        let is_ready = self.leader_tracker.is_ready().await;
+        let current_slot = self.leader_tracker.current_slot().await;
+        let validator_count = self.leader_tracker.validator_count().await;
+
+        TpuClientStats {
+            connection_count: self.connection_manager.connection_count() as u32,
+            current_slot: current_slot as u32,
+            endpoint_count: 5, // NUM_ENDPOINTS from connection_manager
+            ready_state: if is_ready {
+                "ready".to_string()
+            } else {
+                "initializing".to_string()
+            },
+            uptime_secs: self.start_time.elapsed().as_secs() as u32,
+            known_validators: validator_count as u32,
+        }
     }
 
     /// Waits for the client to be fully initialized.

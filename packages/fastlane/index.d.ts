@@ -14,25 +14,67 @@ export interface TpuClientConfig {
   /** Whether to pre-warm connections to upcoming leaders (default: true). */
   prewarmConnections?: boolean
 }
+/** Result for a single leader send attempt. */
+export interface LeaderSendResult {
+  /** Validator identity pubkey. */
+  identity: string
+  /** TPU socket address. */
+  address: string
+  /** Whether send succeeded. */
+  success: boolean
+  /** Latency for this leader in milliseconds. */
+  latencyMs: number
+  /** Error message if failed. */
+  error?: string
+  /** Error code for programmatic handling. */
+  errorCode?: string
+  /** Number of attempts made for this leader. */
+  attempts: number
+}
 /** Result from sending a transaction. */
 export interface SendResult {
   /** Whether the transaction was successfully delivered. */
   delivered: boolean
-  /** Latency in milliseconds. */
+  /** Total latency in milliseconds. */
   latencyMs: number
   /** Number of leaders the transaction was sent to. */
   leaderCount: number
+  /** Per-leader breakdown of send results. */
+  leaders: Array<LeaderSendResult>
+  /** Total retry attempts made across all leaders. */
+  retryCount: number
+}
+/** Client health and statistics. */
+export interface TpuClientStats {
+  /** Number of active QUIC connections. */
+  connectionCount: number
+  /** Current estimated slot. */
+  currentSlot: number
+  /** Number of QUIC endpoints. */
+  endpointCount: number
+  /** Client ready state: "initializing", "ready", or "error". */
+  readyState: string
+  /** Seconds since client was created. */
+  uptimeSecs: number
+  /** Number of validators with known sockets. */
+  knownValidators: number
 }
 /** Native QUIC client for direct Solana TPU transaction submission. */
 export declare class TpuClient {
   /** Creates a new TPU client instance. */
   constructor(config: TpuClientConfig)
-  /** Sends a serialized transaction to TPU endpoints. */
+  /**
+   * Sends a serialized transaction to TPU endpoints.
+   *
+   * Returns detailed per-leader results including retry statistics.
+   */
   sendTransaction(transaction: Buffer): Promise<SendResult>
   /** Gets the current estimated slot number. */
   getCurrentSlot(): number
   /** Gets the number of active QUIC connections. */
   getConnectionCount(): Promise<number>
+  /** Gets comprehensive client statistics. */
+  getStats(): Promise<TpuClientStats>
   /** Waits for the client to be fully initialized. */
   waitReady(): Promise<void>
   /** Shuts down the client and closes all connections. */

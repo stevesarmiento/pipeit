@@ -17,13 +17,18 @@ export const COMPUTE_BUDGET_PROGRAM = address('ComputeBudget11111111111111111111
 
 /**
  * Predefined priority fee levels in micro-lamports per compute unit.
+ * 
+ * For TPU submissions, use 'turbo' or higher for reliable landing.
+ * Lower levels are suitable for low-congestion periods or non-critical txs.
  */
 export const PRIORITY_FEE_LEVELS = {
     none: 0,
-    low: 1_000, // 0.001 lamports per CU
-    medium: 10_000, // 0.01 lamports per CU
-    high: 50_000, // 0.05 lamports per CU
-    veryHigh: 100_000, // 0.1 lamports per CU
+    low: 1_000,         // 0.001 lamports per CU - minimal fee
+    medium: 10_000,     // 0.01 lamports per CU - standard RPC
+    high: 100_000,      // 0.1 lamports per CU - elevated priority
+    veryHigh: 500_000,  // 0.5 lamports per CU - high priority
+    turbo: 1_000_000,   // 1 lamport per CU - TPU recommended minimum
+    max: 5_000_000,     // 5 lamports per CU - maximum priority for critical txs
 } as const;
 
 export type PriorityFeeLevel = keyof typeof PRIORITY_FEE_LEVELS;

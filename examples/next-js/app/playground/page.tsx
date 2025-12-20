@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,9 +23,12 @@ import {
     jitoBundleCode,
     useTpuDirectPipeline,
     tpuDirectCode,
+    type TpuSubmissionResult,
 } from '@/components/pipeline/examples';
 import { ConnectButton } from '@/components/connector';
 import { PipelineHeaderButton } from '@/components/pipeline/pipeline-header-button';
+import { TpuResultsPanel } from '@/components/pipeline';
+import { tpuEvents } from '@/lib/tpu-events';
 
 interface PipelineExampleConfig {
     id: string;
@@ -103,8 +106,46 @@ const pipelineExamples: PipelineExampleConfig[] = [
 
 function PipelineExampleCard({ example }: { example: PipelineExampleConfig }) {
     const [strategy, setStrategy] = useState<'auto' | 'batch' | 'sequential'>('auto');
+    const [tpuResult, setTpuResult] = useState<TpuSubmissionResult | null>(null);
+    const [tpuSending, setTpuSending] = useState(false);
 
     const visualPipeline = example.hook();
+    const isTpuExample = example.id === 'tpu-direct';
+
+    // Track pipeline state for TPU results
+    const isExecuting = visualPipeline.state === 'executing';
+
+    // Listen for TPU events from @pipeit/core
+    useEffect(() => {
+        if (!isTpuExample) return;
+
+        // Start listening for pipeit:tpu:* CustomEvents
+        tpuEvents.startIntercepting();
+
+        // Subscribe to TPU start events
+        const unsubStart = tpuEvents.onStart(() => {
+            console.log('🚀 TPU submission starting...');
+            setTpuSending(true);
+        });
+
+        // Subscribe to TPU results
+        const unsubResult = tpuEvents.onResult(result => {
+            console.log('📡 TPU Result received:', result);
+            setTpuResult(result);
+            setTpuSending(false);
+        });
+
+        return () => {
+            unsubStart();
+            unsubResult();
+            tpuEvents.stopIntercepting();
+        };
+    }, [isTpuExample]);
+
+    // Log pipeline state changes for debugging
+    useEffect(() => {
+        console.log('🔄 [Pipeline State]:', visualPipeline.state, '| Has TPU result:', !!tpuResult, '| tpuSending:', tpuSending);
+    }, [visualPipeline.state, tpuResult, tpuSending]);
 
     return (
         <section className="py-16 border-b border-sand-200 last:border-b-0">
@@ -138,6 +179,7 @@ function PipelineExampleCard({ example }: { example: PipelineExampleConfig }) {
                                             onClick={() => {
                                                 setStrategy(s);
                                                 visualPipeline.reset();
+                                                setTpuResult(null);
                                             }}
                                             className={cn(
                                                 index === 0 && 'rounded-r-none',
@@ -159,7 +201,10 @@ function PipelineExampleCard({ example }: { example: PipelineExampleConfig }) {
 
                         <TabsContent value="visualization" className="">
                             <Card
-                                className="border-sand-300 bg-sand-100/30 rounded-xl shadow-sm max-h-[340px] min-h-[340px]"
+                                className={cn(
+                                    'border-sand-300 bg-sand-100/30 rounded-xl shadow-sm overflow-visible',
+                                    isTpuExample ? 'min-h-[420px]' : 'max-h-[340px] min-h-[340px]'
+                                )}
                                 style={{
                                     backgroundImage: `repeating-linear-gradient(
                   45deg,
@@ -170,8 +215,20 @@ function PipelineExampleCard({ example }: { example: PipelineExampleConfig }) {
                 )`,
                                 }}
                             >
-                                <CardContent className="">
-                                    <PipelineVisualization visualPipeline={visualPipeline} strategy={strategy} />
+                                <CardContent className="flex flex-col h-full overflow-visible">
+                                    <div className={isTpuExample ? 'flex-1 min-h-[280px]' : ''}>
+                                        <PipelineVisualization visualPipeline={visualPipeline} strategy={strategy} />
+                                    </div>
+                                    
+                                    {/* TPU Results Panel */}
+                                    {isTpuExample && (
+                                        <div className="pt-4 pb-2">
+                                            <TpuResultsPanel 
+                                                result={tpuResult} 
+                                                isExecuting={isExecuting || tpuSending}
+                                            />
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         </TabsContent>

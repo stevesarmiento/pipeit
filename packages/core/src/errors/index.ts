@@ -9,6 +9,9 @@ export * from './errors.js';
 export * from './predicates.js';
 export * from './messages.js';
 
+// TPU-specific errors
+export * from './tpu-errors.js';
+
 // Kit errors (re-exported for convenience)
 export * from './kit-errors.js';
 
