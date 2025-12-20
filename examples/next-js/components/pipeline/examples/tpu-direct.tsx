@@ -68,7 +68,7 @@ export function useTpuDirectPipeline() {
                 execution: {
                     tpu: {
                         enabled: true,
-                        fanout: 6, // Balanced fanout
+                        fanout: 8,
                         apiRoute: '/api/tpu',
                     },
                 },
@@ -84,10 +84,9 @@ export function useTpuDirectPipeline() {
 
                 const { TransactionBuilder } = await import('@pipeit/core');
 
-                // 'high' = 2.5 lamports/CU - balanced cost/speed
                 const signature = await new TransactionBuilder({
                     rpc: ctx.rpc,
-                    priorityFee: 'high', // Balanced priority fee
+                    priorityFee: 'high',
                 })
                     .setFeePayerSigner(ctx.signer)
                     .addInstruction(instruction)
@@ -97,7 +96,7 @@ export function useTpuDirectPipeline() {
                         execution: {
                             tpu: {
                                 enabled: true,
-                                fanout: 6, // Balanced fanout
+                                fanout: 8,
                                 apiRoute: '/api/tpu',
                             },
                         },

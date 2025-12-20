@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::errors::{classify_error, is_retryable_error, TpuErrorCode};
-use crate::tracker::LeaderTracker;
+use crate::tracker::{LeaderInfo, LeaderTracker};
 
 /// ALPN protocol identifier for Solana TPU.
 const ALPN_TPU_PROTOCOL_ID: &[u8] = b"solana-tpu";
@@ -329,6 +329,106 @@ impl TpuConnectionManager {
                 "Failed to send transaction to any leader ({} attempted, {} total retries)",
                 leaders.len(),
                 total_retries
+            ));
+        }
+
+        Ok(DeliveryResult {
+            delivered,
+            latency_ms: start.elapsed().as_millis() as u64,
+            leader_count: success_count,
+            leaders: leader_results,
+            total_retries,
+        })
+    }
+
+    /// Sends a transaction to specific leaders (slot-aware selection).
+    /// 
+    /// This method accepts an explicit list of leaders instead of using
+    /// fanout-based discovery. Used by slot-aware sending strategy which
+    /// determines the optimal leaders based on current slot position.
+    ///
+    /// # Arguments
+    ///
+    /// * `tx_data` - Serialized transaction bytes
+    /// * `leaders` - Explicit list of leaders to send to
+    ///
+    /// # Returns
+    ///
+    /// Delivery result with per-leader breakdown.
+    pub async fn send_to_leaders(&self, tx_data: &[u8], leaders: &[LeaderInfo]) -> Result<DeliveryResult> {
+        if leaders.is_empty() {
+            return Err(anyhow!("No leaders provided"));
+        }
+
+        let start = Instant::now();
+
+        // Create channel to receive results as they complete
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<LeaderDeliveryResult>(leaders.len());
+
+        // Spawn all send tasks
+        for leader in leaders {
+            let tx_data = tx_data.to_vec();
+            let tpu_socket = leader.tpu_socket.clone();
+            let identity = leader.identity.clone();
+            let manager = self.clone();
+            let result_tx = tx.clone();
+
+            tokio::spawn(async move {
+                let result = manager
+                    .send_to_leader_with_retry(&tx_data, &tpu_socket, &identity)
+                    .await;
+                let _ = result_tx.send(result).await;
+            });
+        }
+
+        drop(tx);
+
+        // Collect results with timeout
+        let mut leader_results = Vec::with_capacity(leaders.len());
+        let mut success_count = 0;
+        let mut total_retries = 0;
+
+        let collect_timeout = Duration::from_millis(800);
+        let collect_start = std::time::Instant::now();
+
+        while let Ok(Some(result)) = tokio::time::timeout(
+            collect_timeout.saturating_sub(collect_start.elapsed()),
+            rx.recv()
+        ).await {
+            if result.attempts > 1 {
+                total_retries += result.attempts - 1;
+            }
+
+            if result.success {
+                eprintln!(
+                    "[TPU] ✅ Sent to {} at {} ({}ms)",
+                    &result.identity[..8.min(result.identity.len())],
+                    result.address,
+                    result.latency_ms
+                );
+                success_count += 1;
+            } else {
+                eprintln!(
+                    "[TPU] ❌ Failed {} at {}: {}",
+                    &result.identity[..8.min(result.identity.len())],
+                    result.address,
+                    result.error.as_deref().unwrap_or("unknown")
+                );
+            }
+
+            leader_results.push(result);
+
+            if leader_results.len() >= leaders.len() {
+                break;
+            }
+        }
+
+        let delivered = success_count > 0;
+
+        if !delivered {
+            return Err(anyhow!(
+                "Failed to send transaction to any leader ({} attempted)",
+                leaders.len()
             ));
         }
 

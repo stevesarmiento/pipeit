@@ -97,6 +97,49 @@ impl LeaderTracker {
         self.slots_tracker.read().await.current_slot()
     }
 
+    /// Get slot position within leader's 4-slot window (0-3).
+    /// 
+    /// Solana leaders get 4 consecutive slots (NUM_CONSECUTIVE_LEADER_SLOTS = 4).
+    /// This returns which slot within that window we're currently in:
+    /// - 0, 1, 2: Early/middle slots - current leader is likely to process
+    /// - 3: Last slot - hedge by also sending to next leader
+    pub fn get_slot_position(slot: u64) -> u8 {
+        (slot % 4) as u8
+    }
+
+    /// Get leaders using slot-aware strategy to minimize tx leakage.
+    /// 
+    /// Strategy:
+    /// - Slots 0-2 of leader window: returns current leader only (fanout = 1)
+    /// - Slot 3 of leader window: returns current + next leader (fanout = 2)
+    /// 
+    /// This achieves the same landing rate as high fanout but with minimal
+    /// transaction leakage (fewer validators see the transaction).
+    pub async fn get_slot_aware_leaders(&self) -> (Vec<LeaderInfo>, u8) {
+        let current_slot = self.current_slot().await;
+        
+        // If slot is 0, we can't determine position - caller should fallback
+        if current_slot == 0 {
+            return (vec![], 0);
+        }
+        
+        let slot_position = Self::get_slot_position(current_slot);
+        
+        // Last slot of leader's window (position 3) - include next leader as hedge
+        // Otherwise, just send to current leader
+        let num_leaders = if slot_position == 3 { 2 } else { 1 };
+        
+        // Look ahead enough slots to find the required number of unique leaders
+        // Each leader has 4 slots, so for 2 leaders we need to look at 8 slots
+        let lookahead = num_leaders as u64 * 4;
+        let leaders = self.get_future_leaders(0, lookahead).await;
+        
+        // Take only the number of leaders we need
+        let leaders: Vec<LeaderInfo> = leaders.into_iter().take(num_leaders).collect();
+        
+        (leaders, slot_position)
+    }
+
     /// Returns the number of validators with known socket addresses.
     pub async fn validator_count(&self) -> usize {
         self.leader_sockets.read().await.len()

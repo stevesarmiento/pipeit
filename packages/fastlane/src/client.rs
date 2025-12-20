@@ -290,9 +290,11 @@ impl TpuClient {
 
     /// Sends a transaction continuously until confirmed or timeout.
     ///
-    /// This method sends the transaction to fresh leaders every ~400ms (one slot)
-    /// and checks for confirmation in parallel. This achieves 90%+ landing rates
-    /// similar to yellowstone-jet and Jito.
+    /// Uses slot-aware leader selection to minimize tx leakage:
+    /// - Slots 0-2 of leader window: sends to current leader only
+    /// - Slot 3 of leader window: sends to current + next leader (hedge)
+    ///
+    /// Falls back to fixed fanout if slot estimation is unreliable.
     ///
     /// # Arguments
     /// * `transaction` - Serialized signed transaction
@@ -326,9 +328,10 @@ impl TpuClient {
         };
         
         let signature_str = signature.to_string();
-        eprintln!("[TPU] 🔄 Starting continuous send until confirmed");
+        eprintln!("[TPU] 🔄 Starting slot-aware send until confirmed");
         eprintln!("[TPU] 📝 Signature: {}", &signature_str[..16]);
         eprintln!("[TPU] ⏱️  Timeout: {}ms", timeout.as_millis());
+        eprintln!("[TPU] 🎯 Strategy: slot-aware (1 leader for slots 0-2, 2 leaders for slot 3)");
         
         let mut rounds = 0u32;
         let mut total_leaders_sent = 0u32;
@@ -338,21 +341,33 @@ impl TpuClient {
         while start.elapsed() < timeout {
             rounds += 1;
             
-            // 1. Send to current leaders
-            let send_result = self.connection_manager
-                .send_transaction_with_fanout(&tx_data, self.fanout)
-                .await;
+            // 1. Get slot-aware leaders (1 or 2 based on slot position)
+            let (leaders, slot_position) = self.leader_tracker.get_slot_aware_leaders().await;
+            
+            // Fallback to fixed fanout if slot estimation is unreliable
+            let send_result = if leaders.is_empty() {
+                eprintln!(
+                    "[TPU] ⚠️ Round {}: slot unreliable, falling back to fanout {}",
+                    rounds, self.fanout
+                );
+                self.connection_manager
+                    .send_transaction_with_fanout(&tx_data, self.fanout)
+                    .await
+            } else {
+                let current_slot = self.leader_tracker.current_slot().await;
+                let hedge_indicator = if slot_position == 3 { " (hedging)" } else { "" };
+                eprintln!(
+                    "[TPU] 📤 Round {}: slot {} (pos {}/4) -> {} leader(s){}",
+                    rounds, current_slot, slot_position, leaders.len(), hedge_indicator
+                );
+                self.connection_manager
+                    .send_to_leaders(&tx_data, &leaders)
+                    .await
+            };
             
             match &send_result {
                 Ok(result) => {
                     total_leaders_sent += result.leader_count as u32;
-                    eprintln!(
-                        "[TPU] 📤 Round {}: sent to {}/{} leaders (total: {})",
-                        rounds,
-                        result.leader_count,
-                        self.fanout,
-                        total_leaders_sent
-                    );
                 }
                 Err(e) => {
                     eprintln!("[TPU] ⚠️ Round {}: send failed: {}", rounds, e);

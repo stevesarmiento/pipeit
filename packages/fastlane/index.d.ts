@@ -92,9 +92,11 @@ export declare class TpuClient {
   /**
    * Sends a transaction continuously until confirmed or timeout.
    *
-   * This method sends the transaction to fresh leaders every ~400ms (one slot)
-   * and checks for confirmation in parallel. This achieves 90%+ landing rates
-   * similar to yellowstone-jet and Jito.
+   * Uses slot-aware leader selection to minimize tx leakage:
+   * - Slots 0-2 of leader window: sends to current leader only
+   * - Slot 3 of leader window: sends to current + next leader (hedge)
+   *
+   * Falls back to fixed fanout if slot estimation is unreliable.
    *
    * # Arguments
    * * `transaction` - Serialized signed transaction
