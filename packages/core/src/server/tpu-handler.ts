@@ -34,17 +34,29 @@ export interface TpuHandlerRequest {
  */
 export interface TpuHandlerResponse {
     /**
-     * Whether the transaction was successfully delivered to leaders.
+     * Whether the transaction was confirmed on-chain.
+     * This is the definitive success indicator.
      */
-    delivered: boolean;
+    confirmed: boolean;
 
     /**
-     * Number of leaders the transaction was sent to.
+     * Transaction signature (base58).
      */
-    leaderCount: number;
+    signature: string;
 
     /**
-     * Time taken to submit the transaction in milliseconds.
+     * Number of send rounds attempted.
+     * Each round sends to fresh leaders as slots progress.
+     */
+    rounds: number;
+
+    /**
+     * Total number of leader sends across all rounds.
+     */
+    totalLeadersSent: number;
+
+    /**
+     * Time taken in milliseconds.
      */
     latencyMs: number;
 
@@ -52,6 +64,16 @@ export interface TpuHandlerResponse {
      * Error message if submission failed.
      */
     error?: string;
+
+    /**
+     * @deprecated Use `confirmed` instead. Kept for backwards compatibility.
+     */
+    delivered?: boolean;
+
+    /**
+     * @deprecated Use `totalLeadersSent` instead.
+     */
+    leaderCount?: number;
 }
 
 // Singleton TPU client instance
@@ -65,8 +87,34 @@ interface TpuClientInstance {
         delivered: boolean;
         leaderCount: number;
         latencyMs: number;
+        leaders: Array<{
+            identity: string;
+            address: string;
+            success: boolean;
+            latencyMs: number;
+            error?: string;
+            errorCode?: string;
+            attempts: number;
+        }>;
+        retryCount: number;
+    }>;
+    sendUntilConfirmed: (tx: Buffer, timeoutMs?: number) => Promise<{
+        confirmed: boolean;
+        signature: string;
+        rounds: number;
+        totalLeadersSent: number;
+        latencyMs: number;
+        error?: string;
     }>;
     waitReady: () => Promise<void>;
+    getStats: () => Promise<{
+        connectionCount: number;
+        currentSlot: number;
+        endpointCount: number;
+        readyState: string;
+        uptimeSecs: number;
+        knownValidators: number;
+    }>;
     shutdown: () => void;
 }
 
@@ -152,6 +200,53 @@ async function getTpuClient(config: { rpcUrl: string; wsUrl: string; fanout: num
 }
 
 /**
+ * Wait for the TPU client to have enough known validators.
+ * 
+ * The client may be "ready" (slot listener started) but not have
+ * leader sockets populated yet. This function waits until enough
+ * validators are known or times out.
+ * 
+ * @param client - TPU client instance
+ * @param minValidators - Minimum number of validators required (default: 10)
+ * @param timeoutMs - Maximum time to wait in milliseconds (default: 10000)
+ * @returns True if enough validators are available, false if timed out
+ */
+async function waitForValidators(
+    client: TpuClientInstance, 
+    minValidators = 10,
+    timeoutMs = 10000
+): Promise<boolean> {
+    const startTime = Date.now();
+    const pollInterval = 200;
+    let lastValidatorCount = 0;
+
+    while (Date.now() - startTime < timeoutMs) {
+        try {
+            const stats = await client.getStats();
+            if (stats.knownValidators !== lastValidatorCount) {
+                console.log(`[TPU] Validators discovered: ${stats.knownValidators} (need ${minValidators}+)`);
+                lastValidatorCount = stats.knownValidators;
+            }
+            
+            // Need enough validators for good landing rate
+            if (stats.knownValidators >= minValidators && stats.readyState === 'ready') {
+                console.log(`[TPU] ✅ Ready with ${stats.knownValidators} known validators`);
+                return true;
+            }
+        } catch {
+            // Stats not available yet, continue polling
+        }
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    console.warn(
+        `[TPU] ⚠️ Timeout waiting for validators. Only ${lastValidatorCount} known (wanted ${minValidators}+). ` +
+        `This may reduce landing rate.`
+    );
+    return false;
+}
+
+/**
  * Resolve TPU configuration from request and environment variables.
  */
 function resolveConfig(requestConfig?: TpuHandlerRequest['config']): {
@@ -170,7 +265,8 @@ function resolveConfig(requestConfig?: TpuHandlerRequest['config']): {
     // Derive WebSocket URL from RPC URL if not provided
     const wsUrl = requestConfig?.wsUrl || process.env.SOLANA_WS_URL || process.env.WS_URL || deriveWsUrl(rpcUrl);
 
-    const fanout = requestConfig?.fanout ?? 2;
+    // Default to 4 leaders for better landing rates
+    const fanout = requestConfig?.fanout ?? 4;
 
     return { rpcUrl, wsUrl, fanout };
 }
@@ -227,10 +323,15 @@ export async function tpuHandler(
         if (!body.transaction) {
             return Response.json(
                 {
+                    confirmed: false,
+                    signature: '',
+                    rounds: 0,
+                    totalLeadersSent: 0,
+                    latencyMs: 0,
                     error: 'Missing transaction in request body',
+                    // Backwards compatibility
                     delivered: false,
                     leaderCount: 0,
-                    latencyMs: 0,
                 } satisfies TpuHandlerResponse,
                 { status: 400 },
             );
@@ -245,42 +346,85 @@ export async function tpuHandler(
         // Get or create TPU client
         const client = await getTpuClient(config);
 
+        // Wait for validators to be available before sending
+        // This prevents "No leaders available" errors on first requests
+        // We need at least fanout * 2 validators for good leader discovery
+        const minValidators = config.fanout * 2;
+        const hasValidators = await waitForValidators(client, minValidators, 10000);
+        if (!hasValidators) {
+            console.warn(`[TPU] ⚠️ Proceeding with limited validators - landing rate may be reduced`);
+        }
+
         // Convert base64 transaction to Buffer
         const txBuffer = Buffer.from(body.transaction, 'base64');
 
-        const startTime = performance.now();
+        // Get stats for logging
+        let stats: { knownValidators: number; currentSlot: number } | null = null;
+        try {
+            stats = await client.getStats();
+        } catch {
+            // Stats not available
+        }
 
         console.log('\n┌─────────────────────────────────────────────────────────────┐');
-        console.log('│ 🚀 TPU DIRECT SUBMISSION                                    │');
+        console.log('│ 🚀 TPU CONTINUOUS SUBMISSION (until confirmed)              │');
         console.log('├─────────────────────────────────────────────────────────────┤');
         console.log(`│ Protocol: QUIC (native)                                     │`);
-        console.log(`│ Target: Validator TPU endpoints                             │`);
+        console.log(`│ Mode: Send until confirmed                                   │`);
         console.log(`│ Transaction size: ${txBuffer.length} bytes`.padEnd(62) + '│');
-
-        // Send transaction
-        const result = await client.sendTransaction(txBuffer);
-
-        const latencyMs = Math.round(performance.now() - startTime);
-
-        console.log(`│ Leaders reached: ${result.leaderCount}`.padEnd(62) + '│');
-        console.log(`│ Delivery: ${result.delivered ? '✅ SUCCESS' : '❌ FAILED'}`.padEnd(62) + '│');
-        console.log(`│ Latency: ${latencyMs}ms`.padEnd(62) + '│');
+        console.log(`│ Configured fanout: ${config.fanout}`.padEnd(62) + '│');
+        console.log(`│ Timeout: 30 seconds                                         │`);
+        if (stats) {
+            console.log(`│ Known validators: ${stats.knownValidators}`.padEnd(62) + '│');
+            console.log(`│ Current slot: ${stats.currentSlot}`.padEnd(62) + '│');
+        }
         console.log('└─────────────────────────────────────────────────────────────┘\n');
 
-        return Response.json({
-            delivered: result.delivered,
-            leaderCount: result.leaderCount,
-            latencyMs,
-        } satisfies TpuHandlerResponse);
+        // Send transaction continuously until confirmed (30 second timeout)
+        const result = await client.sendUntilConfirmed(txBuffer, 30000);
+
+        console.log('\n┌─────────────────────────────────────────────────────────────┐');
+        console.log(`│ Result: ${result.confirmed ? '✅ CONFIRMED ON-CHAIN' : '❌ NOT CONFIRMED'}`.padEnd(61) + '│');
+        console.log(`│ Signature: ${result.signature.slice(0, 20)}...`.padEnd(62) + '│');
+        console.log(`│ Rounds: ${result.rounds}`.padEnd(62) + '│');
+        console.log(`│ Total leaders sent: ${result.totalLeadersSent}`.padEnd(62) + '│');
+        console.log(`│ Latency: ${result.latencyMs}ms`.padEnd(62) + '│');
+        if (result.error) {
+            console.log(`│ Error: ${result.error.slice(0, 50)}`.padEnd(62) + '│');
+        }
+        console.log('└─────────────────────────────────────────────────────────────┘\n');
+
+        // Build response with backwards compatibility
+        const response: TpuHandlerResponse = {
+            confirmed: result.confirmed,
+            signature: result.signature,
+            rounds: result.rounds,
+            totalLeadersSent: result.totalLeadersSent,
+            latencyMs: result.latencyMs,
+            // Backwards compatibility
+            delivered: result.confirmed,
+            leaderCount: result.totalLeadersSent,
+        };
+        
+        if (result.error) {
+            response.error = result.error;
+        }
+
+        return Response.json(response);
     } catch (error) {
         console.error('TPU handler error:', error);
 
         return Response.json(
             {
+                confirmed: false,
+                signature: '',
+                rounds: 0,
+                totalLeadersSent: 0,
+                latencyMs: 0,
                 error: error instanceof Error ? error.message : String(error),
+                // Backwards compatibility
                 delivered: false,
                 leaderCount: 0,
-                latencyMs: 0,
             } satisfies TpuHandlerResponse,
             { status: 500 },
         );

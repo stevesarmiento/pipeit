@@ -483,7 +483,8 @@ function printResults(results: BenchmarkResult[], txCount: number): void {
 
     console.log('\nNotes:');
     console.log('  • Send time = network request + confirmation wait');
-    console.log('  • TPU send is fire-and-forget (faster but reports "delivered" not "confirmed")');
+    console.log('  • TPU sends to 4 leaders IN PARALLEL via QUIC (fire-and-forget)');
+    console.log('  • TPU reports "delivered" to leader, not "confirmed" on chain');
     console.log('  • Set TX_COUNT env var to change number of transactions (default: 5)');
 
     // Print sample signatures for verification
@@ -568,12 +569,13 @@ async function main(): Promise<void> {
         const tpuClientInstance = new TpuClient({
             rpcUrl: heliusRpcUrl,
             wsUrl: heliusWsUrl,
-            fanout: 2,
+            fanout: 4, // Send to 4 leaders in parallel for better landing rates
         });
         await tpuClientInstance.waitReady();
         tpuWarmupTime = Math.round(performance.now() - tpuStart);
         tpuClient = tpuClientInstance as TpuClientInstance;
-        console.log(`  TPU client ready (warmup took ${tpuWarmupTime}ms)\n`);
+        console.log(`  TPU client ready (warmup took ${tpuWarmupTime}ms)`);
+        console.log(`  Fanout: 4 leaders (parallel sends)\n`);
     } catch (error) {
         console.log(`  TPU client unavailable: ${(error as Error).message}\n`);
     }
@@ -581,11 +583,12 @@ async function main(): Promise<void> {
     // Run all strategies IN PARALLEL for accurate timing comparison
     console.log(`Running benchmark with ${TX_COUNT} transactions per strategy...\n`);
 
-    const [heliusResult, tritonResult, quicknodeResult, tpuResult] = await Promise.all([
+    const [heliusResult, tritonResult, quicknodeResult, tpuResult, jitoResult] = await Promise.all([
         runSimpleTransfer(heliusRpc, heliusRpcSubscriptions, signer, 'Helius RPC', TX_COUNT),
         runSimpleTransfer(tritonRpc, tritonRpcSubscriptions, signer, 'Triton RPC', TX_COUNT),
         runSimpleTransfer(quicknodeRpc, quicknodeRpcSubscriptions, signer, 'QuickNode RPC', TX_COUNT),
         runTpuDirect(heliusRpc, signer, tpuClient, TX_COUNT),
+        runJitoBundle(heliusRpc, heliusRpcSubscriptions, signer, TX_COUNT),
     ]);
 
     // Shutdown TPU client
@@ -593,7 +596,7 @@ async function main(): Promise<void> {
         (tpuClient as any).shutdown?.();
     }
 
-    const results: BenchmarkResult[] = [heliusResult, tritonResult, quicknodeResult, tpuResult];
+    const results: BenchmarkResult[] = [heliusResult, tritonResult, quicknodeResult, tpuResult, jitoResult];
 
     // Print comparison table
     printResults(results, TX_COUNT);

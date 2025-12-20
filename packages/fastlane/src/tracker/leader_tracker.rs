@@ -29,6 +29,16 @@ pub struct LeaderInfo {
     pub slot: Slot,
 }
 
+/// TPU socket addresses for a validator.
+/// Stores both normal and forwards ports for flexible routing.
+#[derive(Debug, Clone)]
+pub struct TpuSockets {
+    /// Standard TPU QUIC socket address.
+    pub tpu_socket: Option<String>,
+    /// TPU forwards QUIC socket address (preferred by validators).
+    pub tpu_forwards_socket: Option<String>,
+}
+
 /// Coordinates leader tracking for TPU transaction routing.
 ///
 /// Responsibilities:
@@ -47,8 +57,8 @@ pub struct LeaderTracker {
     pub slots_tracker: RwLock<SlotsTracker>,
     /// Leader schedule tracker.
     schedule_tracker: RwLock<ScheduleTracker>,
-    /// Maps validator identity -> TPU socket address.
-    leader_sockets: RwLock<HashMap<String, String>>,
+    /// Maps validator identity -> TPU socket addresses (normal + forwards).
+    leader_sockets: RwLock<HashMap<String, TpuSockets>>,
     /// Whether the tracker is ready.
     ready: RwLock<bool>,
 }
@@ -87,7 +97,76 @@ impl LeaderTracker {
         self.slots_tracker.read().await.current_slot()
     }
 
+    /// Refreshes the current slot from RPC when WebSocket is stale.
+    /// 
+    /// This is a fallback mechanism when the WebSocket subscription lags
+    /// and the slot tracker reports the same slot for multiple rounds.
+    pub async fn refresh_slot_from_rpc(&self) -> Result<Slot> {
+        let rpc_client = RpcClient::new(self.rpc_url.clone());
+        let slot = rpc_client
+            .get_slot()
+            .await
+            .context("Failed to fetch slot from RPC")?;
+        
+        // Update the slots tracker with this fresh value
+        let mut tracker = self.slots_tracker.write().await;
+        tracker.record(SlotEvent::Start(slot));
+        
+        Ok(slot)
+    }
+
+    /// Get slot position within leader's 4-slot window (0-3).
+    /// 
+    /// Solana leaders get 4 consecutive slots (NUM_CONSECUTIVE_LEADER_SLOTS = 4).
+    /// This returns which slot within that window we're currently in:
+    /// - 0, 1, 2: Early/middle slots - current leader is likely to process
+    /// - 3: Last slot - hedge by also sending to next leader
+    pub fn get_slot_position(slot: u64) -> u8 {
+        (slot % 4) as u8
+    }
+
+    /// Get leaders using slot-aware strategy to minimize tx leakage.
+    /// 
+    /// Strategy:
+    /// - Slots 0-2 of leader window: returns current leader only (fanout = 1)
+    /// - Slot 3 of leader window: returns current + next leader (fanout = 2)
+    /// 
+    /// This achieves the same landing rate as high fanout but with minimal
+    /// transaction leakage (fewer validators see the transaction).
+    pub async fn get_slot_aware_leaders(&self) -> (Vec<LeaderInfo>, u8) {
+        let current_slot = self.current_slot().await;
+        
+        // If slot is 0, we can't determine position - caller should fallback
+        if current_slot == 0 {
+            return (vec![], 0);
+        }
+        
+        let slot_position = Self::get_slot_position(current_slot);
+        
+        // Last slot of leader's window (position 3) - include next leader as hedge
+        // Otherwise, just send to current leader
+        let num_leaders = if slot_position == 3 { 2 } else { 1 };
+        
+        // Look ahead enough slots to find the required number of unique leaders
+        // Each leader has 4 slots, so for 2 leaders we need to look at 8 slots
+        let lookahead = num_leaders as u64 * 4;
+        let leaders = self.get_future_leaders(0, lookahead).await;
+        
+        // Take only the number of leaders we need
+        let leaders: Vec<LeaderInfo> = leaders.into_iter().take(num_leaders).collect();
+        
+        (leaders, slot_position)
+    }
+
+    /// Returns the number of validators with known socket addresses.
+    pub async fn validator_count(&self) -> usize {
+        self.leader_sockets.read().await.len()
+    }
+
     /// Gets upcoming leaders for transaction routing.
+    ///
+    /// Prefers TPU forwards port (recommended by validators), falling back
+    /// to normal TPU port if forwards is not available.
     ///
     /// # Arguments
     ///
@@ -106,6 +185,7 @@ impl LeaderTracker {
         let curr_slot = slot_tracker.current_slot();
 
         if curr_slot == 0 {
+            eprintln!("[TPU] ⚠️ Current slot is 0, cannot determine leaders");
             return vec![];
         }
 
@@ -113,8 +193,8 @@ impl LeaderTracker {
         if curr_slot < schedule_tracker.current_epoch_slot_start()
             || curr_slot >= schedule_tracker.next_epoch_slot_start()
         {
-            warn!(
-                "Current slot {} is outside epoch range [{}, {})",
+            eprintln!(
+                "[TPU] ⚠️ Current slot {} is outside epoch range [{}, {})",
                 curr_slot,
                 schedule_tracker.current_epoch_slot_start(),
                 schedule_tracker.next_epoch_slot_start()
@@ -124,6 +204,8 @@ impl LeaderTracker {
 
         let mut leaders = Vec::new();
         let mut seen = HashSet::new();
+        let mut missing_sockets = 0;
+        let mut no_usable_address = 0;
 
         for i in start..end {
             let target_slot = match curr_slot.checked_add(i) {
@@ -150,32 +232,109 @@ impl LeaderTracker {
                 }
 
                 match leader_sockets.get(leader_pubkey) {
-                    Some(socket) => {
-                        leaders.push(LeaderInfo {
-                            identity: leader_pubkey.to_string(),
-                            tpu_socket: socket.clone(),
-                            slot: curr_slot,
-                        });
+                    Some(sockets) => {
+                        // Prefer forwards port, fall back to normal TPU port
+                        let socket = sockets
+                            .tpu_forwards_socket
+                            .as_ref()
+                            .or(sockets.tpu_socket.as_ref());
+
+                        if let Some(s) = socket {
+                            leaders.push(LeaderInfo {
+                                identity: leader_pubkey.to_string(),
+                                tpu_socket: s.clone(),
+                                slot: curr_slot,
+                            });
+                        } else {
+                            no_usable_address += 1;
+                            eprintln!(
+                                "[TPU] ⚠️ Leader {}... has socket entry but no usable address",
+                                &leader_pubkey[..8]
+                            );
+                        }
                     }
                     None => {
-                        debug!("Leader {} has no known socket address", leader_pubkey);
+                        missing_sockets += 1;
+                        // Only print first few to avoid spam
+                        if missing_sockets <= 3 {
+                            eprintln!(
+                                "[TPU] ⚠️ Leader {}... for slot {} not in cluster nodes",
+                                &leader_pubkey[..8],
+                                target_slot
+                            );
+                        }
                     }
                 }
             }
         }
 
+        // Summary logging if we had issues
+        if missing_sockets > 3 {
+            eprintln!(
+                "[TPU] ⚠️ ...and {} more leaders missing from cluster nodes (total: {})",
+                missing_sockets - 3,
+                missing_sockets
+            );
+        }
+        if missing_sockets > 0 || no_usable_address > 0 {
+            eprintln!(
+                "[TPU] 📊 Leader lookup summary: found={}, missing_sockets={}, no_usable_addr={}",
+                leaders.len(),
+                missing_sockets,
+                no_usable_address
+            );
+        }
+
         leaders
     }
 
-    /// Gets the current leader and next leader (if close to leader switch).
+    /// Gets upcoming leaders for transaction routing.
     ///
     /// This is the main method for transaction routing.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `fanout` - Number of upcoming leaders to target (default: 4)
     pub async fn get_leaders(&self) -> Vec<LeaderInfo> {
-        self.get_future_leaders(0, 2).await
+        // Default to 4 leaders for better landing rates
+        self.get_leaders_with_fanout(4).await
+    }
+
+    /// Gets upcoming leaders with configurable fanout.
+    ///
+    /// # Arguments
+    /// 
+    /// * `fanout` - Number of upcoming leaders to target
+    pub async fn get_leaders_with_fanout(&self, fanout: u32) -> Vec<LeaderInfo> {
+        // Look ahead by fanout * 4 slots to capture enough unique leaders.
+        // Validators can have up to 4 consecutive slots (NUM_CONSECUTIVE_LEADER_SLOTS),
+        // so with fanout=4 we need to look at least 16 slots ahead to find 4 unique leaders.
+        let leaders = self.get_future_leaders(0, fanout as u64 * 4).await;
+        
+        // Always log leader discovery results (this is important for debugging)
+        if (leaders.len() as u32) < fanout {
+            let sockets_count = self.leader_sockets.read().await.len();
+            eprintln!(
+                "[TPU] ⚠️ LOW LEADER COUNT: Found {} leaders (wanted {}). \
+                Sockets available: {}. Check logs above for missing validators.",
+                leaders.len(),
+                fanout,
+                sockets_count
+            );
+        } else {
+            eprintln!(
+                "[TPU] ✅ Found {} leaders for fanout {}",
+                leaders.len(),
+                fanout
+            );
+        }
+        
+        leaders
     }
 
     /// Updates the leader socket addresses from cluster nodes.
     ///
+    /// Fetches both normal TPU QUIC and TPU forwards QUIC addresses.
     /// Should be called periodically (e.g., every 60 seconds) as
     /// validator IPs can change.
     pub async fn update_leader_sockets(&self) -> Result<()> {
@@ -189,16 +348,40 @@ impl LeaderTracker {
         let mut new_sockets = HashMap::new();
 
         for node in nodes {
-            if let (Some(tpu_quic), Some(gossip)) = (node.tpu_quic, node.gossip) {
-                // TPU QUIC uses the gossip IP with the TPU QUIC port
-                new_sockets.insert(
-                    node.pubkey.to_string(),
-                    format!("{}:{}", gossip.ip(), tpu_quic.port()),
-                );
+            if let Some(gossip) = node.gossip {
+                let ip = gossip.ip();
+
+                // Standard TPU QUIC socket
+                let tpu_socket = node.tpu_quic.map(|addr| format!("{}:{}", ip, addr.port()));
+
+                // TPU forwards QUIC socket (preferred by validators)
+                let tpu_forwards_socket = node
+                    .tpu_forwards_quic
+                    .map(|addr| format!("{}:{}", ip, addr.port()));
+
+                // Only add if at least one socket is available
+                if tpu_socket.is_some() || tpu_forwards_socket.is_some() {
+                    new_sockets.insert(
+                        node.pubkey.to_string(),
+                        TpuSockets {
+                            tpu_socket,
+                            tpu_forwards_socket,
+                        },
+                    );
+                }
             }
         }
 
-        info!("Updated sockets for {} validators", new_sockets.len());
+        // Count validators with each type of socket
+        let with_forwards = new_sockets.values().filter(|s| s.tpu_forwards_socket.is_some()).count();
+        let with_tpu = new_sockets.values().filter(|s| s.tpu_socket.is_some()).count();
+        
+        info!(
+            "📡 Updated sockets for {} validators ({} with forwards, {} with tpu)",
+            new_sockets.len(),
+            with_forwards,
+            with_tpu
+        );
 
         let mut sockets = self.leader_sockets.write().await;
         *sockets = new_sockets;
@@ -206,10 +389,27 @@ impl LeaderTracker {
         Ok(())
     }
 
-    /// Starts the slot updates listener.
+    /// Starts the slot updates listener with automatic reconnection.
     ///
-    /// This should be spawned as a background task.
+    /// This should be spawned as a background task. If the WebSocket
+    /// connection drops, it will automatically reconnect after a short delay.
     pub async fn run_slot_listener(self: Arc<Self>) -> Result<()> {
+        loop {
+            match self.run_slot_listener_inner().await {
+                Ok(_) => {
+                    warn!("WebSocket slot listener ended unexpectedly, reconnecting...");
+                }
+                Err(e) => {
+                    error!("WebSocket error: {}, reconnecting in 1s...", e);
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
+    }
+
+    /// Inner slot listener that handles the WebSocket connection.
+    /// Returns when the connection ends (either normally or due to error).
+    async fn run_slot_listener_inner(&self) -> Result<()> {
         let ws_client = PubsubClient::new(&self.ws_url)
             .await
             .context("Failed to connect to WebSocket")?;
@@ -233,6 +433,7 @@ impl LeaderTracker {
             }
         }
 
+        // Stream ended - will trigger reconnect in the outer loop
         Ok(())
     }
 

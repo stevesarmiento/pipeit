@@ -459,6 +459,9 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
     
     // 2. Priority fee / compute unit price
     const priorityFee = await this.resolvePriorityFee();
+    if (this.config.logLevel !== 'silent') {
+      console.log(`[Pipeit] Priority fee: ${priorityFee.toLocaleString()} micro-lamports/CU (${(priorityFee / 1_000_000).toFixed(3)} lamports/CU)`);
+    }
     if (priorityFee > 0) {
       message = appendTransactionMessageInstruction(
         createSetComputeUnitPriceInstruction(priorityFee),
@@ -747,17 +750,19 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
     // Get base64 encoded transaction for execution strategies
     const base64Tx = getBase64EncodedWireTransaction(signedTransaction);
     
-    // Check if we should use execution strategies (Jito or parallel enabled)
-    const useExecutionStrategy = executionConfig.jito.enabled || executionConfig.parallel.enabled;
+    // Check if we should use execution strategies (Jito, parallel, or TPU enabled)
+    const useExecutionStrategy = executionConfig.jito.enabled || executionConfig.parallel.enabled || executionConfig.tpu.enabled;
     
     if (useExecutionStrategy) {
       // Use execution strategy
       if (this.config.logLevel !== 'silent') {
-        const strategyName = executionConfig.jito.enabled && executionConfig.parallel.enabled
-          ? 'Jito + Parallel'
-          : executionConfig.jito.enabled
-            ? 'Jito'
-            : 'Parallel';
+        const strategyName = executionConfig.tpu.enabled
+          ? 'TPU Direct'
+          : executionConfig.jito.enabled && executionConfig.parallel.enabled
+            ? 'Jito + Parallel'
+            : executionConfig.jito.enabled
+              ? 'Jito'
+              : 'Parallel';
         console.log(`[Pipeit] Using ${strategyName} execution strategy`);
       }
       
@@ -772,12 +777,43 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         ...(params.abortSignal && { abortSignal: params.abortSignal }),
       });
       
-      if (this.config.logLevel !== 'silent') {
-        console.log(`[Pipeit] Transaction landed via ${result.landedVia}${result.latencyMs ? ` in ${result.latencyMs}ms` : ''}`);
+      // For TPU with continuous resubmission, confirmation happens server-side
+      if (result.landedVia === 'tpu') {
+        if (this.config.logLevel !== 'silent') {
+          if (result.confirmed) {
+            console.log(
+              `[Pipeit] ✅ Transaction CONFIRMED on-chain via TPU!\n` +
+              `         Rounds: ${result.rounds ?? 'N/A'}, Leaders sent: ${result.leaderCount ?? 'N/A'}\n` +
+              `         Latency: ${result.latencyMs ?? 'N/A'}ms`
+            );
+          } else {
+            console.warn(
+              `[Pipeit] ⚠️ TPU submission completed but transaction NOT confirmed.\n` +
+              `         Rounds: ${result.rounds ?? 'N/A'}, Leaders sent: ${result.leaderCount ?? 'N/A'}\n` +
+              `         Signature: ${result.signature}\n` +
+              `         The transaction may still land - check explorer.`
+            );
+          }
+        }
+        
+        // Return signature - for TPU, confirmation already happened server-side
+        return result.signature;
       }
       
-      // Now confirm the transaction using standard confirmation
-      await this.confirmTransaction(result.signature, rpcSubscriptions, commitment);
+      // For non-TPU strategies (Jito, parallel), use standard confirmation
+      if (this.config.logLevel !== 'silent') {
+        console.log(`[Pipeit] Transaction sent via ${result.landedVia}${result.latencyMs ? ` in ${result.latencyMs}ms` : ''}`);
+      }
+      
+      // Confirm via WebSocket subscription
+      try {
+        await this.confirmTransaction(result.signature, rpcSubscriptions, commitment);
+        if (this.config.logLevel !== 'silent') {
+          console.log(`[Pipeit] ✅ Transaction confirmed via WebSocket subscription`);
+        }
+      } catch (confirmError) {
+        throw confirmError;
+      }
       
       // Verify transaction execution status (catch false positives)
       await this.verifyTransactionSuccess(rpc, result.signature);
@@ -862,18 +898,18 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
     rpc: Rpc<GetSignatureStatusesApi>,
     signature: string,
     options?: {
-      /** Maximum number of retry attempts (default: 5) */
+      /** Maximum number of retry attempts (default: 12) */
       maxAttempts?: number;
-      /** Initial delay in milliseconds before first retry (default: 500) */
+      /** Initial delay in milliseconds before first retry (default: 1000) */
       initialDelayMs?: number;
-      /** Maximum delay in milliseconds between retries (default: 4000) */
+      /** Maximum delay in milliseconds between retries (default: 8000) */
       maxDelayMs?: number;
     }
   ): Promise<void> {
     const {
-      maxAttempts = 5,
-      initialDelayMs = 500,
-      maxDelayMs = 4000,
+      maxAttempts = 12,      // Increased from 5 - gives more time for RPC to index
+      initialDelayMs = 1000, // Increased from 500 - start with longer delay
+      maxDelayMs = 8000,     // Increased from 4000 - longer max delay for slow RPCs
     } = options ?? {};
     
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {

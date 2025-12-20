@@ -9,6 +9,8 @@
 //! - Real-time leader schedule tracking
 //! - Connection pooling with 0-RTT support
 //! - Pre-warming connections to upcoming leaders
+//! - Per-leader send results with error classification
+//! - Internal retry with exponential backoff
 //!
 //! ## Usage
 //!
@@ -22,16 +24,19 @@
 //!
 //! await client.waitReady();
 //! const result = await client.sendTransaction(serializedTxBuffer);
+//! // result.leaders contains per-validator send status
 //! ```
 
 #![deny(clippy::all)]
 
 mod client;
 mod connection_manager;
+mod errors;
 pub mod tracker;
 
 // Re-export main types
-pub use client::{SendResult, TpuClient, TpuClientConfig};
-pub use connection_manager::{DeliveryResult, TpuConnectionManager};
+pub use client::{LeaderSendResult, SendResult, TpuClient, TpuClientConfig, TpuClientStats};
+pub use connection_manager::{DeliveryResult, LeaderDeliveryResult, TpuConnectionManager};
+pub use errors::TpuErrorCode;
 pub use tracker::{LeaderInfo, LeaderTracker, ScheduleTracker, SlotEvent, SlotsTracker};
 

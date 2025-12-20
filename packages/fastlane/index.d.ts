@@ -14,25 +14,104 @@ export interface TpuClientConfig {
   /** Whether to pre-warm connections to upcoming leaders (default: true). */
   prewarmConnections?: boolean
 }
+/** Result for a single leader send attempt. */
+export interface LeaderSendResult {
+  /** Validator identity pubkey. */
+  identity: string
+  /** TPU socket address. */
+  address: string
+  /** Whether send succeeded. */
+  success: boolean
+  /** Latency for this leader in milliseconds. */
+  latencyMs: number
+  /** Error message if failed. */
+  error?: string
+  /** Error code for programmatic handling. */
+  errorCode?: string
+  /** Number of attempts made for this leader. */
+  attempts: number
+}
 /** Result from sending a transaction. */
 export interface SendResult {
   /** Whether the transaction was successfully delivered. */
   delivered: boolean
-  /** Latency in milliseconds. */
+  /** Total latency in milliseconds. */
   latencyMs: number
   /** Number of leaders the transaction was sent to. */
   leaderCount: number
+  /** Per-leader breakdown of send results. */
+  leaders: Array<LeaderSendResult>
+  /** Total retry attempts made across all leaders. */
+  retryCount: number
 }
-/** Native QUIC client for direct Solana TPU transaction submission. */
+/** Client health and statistics. */
+export interface TpuClientStats {
+  /** Number of active QUIC connections. */
+  connectionCount: number
+  /** Current estimated slot. */
+  currentSlot: number
+  /** Number of QUIC endpoints. */
+  endpointCount: number
+  /** Client ready state: "initializing", "ready", or "error". */
+  readyState: string
+  /** Seconds since client was created. */
+  uptimeSecs: number
+  /** Number of validators with known sockets. */
+  knownValidators: number
+}
+/** Result from continuous send until confirmed. */
+export interface SendUntilConfirmedResult {
+  /** Whether the transaction was confirmed on-chain. */
+  confirmed: boolean
+  /** Transaction signature (base58). */
+  signature: string
+  /** Number of send rounds attempted. */
+  rounds: number
+  /** Total number of leader sends across all rounds. */
+  totalLeadersSent: number
+  /** Total latency in milliseconds. */
+  latencyMs: number
+  /** Error message if failed. */
+  error?: string
+}
+/**
+ * Native QUIC client for direct Solana TPU transaction submission.
+ *
+ * Supports continuous resubmission until confirmed for high landing rates.
+ */
 export declare class TpuClient {
   /** Creates a new TPU client instance. */
   constructor(config: TpuClientConfig)
-  /** Sends a serialized transaction to TPU endpoints. */
+  /**
+   * Sends a serialized transaction to TPU endpoints (single attempt).
+   *
+   * Returns detailed per-leader results including retry statistics.
+   * For higher landing rates, use `send_until_confirmed` instead.
+   */
   sendTransaction(transaction: Buffer): Promise<SendResult>
+  /**
+   * Sends a transaction continuously until confirmed or timeout.
+   *
+   * Uses slot-aware leader selection to minimize tx leakage:
+   * - Slots 0-2 of leader window: sends to current leader only
+   * - Slot 3 of leader window: sends to current + next leader (hedge)
+   *
+   * Falls back to fixed fanout if slot estimation is unreliable.
+   *
+   * # Arguments
+   * * `transaction` - Serialized signed transaction
+   * * `timeout_ms` - Maximum time to wait for confirmation (default: 30000ms)
+   *
+   * # Returns
+   * Result indicating whether the transaction was confirmed on-chain.
+   */
+  sendUntilConfirmed(transaction: Buffer, timeoutMs?: number | undefined | null): Promise<SendUntilConfirmedResult>
   /** Gets the current estimated slot number. */
   getCurrentSlot(): number
   /** Gets the number of active QUIC connections. */
   getConnectionCount(): Promise<number>
+  /** Gets comprehensive client statistics. */
+  getStats(): Promise<TpuClientStats>
   /** Waits for the client to be fully initialized. */
   waitReady(): Promise<void>
   /** Shuts down the client and closes all connections. */
