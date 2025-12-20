@@ -83,7 +83,12 @@ export function useTpuSubmission(apiRoute: string = '/api/tpu') {
                     }),
                 });
 
-                const data = await response.json();
+                let data;
+                try {
+                    data = await response.json();
+                } catch {
+                    throw new Error(`TPU API returned non-JSON response: ${response.status}`);
+                }
 
                 const submissionResult: TpuSubmissionResult = {
                     delivered: data.delivered,

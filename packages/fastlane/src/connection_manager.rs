@@ -278,7 +278,7 @@ impl TpuConnectionManager {
             if result.success {
                 eprintln!(
                     "[TPU] ✅ Sent to {} at {} ({}ms, {} attempts)",
-                    &result.identity[..8],
+                    &result.identity[..8.min(result.identity.len())],
                     result.address,
                     result.latency_ms,
                     result.attempts
@@ -290,7 +290,7 @@ impl TpuConnectionManager {
             } else {
                 eprintln!(
                     "[TPU] ❌ Failed {} at {}: {} ({}ms, {} attempts)",
-                    &result.identity[..8],
+                    &result.identity[..8.min(result.identity.len())],
                     result.address,
                     result.error.as_deref().unwrap_or("unknown"),
                     result.latency_ms,

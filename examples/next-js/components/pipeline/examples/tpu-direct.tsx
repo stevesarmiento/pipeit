@@ -409,7 +409,7 @@ const result = await createFlow({
     
     const signature = await new TransactionBuilder({
       rpc: ctx.rpc,
-      priorityFee: 'high', // 2.5 lamports/CU - balanced cost/speed
+      priorityFee: 'high',
     })
       .setFeePayerSigner(ctx.signer)
       .addInstruction(instruction)
