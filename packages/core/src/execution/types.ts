@@ -215,6 +215,17 @@ export interface ExecutionResult {
     leaderCount?: number;
 
     /**
+     * Whether the transaction was confirmed on-chain.
+     * For TPU submissions with continuous resubmission, this is set by the server.
+     */
+    confirmed?: boolean;
+
+    /**
+     * Number of send rounds for TPU continuous submission.
+     */
+    rounds?: number;
+
+    /**
      * Enhanced TPU submission details with per-leader breakdown.
      * Only present when transaction was submitted via TPU.
      */

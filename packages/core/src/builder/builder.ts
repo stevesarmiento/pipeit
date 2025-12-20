@@ -777,64 +777,46 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         ...(params.abortSignal && { abortSignal: params.abortSignal }),
       });
       
-      if (this.config.logLevel !== 'silent') {
-        console.log(`[Pipeit] Transaction delivered via ${result.landedVia}${result.latencyMs ? ` in ${result.latencyMs}ms` : ''}`);
-        if (result.landedVia === 'tpu') {
-          console.log(`[Pipeit] ⏳ Waiting for on-chain confirmation (delivered ≠ confirmed)...`);
+      // For TPU with continuous resubmission, confirmation happens server-side
+      if (result.landedVia === 'tpu') {
+        if (this.config.logLevel !== 'silent') {
+          if (result.confirmed) {
+            console.log(
+              `[Pipeit] ✅ Transaction CONFIRMED on-chain via TPU!\n` +
+              `         Rounds: ${result.rounds ?? 'N/A'}, Leaders sent: ${result.leaderCount ?? 'N/A'}\n` +
+              `         Latency: ${result.latencyMs ?? 'N/A'}ms`
+            );
+          } else {
+            console.warn(
+              `[Pipeit] ⚠️ TPU submission completed but transaction NOT confirmed.\n` +
+              `         Rounds: ${result.rounds ?? 'N/A'}, Leaders sent: ${result.leaderCount ?? 'N/A'}\n` +
+              `         Signature: ${result.signature}\n` +
+              `         The transaction may still land - check explorer.`
+            );
+          }
         }
+        
+        // Return signature - for TPU, confirmation already happened server-side
+        return result.signature;
       }
       
-      // Now confirm the transaction using standard confirmation
+      // For non-TPU strategies (Jito, parallel), use standard confirmation
+      if (this.config.logLevel !== 'silent') {
+        console.log(`[Pipeit] Transaction sent via ${result.landedVia}${result.latencyMs ? ` in ${result.latencyMs}ms` : ''}`);
+      }
+      
+      // Confirm via WebSocket subscription
       try {
         await this.confirmTransaction(result.signature, rpcSubscriptions, commitment);
         if (this.config.logLevel !== 'silent') {
           console.log(`[Pipeit] ✅ Transaction confirmed via WebSocket subscription`);
         }
       } catch (confirmError) {
-        // For TPU submissions, log but don't fail if WebSocket confirmation fails
-        // The TPU already reported success, and we'll verify via polling below
-        if (result.landedVia === 'tpu') {
-          if (this.config.logLevel !== 'silent') {
-            console.log(`[Pipeit] WebSocket confirmation timed out, falling back to RPC polling...`);
-          }
-        } else {
-          throw confirmError;
-        }
+        throw confirmError;
       }
       
-      // Verify transaction execution status via polling (catch false positives)
-      if (this.config.logLevel !== 'silent' && result.landedVia === 'tpu') {
-        console.log(`[Pipeit] 🔍 Polling RPC for transaction status...`);
-      }
-      
-      try {
-        await this.verifyTransactionSuccess(rpc, result.signature);
-        if (this.config.logLevel !== 'silent') {
-          console.log(`[Pipeit] ✅ Transaction confirmed on-chain!`);
-        }
-      } catch (verifyError) {
-        // For TPU submissions with "delivered" status, the transaction may not have landed
-        // This is common - TPU "delivered" only means sent to validator, not processed
-        if (result.landedVia === 'tpu' && 
-            verifyError instanceof Error && 
-            verifyError.message.includes('Unable to verify')) {
-          if (this.config.logLevel !== 'silent') {
-            console.warn(
-              `[Pipeit] ⚠️ TPU delivery succeeded but transaction NOT confirmed on-chain.\n` +
-              `         This is common with TPU - "delivered" only means sent to validator.\n` +
-              `         Signature: ${result.signature}\n` +
-              `         Possible causes:\n` +
-              `         - Transaction dropped by validator (congestion)\n` +
-              `         - Blockhash expired before processing\n` +
-              `         - Insufficient priority fee\n` +
-              `         Consider: higher priority fee, more leader fanout, or retry with fresh blockhash.`
-            );
-          }
-          // Return signature anyway - let the caller decide what to do
-          return result.signature;
-        }
-        throw verifyError;
-      }
+      // Verify transaction execution status (catch false positives)
+      await this.verifyTransactionSuccess(rpc, result.signature);
       
       return result.signature;
     }

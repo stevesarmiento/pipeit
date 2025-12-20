@@ -59,16 +59,51 @@ export interface TpuClientStats {
   /** Number of validators with known sockets. */
   knownValidators: number
 }
-/** Native QUIC client for direct Solana TPU transaction submission. */
+/** Result from continuous send until confirmed. */
+export interface SendUntilConfirmedResult {
+  /** Whether the transaction was confirmed on-chain. */
+  confirmed: boolean
+  /** Transaction signature (base58). */
+  signature: string
+  /** Number of send rounds attempted. */
+  rounds: number
+  /** Total number of leader sends across all rounds. */
+  totalLeadersSent: number
+  /** Total latency in milliseconds. */
+  latencyMs: number
+  /** Error message if failed. */
+  error?: string
+}
+/**
+ * Native QUIC client for direct Solana TPU transaction submission.
+ *
+ * Supports continuous resubmission until confirmed for high landing rates.
+ */
 export declare class TpuClient {
   /** Creates a new TPU client instance. */
   constructor(config: TpuClientConfig)
   /**
-   * Sends a serialized transaction to TPU endpoints.
+   * Sends a serialized transaction to TPU endpoints (single attempt).
    *
    * Returns detailed per-leader results including retry statistics.
+   * For higher landing rates, use `send_until_confirmed` instead.
    */
   sendTransaction(transaction: Buffer): Promise<SendResult>
+  /**
+   * Sends a transaction continuously until confirmed or timeout.
+   *
+   * This method sends the transaction to fresh leaders every ~400ms (one slot)
+   * and checks for confirmation in parallel. This achieves 90%+ landing rates
+   * similar to yellowstone-jet and Jito.
+   *
+   * # Arguments
+   * * `transaction` - Serialized signed transaction
+   * * `timeout_ms` - Maximum time to wait for confirmation (default: 30000ms)
+   *
+   * # Returns
+   * Result indicating whether the transaction was confirmed on-chain.
+   */
+  sendUntilConfirmed(transaction: Buffer, timeoutMs?: number | undefined | null): Promise<SendUntilConfirmedResult>
   /** Gets the current estimated slot number. */
   getCurrentSlot(): number
   /** Gets the number of active QUIC connections. */

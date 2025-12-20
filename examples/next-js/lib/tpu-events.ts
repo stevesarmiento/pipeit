@@ -67,15 +67,22 @@ class TpuEventEmitter {
             const data = customEvent.detail;
             console.log('🟢 [TPU Events] TPU result received:', data);
 
-            if (data && typeof data.delivered !== 'undefined') {
+            if (data && (typeof data.confirmed !== 'undefined' || typeof data.delivered !== 'undefined')) {
                 const result: TpuSubmissionResult = {
-                    delivered: data.delivered,
-                    leaderCount: data.leaderCount || 0,
+                    // Required fields
+                    confirmed: data.confirmed ?? data.delivered ?? false,
+                    signature: data.signature || '',
+                    rounds: data.rounds || 0,
+                    totalLeadersSent: data.totalLeadersSent || data.leaderCount || 0,
                     latencyMs: data.latencyMs || 0,
+                    error: data.error,
+                    // Backwards compat fields
+                    delivered: data.delivered ?? data.confirmed ?? false,
+                    leaderCount: data.leaderCount || data.totalLeadersSent || 0,
                     leaders: (data.leaders || []).map((l: any) => ({
                         identity: l.identity || 'Unknown',
                         address: l.address || 'Unknown',
-                        success: l.success ?? data.delivered,
+                        success: l.success ?? data.delivered ?? data.confirmed ?? false,
                         latencyMs: l.latencyMs || 0,
                         error: l.error,
                         errorCode: l.errorCode,

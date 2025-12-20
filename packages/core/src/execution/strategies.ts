@@ -502,21 +502,26 @@ function isBrowser(): boolean {
  * In browser environments, this sends to the configured API route.
  * In server environments, this uses the native TPU client directly.
  */
-/** TPU submission result with per-leader details */
+/** TPU submission result with confirmation status */
 interface TpuSubmissionResult {
-    delivered: boolean;
+    /** Whether the transaction was confirmed on-chain (new) */
+    confirmed: boolean;
+    /** Transaction signature (new) */
+    signature: string;
+    /** Number of send rounds (new) */
+    rounds: number;
+    /** Total leaders sent across all rounds (new) */
+    totalLeadersSent: number;
+    /** Total latency in ms */
     latencyMs: number;
-    leaderCount: number;
-    leaders?: Array<{
-        identity: string;
-        address: string;
-        success: boolean;
-        latencyMs: number;
-        error?: string;
-        errorCode?: string;
-        attempts: number;
-    }>;
-    retryCount?: number;
+    /** Error message if any */
+    error?: string;
+    
+    // Backwards compatibility fields
+    /** @deprecated Use confirmed instead */
+    delivered?: boolean;
+    /** @deprecated Use totalLeadersSent instead */
+    leaderCount?: number;
 }
 
 async function submitToTpu(
@@ -569,13 +574,17 @@ async function submitToTpu(
                     detail: result,
                 }),
             );
-            console.log('✅ [TPU] Dispatched pipeit:tpu:result event with', result.leaderCount, 'leaders');
+            console.log(
+                '✅ [TPU] Dispatched pipeit:tpu:result event:',
+                result.confirmed ? 'CONFIRMED' : 'NOT CONFIRMED',
+                `(${result.rounds} rounds, ${result.totalLeadersSent} leaders)`
+            );
         }
 
         return result;
     }
 
-    // Server: use native client
+    // Server: use native client with continuous resubmission
     // Dynamic import to avoid bundling native module in browser builds
     try {
         // @ts-ignore - Optional dependency loaded at runtime
@@ -588,13 +597,22 @@ async function submitToTpu(
         // Convert base64 transaction to Buffer
         const txBuffer = Buffer.from(transaction, 'base64');
 
-        const result = await client.sendTransaction(txBuffer);
+        // Use sendUntilConfirmed for continuous resubmission (30 second timeout)
+        const result = await client.sendUntilConfirmed(txBuffer, 30000);
 
-        return {
-            delivered: result.delivered,
+        const response: TpuSubmissionResult = {
+            confirmed: result.confirmed,
+            signature: result.signature,
+            rounds: result.rounds,
+            totalLeadersSent: result.totalLeadersSent,
             latencyMs: result.latencyMs,
-            leaderCount: result.leaderCount,
         };
+        
+        if (result.error) {
+            response.error = result.error;
+        }
+        
+        return response;
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND') {
             throw new ExecutionStrategyError(
@@ -614,6 +632,14 @@ let tpuClientConfig: ResolvedExecutionConfig['tpu'] | null = null;
  */
 async function getTpuClientSingleton(config: ResolvedExecutionConfig['tpu']): Promise<{
     sendTransaction: (tx: Buffer) => Promise<{ delivered: boolean; latencyMs: number; leaderCount: number }>;
+    sendUntilConfirmed: (tx: Buffer, timeoutMs?: number) => Promise<{
+        confirmed: boolean;
+        signature: string;
+        rounds: number;
+        totalLeadersSent: number;
+        latencyMs: number;
+        error?: string;
+    }>;
     waitReady: () => Promise<void>;
 }> {
     // Check if config changed
@@ -625,6 +651,14 @@ async function getTpuClientSingleton(config: ResolvedExecutionConfig['tpu']): Pr
     ) {
         return tpuClientInstance as {
             sendTransaction: (tx: Buffer) => Promise<{ delivered: boolean; latencyMs: number; leaderCount: number }>;
+            sendUntilConfirmed: (tx: Buffer, timeoutMs?: number) => Promise<{
+                confirmed: boolean;
+                signature: string;
+                rounds: number;
+                totalLeadersSent: number;
+                latencyMs: number;
+                error?: string;
+            }>;
             waitReady: () => Promise<void>;
         };
     }
@@ -674,22 +708,27 @@ async function executeTpuStrategy(
         return executeTpuJitoRace(transaction, { ...config, tpu: tpuConfig }, context, startTime);
     }
 
-    // TPU only
+    // TPU only - now uses continuous resubmission until confirmed
     const result = await submitToTpu(transaction, tpuConfig, abortSignal);
 
-    if (!result.delivered) {
-        throw new ExecutionStrategyError('TPU submission failed - transaction not delivered to any leader');
+    // Check if confirmed (new behavior) or delivered (backwards compat)
+    const isConfirmed = result.confirmed ?? result.delivered ?? false;
+    
+    if (!isConfirmed && result.error) {
+        throw new ExecutionStrategyError(`TPU submission failed: ${result.error}`);
     }
 
-    // Extract signature from the transaction
-    // The signature is the first 64 bytes after the signature count
-    const signature = extractSignatureFromTransaction(transaction);
+    // Use signature from server response (new) or extract from transaction (fallback)
+    const signature = result.signature || extractSignatureFromTransaction(transaction);
 
     return {
         signature,
         landedVia: 'tpu',
         latencyMs: result.latencyMs,
-        leaderCount: result.leaderCount,
+        // New fields from continuous resubmission
+        confirmed: result.confirmed,
+        rounds: result.rounds,
+        leaderCount: result.totalLeadersSent ?? result.leaderCount,
     };
 }
 
@@ -768,22 +807,26 @@ async function executeTpuJitoRace(
     let tpuError: Error | undefined;
     let jitoError: Error | undefined;
 
-    // TPU submission promise
+    // TPU submission promise (with continuous resubmission)
     const tpuPromise = (async (): Promise<ExecutionResult> => {
         try {
             const result = await submitToTpu(transaction, tpu, combinedSignal);
 
-            if (!result.delivered) {
-                throw new Error('TPU submission failed');
+            // Check confirmation status
+            const isConfirmed = result.confirmed ?? result.delivered ?? false;
+            if (!isConfirmed && result.error) {
+                throw new Error(`TPU submission failed: ${result.error}`);
             }
 
-            const signature = extractSignatureFromTransaction(transaction);
+            const signature = result.signature || extractSignatureFromTransaction(transaction);
 
             return {
                 signature,
                 landedVia: 'tpu',
                 latencyMs: result.latencyMs,
-                leaderCount: result.leaderCount,
+                confirmed: result.confirmed,
+                rounds: result.rounds,
+                leaderCount: result.totalLeadersSent ?? result.leaderCount ?? 0,
             };
         } catch (error) {
             tpuError = error instanceof Error ? error : new Error(String(error));

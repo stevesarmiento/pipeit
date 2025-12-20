@@ -8,7 +8,6 @@
  */
 
 import type { ResolvedExecutionConfig } from '../execution/types.js';
-import type { TpuErrorCode } from '../errors/tpu-errors.js';
 
 /**
  * Request body for TPU API route.
@@ -31,41 +30,33 @@ export interface TpuHandlerRequest {
 }
 
 /**
- * Per-leader send result in handler response.
- */
-export interface TpuHandlerLeaderResult {
-    /** Validator identity pubkey. */
-    identity: string;
-    /** TPU socket address. */
-    address: string;
-    /** Whether send succeeded. */
-    success: boolean;
-    /** Latency in milliseconds. */
-    latencyMs: number;
-    /** Error message if failed. */
-    error?: string;
-    /** Error code for programmatic handling. */
-    errorCode?: TpuErrorCode;
-    /** Number of attempts made. */
-    attempts: number;
-}
-
-/**
  * Response from TPU submission.
  */
 export interface TpuHandlerResponse {
     /**
-     * Whether the transaction was successfully delivered to leaders.
+     * Whether the transaction was confirmed on-chain.
+     * This is the definitive success indicator.
      */
-    delivered: boolean;
+    confirmed: boolean;
 
     /**
-     * Number of leaders the transaction was sent to.
+     * Transaction signature (base58).
      */
-    leaderCount: number;
+    signature: string;
 
     /**
-     * Time taken to submit the transaction in milliseconds.
+     * Number of send rounds attempted.
+     * Each round sends to fresh leaders as slots progress.
+     */
+    rounds: number;
+
+    /**
+     * Total number of leader sends across all rounds.
+     */
+    totalLeadersSent: number;
+
+    /**
+     * Time taken in milliseconds.
      */
     latencyMs: number;
 
@@ -75,15 +66,14 @@ export interface TpuHandlerResponse {
     error?: string;
 
     /**
-     * Per-leader breakdown of send results.
-     * Provides detailed information about each leader send attempt.
+     * @deprecated Use `confirmed` instead. Kept for backwards compatibility.
      */
-    leaders?: TpuHandlerLeaderResult[];
+    delivered?: boolean;
 
     /**
-     * Total retry attempts made across all leaders.
+     * @deprecated Use `totalLeadersSent` instead.
      */
-    retryCount?: number;
+    leaderCount?: number;
 }
 
 // Singleton TPU client instance
@@ -107,6 +97,14 @@ interface TpuClientInstance {
             attempts: number;
         }>;
         retryCount: number;
+    }>;
+    sendUntilConfirmed: (tx: Buffer, timeoutMs?: number) => Promise<{
+        confirmed: boolean;
+        signature: string;
+        rounds: number;
+        totalLeadersSent: number;
+        latencyMs: number;
+        error?: string;
     }>;
     waitReady: () => Promise<void>;
     getStats: () => Promise<{
@@ -325,10 +323,15 @@ export async function tpuHandler(
         if (!body.transaction) {
             return Response.json(
                 {
+                    confirmed: false,
+                    signature: '',
+                    rounds: 0,
+                    totalLeadersSent: 0,
+                    latencyMs: 0,
                     error: 'Missing transaction in request body',
+                    // Backwards compatibility
                     delivered: false,
                     leaderCount: 0,
-                    latencyMs: 0,
                 } satisfies TpuHandlerResponse,
                 { status: 400 },
             );
@@ -355,8 +358,6 @@ export async function tpuHandler(
         // Convert base64 transaction to Buffer
         const txBuffer = Buffer.from(body.transaction, 'base64');
 
-        const startTime = performance.now();
-
         // Get stats for logging
         let stats: { knownValidators: number; currentSlot: number } | null = null;
         try {
@@ -366,92 +367,64 @@ export async function tpuHandler(
         }
 
         console.log('\n┌─────────────────────────────────────────────────────────────┐');
-        console.log('│ 🚀 TPU DIRECT SUBMISSION                                    │');
+        console.log('│ 🚀 TPU CONTINUOUS SUBMISSION (until confirmed)              │');
         console.log('├─────────────────────────────────────────────────────────────┤');
         console.log(`│ Protocol: QUIC (native)                                     │`);
-        console.log(`│ Target: Validator TPU endpoints                             │`);
+        console.log(`│ Mode: Send until confirmed (like yellowstone-jet)           │`);
         console.log(`│ Transaction size: ${txBuffer.length} bytes`.padEnd(62) + '│');
         console.log(`│ Configured fanout: ${config.fanout}`.padEnd(62) + '│');
+        console.log(`│ Timeout: 30 seconds                                         │`);
         if (stats) {
             console.log(`│ Known validators: ${stats.knownValidators}`.padEnd(62) + '│');
             console.log(`│ Current slot: ${stats.currentSlot}`.padEnd(62) + '│');
-            // Warn if validator count is low
-            if (stats.knownValidators < config.fanout * 2) {
-                console.log(`│ ⚠️  LOW VALIDATOR COUNT - may reduce landing rate!`.padEnd(61) + '│');
-            }
         }
-
-        // Send transaction
-        const result = await client.sendTransaction(txBuffer);
-
-        const latencyMs = Math.round(performance.now() - startTime);
-
-        console.log(`│ Leaders reached: ${result.leaderCount}/${config.fanout}`.padEnd(62) + '│');
-        if (result.leaderCount < config.fanout) {
-            console.log(`│ ⚠️  FEWER LEADERS THAN FANOUT - check validator sockets`.padEnd(61) + '│');
-        }
-        console.log(`│ Delivery: ${result.delivered ? '✅ SUCCESS' : '❌ FAILED'}`.padEnd(62) + '│');
-        console.log(`│ Retries: ${result.retryCount ?? 0}`.padEnd(62) + '│');
-        console.log(`│ Latency: ${latencyMs}ms`.padEnd(62) + '│');
-        console.log('├─────────────────────────────────────────────────────────────┤');
-        console.log('│ ⚡ NOTE: "delivered" = sent to TPU, NOT confirmed on-chain  │');
-        console.log('│    Confirmation happens after this via RPC polling.         │');
         console.log('└─────────────────────────────────────────────────────────────┘\n');
 
-        // Map per-leader results (with fallback for older fastlane versions)
-        let leaders: TpuHandlerLeaderResult[] = [];
+        // Send transaction continuously until confirmed (30 second timeout)
+        const result = await client.sendUntilConfirmed(txBuffer, 30000);
+
+        console.log('\n┌─────────────────────────────────────────────────────────────┐');
+        console.log(`│ Result: ${result.confirmed ? '✅ CONFIRMED ON-CHAIN' : '❌ NOT CONFIRMED'}`.padEnd(61) + '│');
+        console.log(`│ Signature: ${result.signature.slice(0, 20)}...`.padEnd(62) + '│');
+        console.log(`│ Rounds: ${result.rounds}`.padEnd(62) + '│');
+        console.log(`│ Total leaders sent: ${result.totalLeadersSent}`.padEnd(62) + '│');
+        console.log(`│ Latency: ${result.latencyMs}ms`.padEnd(62) + '│');
+        if (result.error) {
+            console.log(`│ Error: ${result.error.slice(0, 50)}`.padEnd(62) + '│');
+        }
+        console.log('└─────────────────────────────────────────────────────────────┘\n');
+
+        // Build response with backwards compatibility
+        const response: TpuHandlerResponse = {
+            confirmed: result.confirmed,
+            signature: result.signature,
+            rounds: result.rounds,
+            totalLeadersSent: result.totalLeadersSent,
+            latencyMs: result.latencyMs,
+            // Backwards compatibility
+            delivered: result.confirmed,
+            leaderCount: result.totalLeadersSent,
+        };
         
-        if (result.leaders && Array.isArray(result.leaders)) {
-            // New fastlane version with per-leader results
-            leaders = result.leaders.map((lr) => {
-                const mapped: TpuHandlerLeaderResult = {
-                    identity: lr.identity,
-                    address: lr.address,
-                    success: lr.success,
-                    latencyMs: lr.latencyMs,
-                    attempts: lr.attempts ?? 1,
-                };
-                // Only add optional fields if defined (exactOptionalPropertyTypes)
-                if (lr.error !== undefined) {
-                    mapped.error = lr.error;
-                }
-                if (lr.errorCode !== undefined) {
-                    mapped.errorCode = lr.errorCode as TpuErrorCode;
-                }
-                return mapped;
-            });
-        } else {
-            // Fallback for older fastlane versions - generate leader data from summary
-            const leaderCount = result.leaderCount ?? 1;
-            const perLeaderLatency = Math.round(latencyMs / Math.max(leaderCount, 1));
-            
-            for (let i = 0; i < leaderCount; i++) {
-                leaders.push({
-                    identity: `Leader${i + 1}`,
-                    address: `validator-${i + 1}:8009`,
-                    success: result.delivered,
-                    latencyMs: perLeaderLatency,
-                    attempts: 1,
-                });
-            }
+        if (result.error) {
+            response.error = result.error;
         }
 
-        return Response.json({
-            delivered: result.delivered,
-            leaderCount: result.leaderCount,
-            latencyMs,
-            leaders,
-            retryCount: result.retryCount,
-        } satisfies TpuHandlerResponse);
+        return Response.json(response);
     } catch (error) {
         console.error('TPU handler error:', error);
 
         return Response.json(
             {
+                confirmed: false,
+                signature: '',
+                rounds: 0,
+                totalLeadersSent: 0,
+                latencyMs: 0,
                 error: error instanceof Error ? error.message : String(error),
+                // Backwards compatibility
                 delivered: false,
                 leaderCount: 0,
-                latencyMs: 0,
             } satisfies TpuHandlerResponse,
             { status: 500 },
         );
