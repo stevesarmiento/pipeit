@@ -148,6 +148,7 @@ export function formatTpuErrorCode(code: TpuErrorCode): string {
         TIMEOUT: 'Timeout',
         VALIDATOR_UNREACHABLE: 'Validator Unreachable',
         ZERO_RTT_REJECTED: '0-RTT Rejected',
+        UNKNOWN: 'Unknown Error',
     };
     return labels[code] || code;
 }
