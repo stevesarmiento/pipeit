@@ -29,6 +29,16 @@ pub struct LeaderInfo {
     pub slot: Slot,
 }
 
+/// TPU socket addresses for a validator.
+/// Stores both normal and forwards ports for flexible routing.
+#[derive(Debug, Clone)]
+pub struct TpuSockets {
+    /// Standard TPU QUIC socket address.
+    pub tpu_socket: Option<String>,
+    /// TPU forwards QUIC socket address (preferred by validators).
+    pub tpu_forwards_socket: Option<String>,
+}
+
 /// Coordinates leader tracking for TPU transaction routing.
 ///
 /// Responsibilities:
@@ -47,8 +57,8 @@ pub struct LeaderTracker {
     pub slots_tracker: RwLock<SlotsTracker>,
     /// Leader schedule tracker.
     schedule_tracker: RwLock<ScheduleTracker>,
-    /// Maps validator identity -> TPU socket address.
-    leader_sockets: RwLock<HashMap<String, String>>,
+    /// Maps validator identity -> TPU socket addresses (normal + forwards).
+    leader_sockets: RwLock<HashMap<String, TpuSockets>>,
     /// Whether the tracker is ready.
     ready: RwLock<bool>,
 }
@@ -88,6 +98,9 @@ impl LeaderTracker {
     }
 
     /// Gets upcoming leaders for transaction routing.
+    ///
+    /// Prefers TPU forwards port (recommended by validators), falling back
+    /// to normal TPU port if forwards is not available.
     ///
     /// # Arguments
     ///
@@ -150,12 +163,22 @@ impl LeaderTracker {
                 }
 
                 match leader_sockets.get(leader_pubkey) {
-                    Some(socket) => {
-                        leaders.push(LeaderInfo {
-                            identity: leader_pubkey.to_string(),
-                            tpu_socket: socket.clone(),
-                            slot: curr_slot,
-                        });
+                    Some(sockets) => {
+                        // Prefer forwards port, fall back to normal TPU port
+                        let socket = sockets
+                            .tpu_forwards_socket
+                            .as_ref()
+                            .or(sockets.tpu_socket.as_ref());
+
+                        if let Some(s) = socket {
+                            leaders.push(LeaderInfo {
+                                identity: leader_pubkey.to_string(),
+                                tpu_socket: s.clone(),
+                                slot: curr_slot,
+                            });
+                        } else {
+                            debug!("Leader {} has no usable socket address", leader_pubkey);
+                        }
                     }
                     None => {
                         debug!("Leader {} has no known socket address", leader_pubkey);
@@ -176,6 +199,7 @@ impl LeaderTracker {
 
     /// Updates the leader socket addresses from cluster nodes.
     ///
+    /// Fetches both normal TPU QUIC and TPU forwards QUIC addresses.
     /// Should be called periodically (e.g., every 60 seconds) as
     /// validator IPs can change.
     pub async fn update_leader_sockets(&self) -> Result<()> {
@@ -189,12 +213,27 @@ impl LeaderTracker {
         let mut new_sockets = HashMap::new();
 
         for node in nodes {
-            if let (Some(tpu_quic), Some(gossip)) = (node.tpu_quic, node.gossip) {
-                // TPU QUIC uses the gossip IP with the TPU QUIC port
-                new_sockets.insert(
-                    node.pubkey.to_string(),
-                    format!("{}:{}", gossip.ip(), tpu_quic.port()),
-                );
+            if let Some(gossip) = node.gossip {
+                let ip = gossip.ip();
+
+                // Standard TPU QUIC socket
+                let tpu_socket = node.tpu_quic.map(|addr| format!("{}:{}", ip, addr.port()));
+
+                // TPU forwards QUIC socket (preferred by validators)
+                let tpu_forwards_socket = node
+                    .tpu_forwards_quic
+                    .map(|addr| format!("{}:{}", ip, addr.port()));
+
+                // Only add if at least one socket is available
+                if tpu_socket.is_some() || tpu_forwards_socket.is_some() {
+                    new_sockets.insert(
+                        node.pubkey.to_string(),
+                        TpuSockets {
+                            tpu_socket,
+                            tpu_forwards_socket,
+                        },
+                    );
+                }
             }
         }
 

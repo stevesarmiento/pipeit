@@ -2,6 +2,9 @@
 //!
 //! Maintains a pool of QUIC connections to validator TPU endpoints
 //! with support for connection reuse and 0-RTT reconnection.
+//!
+//! Features multi-endpoint architecture to avoid Quinn's mutex contention
+//! under high load, distributing connections across multiple QUIC endpoints.
 
 use anyhow::{anyhow, Context, Result};
 use dashmap::DashMap;
@@ -11,6 +14,7 @@ use quinn::{
     IdleTimeout, TransportConfig,
 };
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -24,6 +28,11 @@ const QUIC_MAX_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Keep-alive interval for QUIC connections.
 const QUIC_KEEP_ALIVE: Duration = Duration::from_secs(4);
+
+/// Number of QUIC endpoints to distribute connections across.
+/// Multiple endpoints avoid Quinn's internal mutex contention under high load.
+/// Each endpoint has its own event loop for better parallelism.
+const NUM_ENDPOINTS: usize = 5;
 
 /// Result of a transaction delivery attempt.
 #[derive(Debug, Clone)]
@@ -45,20 +54,24 @@ struct CachedConnection {
 /// Manages QUIC connections to Solana TPU endpoints.
 ///
 /// Features:
+/// - Multi-endpoint architecture to avoid Quinn mutex contention
 /// - Connection pooling with automatic reconnection
 /// - 0-RTT support for faster reconnection
 /// - Pre-warming connections to upcoming leaders
 pub struct TpuConnectionManager {
-    /// QUIC endpoint for outgoing connections.
-    endpoint: Endpoint,
+    /// Multiple QUIC endpoints to distribute load across.
+    /// Each endpoint has its own event loop for better parallelism.
+    endpoints: Vec<Endpoint>,
     /// Cached connections by address.
     connections: Arc<DashMap<String, CachedConnection>>,
     /// Leader tracker for routing.
     leader_tracker: Arc<LeaderTracker>,
+    /// Round-robin counter for endpoint selection.
+    next_endpoint: AtomicUsize,
 }
 
 impl TpuConnectionManager {
-    /// Creates a new TPU connection manager.
+    /// Creates a new TPU connection manager with multiple QUIC endpoints.
     ///
     /// # Arguments
     ///
@@ -66,9 +79,12 @@ impl TpuConnectionManager {
     ///
     /// # Errors
     ///
-    /// Returns an error if the QUIC endpoint cannot be initialized.
+    /// Returns an error if any QUIC endpoint cannot be initialized.
     pub fn new(leader_tracker: Arc<LeaderTracker>) -> Result<Self> {
-        info!("Creating TPU connection manager");
+        info!(
+            "Creating TPU connection manager with {} endpoints",
+            NUM_ENDPOINTS
+        );
 
         // Generate client certificate for QUIC authentication
         let client_certificate = solana_tls_utils::QuicClientCertificate::new(None);
@@ -94,21 +110,41 @@ impl TpuConnectionManager {
             config
         };
 
-        let mut client_config =
+        let client_config =
             ClientConfig::new(Arc::new(QuicClientConfig::try_from(crypto).unwrap()));
-        client_config.transport_config(Arc::new(transport_config));
+        let client_config = {
+            let mut cfg = client_config;
+            cfg.transport_config(Arc::new(transport_config));
+            cfg
+        };
 
-        // Create QUIC endpoint bound to any available port
-        let mut endpoint = Endpoint::client("0.0.0.0:0".parse()?)?;
-        endpoint.set_default_client_config(client_config);
+        // Create multiple QUIC endpoints to distribute load
+        let mut endpoints = Vec::with_capacity(NUM_ENDPOINTS);
+        for i in 0..NUM_ENDPOINTS {
+            let mut endpoint = Endpoint::client("0.0.0.0:0".parse()?)
+                .context(format!("Failed to create QUIC endpoint {}", i))?;
+            endpoint.set_default_client_config(client_config.clone());
+            endpoints.push(endpoint);
+            debug!("Created QUIC endpoint {}", i);
+        }
 
-        info!("TPU connection manager created");
+        info!(
+            "TPU connection manager created with {} endpoints",
+            endpoints.len()
+        );
 
         Ok(Self {
-            endpoint,
+            endpoints,
             connections: Arc::new(DashMap::new()),
             leader_tracker,
+            next_endpoint: AtomicUsize::new(0),
         })
+    }
+
+    /// Selects the next endpoint using round-robin distribution.
+    fn select_endpoint(&self) -> &Endpoint {
+        let idx = self.next_endpoint.fetch_add(1, Ordering::Relaxed) % self.endpoints.len();
+        &self.endpoints[idx]
     }
 
     /// Sends a transaction to the current leaders.
@@ -198,6 +234,9 @@ impl TpuConnectionManager {
     }
 
     /// Gets an existing connection or creates a new one.
+    ///
+    /// Uses round-robin endpoint selection for new connections to
+    /// distribute load across all available QUIC endpoints.
     async fn get_or_create_connection(&self, address: &str) -> Result<QuinnConnection> {
         // Check for existing active connection
         if let Some(cached) = self.connections.get(address) {
@@ -216,8 +255,11 @@ impl TpuConnectionManager {
         debug!("Creating new connection to {}", address);
         let addr: SocketAddr = address.parse().context("Invalid validator address")?;
 
+        // Select endpoint using round-robin for load distribution
+        let endpoint = self.select_endpoint();
+
         // Try 0-RTT connection first for lower latency
-        let connection = match self.endpoint.connect(addr, "solana")?.into_0rtt() {
+        let connection = match endpoint.connect(addr, "solana")?.into_0rtt() {
             Ok((conn, rtt_accepted)) => {
                 debug!("Attempting 0-RTT connection to: {}", addr);
                 if rtt_accepted.await {
@@ -287,6 +329,8 @@ impl TpuConnectionManager {
     }
 
     /// Closes all connections.
+    ///
+    /// Note: Endpoints will clean up remaining state when dropped.
     pub fn close_all(&self) {
         for entry in self.connections.iter() {
             if let Some(ref conn) = entry.value().conn {
@@ -300,9 +344,11 @@ impl TpuConnectionManager {
 impl Clone for TpuConnectionManager {
     fn clone(&self) -> Self {
         Self {
-            endpoint: self.endpoint.clone(),
+            endpoints: self.endpoints.clone(),
             connections: self.connections.clone(),
             leader_tracker: self.leader_tracker.clone(),
+            // Each clone starts with its own round-robin counter
+            next_endpoint: AtomicUsize::new(0),
         }
     }
 }
