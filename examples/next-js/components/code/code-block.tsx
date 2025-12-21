@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { Prism as SyntaxHighlighter, type SyntaxHighlighterProps } from 'react-syntax-highlighter';
 import type { CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
 
 interface CodeBlockProps {
     code: string;
     language?: string;
-    style: object;
+    style: SyntaxHighlighterProps['style'];
     showLineNumbers?: boolean;
     customStyle?: CSSProperties;
     className?: string;

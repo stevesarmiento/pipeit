@@ -3,12 +3,8 @@
 import { IconBrainFill, IconCharacterMagnify, IconChartBarXaxisAscending, IconHandRaisedFill, IconHareFill } from 'symbols-react';
 import { StructuralValidationBackground } from './backgrounds/structural-validation-background';
 import { GeometricWaveGridBackground } from './backgrounds/geometric-wave-grid-background';
-import { PerlinContoursBackground } from './backgrounds/perlin-contours-background';
 import { RadarSweepBackground } from './backgrounds/radar-sweep-background';
-import { CircuitTracesBackground } from './backgrounds/circuit-traces-background';
-import { GlitchGridTextBackground } from './backgrounds/glitch-grid-text-background';
 import { PianoRollBackground } from './backgrounds/piano-roll-background';
-import { WaterfallTreeBackground } from './backgrounds/waterfall-tree-background';
 import { DitheredBarsBackground } from './backgrounds/dithered-bars-background';
 
 interface FeatureBoxProps {
