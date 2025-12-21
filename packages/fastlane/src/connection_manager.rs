@@ -8,7 +8,6 @@
 
 use anyhow::{anyhow, Context, Result};
 use dashmap::DashMap;
-use log::{debug, info, warn};
 use quinn::{
     crypto::rustls::QuicClientConfig, ClientConfig, Connection as QuinnConnection, Endpoint,
     IdleTimeout, TransportConfig,
@@ -127,11 +126,6 @@ impl TpuConnectionManager {
     ///
     /// Returns an error if any QUIC endpoint cannot be initialized.
     pub fn new(leader_tracker: Arc<LeaderTracker>) -> Result<Self> {
-        info!(
-            "Creating TPU connection manager with {} endpoints",
-            NUM_ENDPOINTS
-        );
-
         // Generate client certificate for QUIC authentication
         let client_certificate = solana_tls_utils::QuicClientCertificate::new(None);
 
@@ -171,13 +165,7 @@ impl TpuConnectionManager {
                 .context(format!("Failed to create QUIC endpoint {}", i))?;
             endpoint.set_default_client_config(client_config.clone());
             endpoints.push(endpoint);
-            debug!("Created QUIC endpoint {}", i);
         }
-
-        info!(
-            "TPU connection manager created with {} endpoints",
-            endpoints.len()
-        );
 
         Ok(Self {
             endpoints,
@@ -216,21 +204,12 @@ impl TpuConnectionManager {
     ///
     /// Delivery result with per-leader breakdown and retry statistics.
     pub async fn send_transaction_with_fanout(&self, tx_data: &[u8], fanout: u32) -> Result<DeliveryResult> {
-        debug!(
-            "Sending transaction ({} bytes) to {} leaders IN PARALLEL, preview: {:02x?}",
-            tx_data.len(),
-            fanout,
-            &tx_data[..tx_data.len().min(32)]
-        );
-
         let start = Instant::now();
         let leaders = self.leader_tracker.get_leaders_with_fanout(fanout).await;
 
         if leaders.is_empty() {
             return Err(anyhow!("No leaders available"));
         }
-
-        info!("Sending to {} leaders in parallel (early return on first success)", leaders.len());
 
         // Create channel to receive results as they complete
         let (tx, mut rx) = tokio::sync::mpsc::channel::<LeaderDeliveryResult>(leaders.len());
@@ -276,26 +255,10 @@ impl TpuConnectionManager {
             }
 
             if result.success {
-                eprintln!(
-                    "[TPU] ✅ Sent to {} at {} ({}ms, {} attempts)",
-                    &result.identity[..8.min(result.identity.len())],
-                    result.address,
-                    result.latency_ms,
-                    result.attempts
-                );
                 success_count += 1;
                 if first_success_latency.is_none() {
                     first_success_latency = Some(start.elapsed().as_millis() as u64);
                 }
-            } else {
-                eprintln!(
-                    "[TPU] ❌ Failed {} at {}: {} ({}ms, {} attempts)",
-                    &result.identity[..8.min(result.identity.len())],
-                    result.address,
-                    result.error.as_deref().unwrap_or("unknown"),
-                    result.latency_ms,
-                    result.attempts
-                );
             }
 
             leader_results.push(result);
@@ -306,23 +269,8 @@ impl TpuConnectionManager {
             }
         }
 
-        // Log final summary
-        eprintln!(
-            "[TPU] 📊 Send complete: {}/{} leaders succeeded in {}ms",
-            success_count,
-            leaders.len(),
-            start.elapsed().as_millis()
-        );
-
         // All leaders completed without success
         let delivered = success_count > 0;
-
-        info!(
-            "Parallel send complete: {}/{} leaders succeeded in {}ms",
-            success_count,
-            leaders.len(),
-            start.elapsed().as_millis()
-        );
 
         if !delivered {
             return Err(anyhow!(
@@ -400,20 +348,7 @@ impl TpuConnectionManager {
             }
 
             if result.success {
-                eprintln!(
-                    "[TPU] ✅ Sent to {} at {} ({}ms)",
-                    &result.identity[..8.min(result.identity.len())],
-                    result.address,
-                    result.latency_ms
-                );
                 success_count += 1;
-            } else {
-                eprintln!(
-                    "[TPU] ❌ Failed {} at {}: {}",
-                    &result.identity[..8.min(result.identity.len())],
-                    result.address,
-                    result.error.as_deref().unwrap_or("unknown")
-                );
             }
 
             leader_results.push(result);
@@ -460,10 +395,6 @@ impl TpuConnectionManager {
             Ok(result) => result,
             Err(_) => {
                 // Timeout elapsed - leader is too slow or unreachable
-                warn!(
-                    "⏱️ Timeout sending to {} at {} after {:?}",
-                    identity, tpu_address, LEADER_SEND_TIMEOUT
-                );
                 LeaderDeliveryResult {
                     identity: identity.to_string(),
                     address: tpu_address.to_string(),
@@ -511,13 +442,6 @@ impl TpuConnectionManager {
 
                     // Only retry on retryable errors and if we have attempts left
                     if attempt < MAX_SEND_ATTEMPTS - 1 && is_retryable_error(&e) {
-                        debug!(
-                            "Retrying send to {} (attempt {}/{}): {}",
-                            tpu_address,
-                            attempt + 1,
-                            MAX_SEND_ATTEMPTS,
-                            e
-                        );
                         tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS)).await;
                     }
                 }
@@ -566,7 +490,6 @@ impl TpuConnectionManager {
         if let Some(cached) = self.connections.get(address) {
             if let Some(ref conn) = cached.conn {
                 if conn.close_reason().is_none() {
-                    debug!("Reusing connection to {}", address);
                     return Ok(conn.clone());
                 }
             }
@@ -575,8 +498,6 @@ impl TpuConnectionManager {
         // Mark as connecting (prevents duplicate connection attempts)
         self.connections
             .insert(address.to_string(), CachedConnection::default());
-
-        debug!("Creating new connection to {}", address);
         let addr: SocketAddr = address.parse().context("Invalid validator address")?;
 
         // Select endpoint using round-robin for load distribution
@@ -588,14 +509,10 @@ impl TpuConnectionManager {
         // Try 0-RTT connection first for lower latency
         let connection = match endpoint.connect(addr, &server_name)?.into_0rtt() {
             Ok((conn, rtt_accepted)) => {
-                debug!("Attempting 0-RTT connection to: {}", addr);
-                if rtt_accepted.await {
-                    debug!("0-RTT accepted");
-                }
+                let _ = rtt_accepted.await;
                 conn
             }
             Err(connecting) => {
-                debug!("0-RTT not available, waiting for full handshake");
                 match connecting.await {
                     Ok(conn) => conn,
                     Err(e) => {
@@ -615,7 +532,6 @@ impl TpuConnectionManager {
             },
         );
 
-        debug!("Connected to {}", address);
         Ok(connection)
     }
 
@@ -629,13 +545,9 @@ impl TpuConnectionManager {
         for leader in leaders {
             let manager = self.clone();
             let socket = leader.tpu_socket.clone();
-            let identity = leader.identity.clone();
 
             tokio::spawn(async move {
-                match manager.get_or_create_connection(&socket).await {
-                    Ok(_) => debug!("Pre-warmed connection to {} at {}", identity, socket),
-                    Err(e) => debug!("Failed to pre-warm connection to {}: {}", socket, e),
-                }
+                let _ = manager.get_or_create_connection(&socket).await;
             });
         }
     }

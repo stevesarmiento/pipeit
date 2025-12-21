@@ -5,7 +5,6 @@
 
 use anyhow::{Context, Result};
 use futures_util::StreamExt;
-use log::{debug, error, info, warn};
 use solana_client::nonblocking::pubsub_client::PubsubClient;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_response::SlotUpdate;
@@ -185,7 +184,6 @@ impl LeaderTracker {
         let curr_slot = slot_tracker.current_slot();
 
         if curr_slot == 0 {
-            eprintln!("[TPU] ⚠️ Current slot is 0, cannot determine leaders");
             return vec![];
         }
 
@@ -193,19 +191,11 @@ impl LeaderTracker {
         if curr_slot < schedule_tracker.current_epoch_slot_start()
             || curr_slot >= schedule_tracker.next_epoch_slot_start()
         {
-            eprintln!(
-                "[TPU] ⚠️ Current slot {} is outside epoch range [{}, {})",
-                curr_slot,
-                schedule_tracker.current_epoch_slot_start(),
-                schedule_tracker.next_epoch_slot_start()
-            );
             return vec![];
         }
 
         let mut leaders = Vec::new();
         let mut seen = HashSet::new();
-        let mut missing_sockets = 0;
-        let mut no_usable_address = 0;
 
         for i in start..end {
             let target_slot = match curr_slot.checked_add(i) {
@@ -245,44 +235,11 @@ impl LeaderTracker {
                                 tpu_socket: s.clone(),
                                 slot: curr_slot,
                             });
-                        } else {
-                            no_usable_address += 1;
-                            eprintln!(
-                                "[TPU] ⚠️ Leader {}... has socket entry but no usable address",
-                                &leader_pubkey[..8]
-                            );
                         }
                     }
-                    None => {
-                        missing_sockets += 1;
-                        // Only print first few to avoid spam
-                        if missing_sockets <= 3 {
-                            eprintln!(
-                                "[TPU] ⚠️ Leader {}... for slot {} not in cluster nodes",
-                                &leader_pubkey[..8],
-                                target_slot
-                            );
-                        }
-                    }
+                    None => {}
                 }
             }
-        }
-
-        // Summary logging if we had issues
-        if missing_sockets > 3 {
-            eprintln!(
-                "[TPU] ⚠️ ...and {} more leaders missing from cluster nodes (total: {})",
-                missing_sockets - 3,
-                missing_sockets
-            );
-        }
-        if missing_sockets > 0 || no_usable_address > 0 {
-            eprintln!(
-                "[TPU] 📊 Leader lookup summary: found={}, missing_sockets={}, no_usable_addr={}",
-                leaders.len(),
-                missing_sockets,
-                no_usable_address
-            );
         }
 
         leaders
@@ -309,27 +266,7 @@ impl LeaderTracker {
         // Look ahead by fanout * 4 slots to capture enough unique leaders.
         // Validators can have up to 4 consecutive slots (NUM_CONSECUTIVE_LEADER_SLOTS),
         // so with fanout=4 we need to look at least 16 slots ahead to find 4 unique leaders.
-        let leaders = self.get_future_leaders(0, fanout as u64 * 4).await;
-        
-        // Always log leader discovery results (this is important for debugging)
-        if (leaders.len() as u32) < fanout {
-            let sockets_count = self.leader_sockets.read().await.len();
-            eprintln!(
-                "[TPU] ⚠️ LOW LEADER COUNT: Found {} leaders (wanted {}). \
-                Sockets available: {}. Check logs above for missing validators.",
-                leaders.len(),
-                fanout,
-                sockets_count
-            );
-        } else {
-            eprintln!(
-                "[TPU] ✅ Found {} leaders for fanout {}",
-                leaders.len(),
-                fanout
-            );
-        }
-        
-        leaders
+        self.get_future_leaders(0, fanout as u64 * 4).await
     }
 
     /// Updates the leader socket addresses from cluster nodes.
@@ -372,17 +309,6 @@ impl LeaderTracker {
             }
         }
 
-        // Count validators with each type of socket
-        let with_forwards = new_sockets.values().filter(|s| s.tpu_forwards_socket.is_some()).count();
-        let with_tpu = new_sockets.values().filter(|s| s.tpu_socket.is_some()).count();
-        
-        info!(
-            "📡 Updated sockets for {} validators ({} with forwards, {} with tpu)",
-            new_sockets.len(),
-            with_forwards,
-            with_tpu
-        );
-
         let mut sockets = self.leader_sockets.write().await;
         *sockets = new_sockets;
 
@@ -396,11 +322,8 @@ impl LeaderTracker {
     pub async fn run_slot_listener(self: Arc<Self>) -> Result<()> {
         loop {
             match self.run_slot_listener_inner().await {
-                Ok(_) => {
-                    warn!("WebSocket slot listener ended unexpectedly, reconnecting...");
-                }
-                Err(e) => {
-                    error!("WebSocket error: {}, reconnecting in 1s...", e);
+                Ok(_) => {}
+                Err(_) => {
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             }
@@ -419,8 +342,6 @@ impl LeaderTracker {
             .await
             .context("Failed to subscribe to slot updates")?;
 
-        info!("Listening for slot updates...");
-
         // Mark as ready once we start receiving updates
         {
             let mut ready = self.ready.write().await;
@@ -428,9 +349,7 @@ impl LeaderTracker {
         }
 
         while let Some(slot_event) = slot_notifications.next().await {
-            if let Err(e) = self.handle_slot_event(slot_event).await {
-                error!("Error handling slot event: {}", e);
-            }
+            let _ = self.handle_slot_event(slot_event).await;
         }
 
         // Stream ended - will trigger reconnect in the outer loop
@@ -470,24 +389,8 @@ impl LeaderTracker {
         let rpc_client = RpcClient::new(self.rpc_url.clone());
         let mut schedule_tracker = self.schedule_tracker.write().await;
 
-        info!(
-            "Rotating epoch: {} -> {}",
-            schedule_tracker.current_epoch_slot_start(),
-            schedule_tracker.next_epoch_slot_start()
-        );
-
-        match schedule_tracker.maybe_rotate(curr_slot, &rpc_client).await {
-            Ok(true) => {
-                info!("Successfully rotated to next epoch");
-            }
-            Ok(false) => {
-                warn!("Rotation not needed despite check");
-            }
-            Err(e) => {
-                error!("Failed to rotate epoch: {}", e);
-                return Err(e).context("Epoch rotation failed");
-            }
-        }
+        schedule_tracker.maybe_rotate(curr_slot, &rpc_client).await
+            .context("Epoch rotation failed")?;
 
         Ok(())
     }
@@ -497,10 +400,7 @@ impl LeaderTracker {
     /// Should be spawned as a background task.
     pub async fn run_socket_updater(self: Arc<Self>, interval: Duration) {
         loop {
-            match self.update_leader_sockets().await {
-                Ok(_) => debug!("Leader sockets updated successfully"),
-                Err(e) => error!("Failed to update leader sockets: {}", e),
-            }
+            let _ = self.update_leader_sockets().await;
             tokio::time::sleep(interval).await;
         }
     }

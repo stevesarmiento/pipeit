@@ -246,7 +246,7 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
       version: config.version ?? 0,
       rpc: config.rpc,
       autoRetry: config.autoRetry ?? { maxAttempts: 3, backoff: 'exponential' },
-      logLevel: config.logLevel ?? 'minimal',
+      logLevel: config.logLevel ?? 'silent',
       priorityFee: config.priorityFee ?? 'medium',
       computeUnits: config.computeUnits ?? 'auto',
       ...(config.lookupTableAddresses && { lookupTableAddresses: config.lookupTableAddresses }),

@@ -550,11 +550,8 @@ async function submitToTpu(
             ...(abortSignal && { signal: abortSignal }),
         });
 
-        console.log('📬 [TPU] API response status:', response.status);
-
         if (!response.ok) {
             const error = await response.text();
-            console.error('❌ [TPU] API error:', error);
             throw new Error(`TPU API error: ${response.status} - ${error}`);
         }
 
