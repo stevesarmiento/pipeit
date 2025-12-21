@@ -1,284 +1,135 @@
-# ConnectorKit React Example
+# Pipeit Next.js Example
 
-Production-ready Solana wallet connection components built with shadcn/ui and Next.js. These components are designed to be copied into your project and customized to match your needs.
+Interactive example application showcasing Pipeit's transaction building capabilities with live mainnet demos.
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # From repo root
 pnpm install
 
 # Run the example
-cd examples/react
+cd examples/next-js
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see the components in action.
+Open [http://localhost:3000](http://localhost:3000) to see the landing page and playground.
 
-## 📦 What's Included
+## Pages
 
-### Components
+### Landing Page (`/`)
 
-All components are located in `components/connector/`:
+Demonstrates the value proposition of Pipeit with:
 
-#### **ConnectButton**
+- Hero section with key messaging
+- Benefits overview
+- Side-by-side code comparison (@solana/kit vs @pipeit/core)
+- Feature highlights (bento grid)
+- Playground CTA
 
-A fully-featured wallet connection button with dropdown menu.
+### Playground (`/playground`)
 
-**Features:**
+Interactive demos of various pipeline patterns with real mainnet transactions:
 
-- Opens wallet selection modal on click
-- Shows wallet avatar and truncated address when connected
-- Dropdown menu with copy address and disconnect actions
-- Loading states during connection
-- Fully styled with shadcn/ui components
+| Example | Description |
+|---------|-------------|
+| **Simple Transfer** | Single instruction, single transaction - baseline example |
+| **Batched Transfers** | Multiple transfers batched into one atomic transaction |
+| **Mixed Pipeline** | Instruction and transaction steps - shows when batching breaks |
+| **Jupiter Swap** | Token swap using Jupiter aggregator |
+| **Pipe Multi-Swap** | SOL → USDC → BONK sequential swaps with Flow orchestration |
+| **Jito Bundle** | MEV-protected bundle submission with Jito tip instructions |
+| **TPU Direct** | Direct QUIC submission to validator TPU - bypass RPC for max speed |
 
-**Usage:**
+Each example includes:
 
-```tsx
-import { ConnectButton } from '@/components/connector';
+- Visual pipeline execution flow
+- Strategy switcher (auto/batch/sequential)
+- Code view with syntax highlighting
+- Real wallet connection and execution
 
-export default function Header() {
-    return <ConnectButton />;
-}
-```
-
-#### **WalletModal**
-
-A dialog for selecting and connecting to Solana wallets.
-
-**Features:**
-
-- Lists all available Solana wallets
-- Shows wallet icons and names
-- Detects installed vs. not installed wallets
-- Provides installation links for popular wallets
-- Handles connection errors gracefully
-- Clean, accessible UI with shadcn Dialog
-
-**Usage:**
-
-```tsx
-import { WalletModal } from "@/components/connector"
-
-const [open, setOpen] = useState(false)
-
-<WalletModal open={open} onOpenChange={setOpen} />
-```
-
-#### **AccountSwitcher**
-
-A dropdown for switching between multiple wallet accounts.
-
-**Features:**
-
-- Automatically hidden when only one account
-- Dropdown menu showing all accounts
-- Visual indicator for active account
-- Truncated addresses for better UX
-- Seamless account switching
-
-**Usage:**
-
-```tsx
-import { AccountSwitcher } from '@/components/connector';
-
-export default function Header() {
-    return <AccountSwitcher />;
-}
-```
-
-#### **ClusterSelector**
-
-A dropdown for switching between Solana networks.
-
-**Features:**
-
-- Supports Mainnet, Devnet, Testnet, and Localnet
-- Color-coded badges for each network
-- Persists selection across sessions
-- Shows current network clearly
-- Visual indicator for active cluster
-
-**Usage:**
-
-```tsx
-import { ClusterSelector } from '@/components/connector';
-
-export default function Header() {
-    return <ClusterSelector />;
-}
-```
-
-## 🎨 Customization
-
-These components are meant to be **copied and customized**:
-
-1. **Copy** the component files from `components/connector/` to your project
-2. **Customize** the styling by modifying Tailwind classes
-3. **Extend** functionality by adding your own features
-4. **Replace** icons or add animations as needed
-
-### Example: Custom Styling
-
-```tsx
-// Change button colors
-<ConnectButton className="bg-purple-500 hover:bg-purple-600" />
-
-// Adjust dropdown position
-<AccountSwitcher className="ml-auto" />
-```
-
-## 📋 Dependencies
-
-These components use:
-
-- `@solana/connector` - Headless wallet connection logic
-- `shadcn/ui` - UI components (Button, Dialog, Dropdown, etc.)
-- `lucide-react` - Icons
-- `tailwindcss` - Styling
-
-## 🏗️ Project Structure
+## Project Structure
 
 ```
-components/
-├── connector/
-│   ├── connect-button.tsx      # Main connection button
-│   ├── wallet-modal.tsx         # Wallet selection dialog
-│   ├── account-switcher.tsx     # Account switching dropdown
-│   ├── cluster-selector.tsx     # Network selection dropdown
-│   └── index.ts                 # Barrel exports
-└── ui/                          # shadcn/ui base components
-    ├── button.tsx
-    ├── dialog.tsx
-    ├── dropdown-menu.tsx
-    └── ...
+examples/next-js/
+├── app/
+│   ├── page.tsx              # Landing page
+│   ├── playground/
+│   │   └── page.tsx          # Interactive pipeline playground
+│   ├── api/
+│   │   ├── tpu/              # TPU submission endpoint
+│   │   └── jupiter/          # Jupiter API proxy
+│   └── providers.tsx         # App providers
+├── components/
+│   ├── landing/              # Landing page components
+│   ├── pipeline/             # Pipeline visualization
+│   ├── connector/            # Wallet connection UI
+│   └── ui/                   # shadcn/ui components
+└── lib/
+    ├── use-tpu-submission.ts # TPU submission hook
+    └── visual-pipeline.ts    # Pipeline visualization logic
 ```
 
-## 🔧 How to Use in Your Project
+## Key Features Demonstrated
 
-### Option 1: Copy Components
+### Execution Strategies
 
-1. Install dependencies:
+The playground shows all four execution presets in action:
 
-    ```bash
-    npm install @solana/connector
-    npx shadcn@latest init
-    npx shadcn@latest add button dialog dropdown-menu avatar badge card
-    ```
+- `'standard'` - Default RPC submission
+- `'economical'` - Jito bundle only
+- `'fast'` - Jito + parallel RPC race
+- `'ultra'` - TPU direct (via @pipeit/fastlane)
 
-2. Copy components:
+### TPU Direct Submission
 
-    ```bash
-    cp -r components/connector your-project/components/
-    ```
+The TPU Direct example shows:
 
-3. Use in your app:
-    ```tsx
-    import { ConnectButton } from '@/components/connector';
-    ```
+- Real-time per-leader send results
+- Latency measurements
+- Connection status to validator TPU endpoints
+- Server-side QUIC handling via `/api/tpu` route
 
-### Option 2: Build Your Own
+### Flow API
 
-Use these components as reference to build your own custom implementation:
+Multi-step examples demonstrate:
 
-- Study how hooks are used (`useConnector`, `useAccount`, `useCluster`)
-- Adapt the UI patterns to your design system
-- Add custom features specific to your use case
+- Dynamic context between steps
+- Automatic batching strategies
+- Atomic instruction groups
+- Lifecycle hooks
 
-## 🎯 Example Implementation
+## Dependencies
 
-See `app/page.tsx` for a complete example showing:
+- `@pipeit/core` - Transaction builder
+- `@pipeit/actions` - DeFi actions (Jupiter swaps)
+- `@pipeit/fastlane` - TPU direct submission
+- `@solana/kit` - Solana primitives
+- `@solana/connector` - Wallet connection
+- `next` - React framework
+- `shadcn/ui` - UI components
+- `motion` - Animations
 
-- Header with all components
-- Connection status display
-- Wallet information cards
-- Network and account details
-- Component documentation
+## Environment Variables
 
-## 🚢 Production Tips
+Create `.env.local` for custom RPC:
 
-- **Error Handling**: Add toast notifications for connection errors
-- **Analytics**: Track wallet connections and network changes
-- **Accessibility**: Components use semantic HTML and ARIA labels
-- **Performance**: Components use React best practices (memoization, etc.)
-- **Mobile**: Test on mobile devices and adjust as needed
+```bash
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+SOLANA_WS_URL=wss://api.mainnet-beta.solana.com
+```
 
-## 📚 Learn More
+## Commands
 
-- [ConnectorKit Documentation](../../README.md)
-- [shadcn/ui Documentation](https://ui.shadcn.com)
-- [Connector Package](../../packages/connector)
+```bash
+pnpm dev        # Start dev server
+pnpm build      # Production build
+pnpm lint       # Run linter
+pnpm benchmark  # Run strategy benchmarks
+```
 
-## 💡 Tips
+## Learn More
 
-- **Combine Components**: Use ConnectButton, AccountSwitcher, and ClusterSelector together in your header
-- **Conditional Rendering**: AccountSwitcher automatically hides when not needed
-- **Persistence**: ClusterSelector remembers the selected network across sessions
-- **Styling**: All components accept `className` prop for easy customization
-
-## 🔄 Pipeline Examples
-
-The playground (`/playground`) demonstrates various transaction pipeline patterns:
-
-### Simple Transfer
-
-Single instruction, single transaction - baseline example showing basic pipeline usage.
-
-### Batched Transfers
-
-Multiple transfer instructions batched into one atomic transaction, demonstrating cost savings.
-
-### Mixed Pipeline
-
-Shows how transaction steps break batching - instruction steps batch together, but transaction steps execute separately.
-
-### DeFi Composition (Jupiter → Kamino)
-
-A complex multi-protocol DeFi transaction demonstrating:
-
-1. **Jupiter Swap**: Swap SOL to USDC on Jupiter aggregator
-2. **Kamino Deposit**: Deposit USDC into Kamino lending vault
-
-**Features Showcased:**
-
-- ✅ IDL-based instruction building
-- ✅ Automatic account discovery (no manual account management!)
-- ✅ Protocol plugins (Jupiter, Kamino)
-- ✅ Multi-step orchestration with dependencies
-- ✅ Visual execution tracking
-
-**How It Works:**
-The pipeline uses protocol-specific plugins that:
-
-- Call Jupiter's quote API to get optimal swap route and accounts
-- Derive Kamino PDAs (lending market, reserve, user ATAs)
-- Resolve all required accounts automatically
-- Handle complex account structures without user intervention
-
-**Batching Strategy:**
-
-- Uses `strategy: 'auto'` (default)
-- Jupiter swap executes in transaction 1
-- Kamino deposit executes in transaction 2
-- Cannot batch because deposit depends on swap's on-chain result
-- Total: 2 transactions, ~0.00001 SOL in fees
-
-**Technical Details:**
-
-- IDL files stored in `lib/idls/`
-- Registry setup in `lib/idl-registry.ts`
-- Pipeline hook in `components/pipeline/examples/jupiter-kamino.tsx`
-- Plugins automatically discover accounts via Jupiter/Kamino APIs
-
-## 🤝 Contributing
-
-These examples are meant to inspire and educate. Feel free to:
-
-- Fork and customize for your needs
-- Share improvements or variations
-- Report issues or suggest features
-
----
-
-Built with ❤️ using ConnectorKit, Next.js, and shadcn/ui
+- [Pipeit Documentation](../../README.md)
+- [@pipeit/core README](../../packages/core/README.md)
+- [@pipeit/actions README](../../packages/actions/README.md)
