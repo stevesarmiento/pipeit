@@ -1,6 +1,8 @@
 import type { NextConfig } from 'next';
 import path from 'node:path';
 
+const isVercelBuild = process.env.VERCEL === '1';
+
 const nextConfig: NextConfig = {
     // Keep native module external on server (loads real native bindings at runtime)
     serverExternalPackages: ['@pipeit/fastlane'],
@@ -17,15 +19,19 @@ const nextConfig: NextConfig = {
      *
      * Extend tracing to the monorepo root and force-include fastlane for the TPU route.
      */
-    outputFileTracingRoot: path.join(__dirname, '../../'),
-    outputFileTracingIncludes: {
-        '/api/tpu': [
-            // npm/yarn or fully hoisted installs
-            'node_modules/@pipeit/fastlane/**',
-            // pnpm store (actual package contents typically live here)
-            '../../node_modules/.pnpm/**/node_modules/@pipeit/fastlane/**',
-        ],
-    },
+    ...(isVercelBuild
+        ? {
+              outputFileTracingRoot: path.join(__dirname, '../../'),
+              outputFileTracingIncludes: {
+                  '/api/tpu': [
+                      // npm/yarn or fully hoisted installs
+                      'node_modules/@pipeit/fastlane/**',
+                      // pnpm store (actual package contents typically live here)
+                      '../../node_modules/.pnpm/**/node_modules/@pipeit/fastlane/**',
+                  ],
+              },
+          }
+        : {}),
 };
 
 export default nextConfig;
