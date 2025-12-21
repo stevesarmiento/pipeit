@@ -602,9 +602,11 @@ async function submitToTpu(
         
         return response;
     } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND') {
+        const errorCode = (error as NodeJS.ErrnoException).code;
+        if (errorCode === 'MODULE_NOT_FOUND' || errorCode === 'ERR_MODULE_NOT_FOUND') {
             throw new ExecutionStrategyError(
-                'TPU submission requires @pipeit/fastlane package. Install it with: npm install @pipeit/fastlane',
+                'TPU submission requires @pipeit/fastlane to be available at runtime. ' +
+                    'If you are deploying with Next.js (e.g. Vercel), ensure it is installed and included in output file tracing (outputFileTracingIncludes).',
             );
         }
         throw error;
