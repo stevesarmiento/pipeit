@@ -19,7 +19,6 @@ export type TpuErrorCode =
     | 'NO_LEADERS'
     | 'TIMEOUT'
     | 'VALIDATOR_UNREACHABLE'
-
     | 'ZERO_RTT_REJECTED';
 
 /**
