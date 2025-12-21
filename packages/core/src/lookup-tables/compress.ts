@@ -64,7 +64,6 @@ export function compressTransactionMessage<TMessage extends TransactionMessage>(
 ): TMessage {
     // Only works with versioned transactions (version 0)
     if (transactionMessage.version === 'legacy') {
-        console.warn('Address lookup tables are not supported for legacy transactions');
         return transactionMessage;
     }
 

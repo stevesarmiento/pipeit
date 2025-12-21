@@ -6,7 +6,6 @@
 //! Features continuous resubmission until confirmed for 90%+ landing rates.
 
 use anyhow::Context;
-use log::{info, warn};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -135,13 +134,6 @@ impl TpuClient {
     /// Creates a new TPU client instance.
     #[napi(constructor)]
     pub fn new(config: TpuClientConfig) -> napi::Result<Self> {
-        // Initialize logging
-        let _ = env_logger::try_init();
-
-        info!(
-            "Creating TpuClient with RPC: {}, WS: {}",
-            config.rpc_url, config.ws_url
-        );
 
         // Create tokio runtime
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -180,18 +172,12 @@ impl TpuClient {
         runtime.spawn(async move {
             // IMPORTANT: Fetch validator sockets FIRST before starting slot listener
             // This ensures we have socket data when is_ready() returns true
-            info!("Fetching initial validator sockets...");
-            match lt_clone.update_leader_sockets().await {
-                Ok(_) => info!("Initial socket update complete"),
-                Err(e) => log::error!("Initial socket update failed: {}", e),
-            }
+            let _ = lt_clone.update_leader_sockets().await;
 
             // Start slot listener (this will set is_ready = true)
             let lt_for_slots = lt_clone.clone();
             let slot_listener = tokio::spawn(async move {
-                if let Err(e) = lt_for_slots.run_slot_listener().await {
-                    log::error!("Slot listener error: {}", e);
-                }
+                let _ = lt_for_slots.run_slot_listener().await;
             });
 
             // Start socket updater (every 60 seconds)
@@ -229,11 +215,8 @@ impl TpuClient {
             }
         });
 
-        info!("TpuClient created successfully");
-
         // Default fanout to 4 if not specified
         let fanout = config.fanout.unwrap_or(4);
-        info!("TpuClient using fanout: {}", fanout);
 
         Ok(Self {
             leader_tracker,
@@ -255,8 +238,6 @@ impl TpuClient {
         let tx_data = transaction.as_ref();
         let cm = self.connection_manager.clone();
         let fanout = self.fanout;
-
-        info!("Sending transaction to {} leaders via TPU", fanout);
 
         let result = cm
             .send_transaction_with_fanout(tx_data, fanout)
@@ -328,10 +309,6 @@ impl TpuClient {
         };
         
         let signature_str = signature.to_string();
-        eprintln!("[TPU] 🔄 Starting slot-aware send until confirmed");
-        eprintln!("[TPU] 📝 Signature: {}", &signature_str[..16]);
-        eprintln!("[TPU] ⏱️  Timeout: {}ms", timeout.as_millis());
-        eprintln!("[TPU] 🎯 Strategy: slot-aware (1 leader for slots 0-2, 2 leaders for slot 3)");
         
         let mut rounds = 0u32;
         let mut total_leaders_sent = 0u32;
@@ -350,18 +327,7 @@ impl TpuClient {
             if current_slot == last_slot && current_slot != 0 {
                 stale_rounds += 1;
                 if stale_rounds >= 2 {
-                    eprintln!(
-                        "[TPU] ⚠️ Slot stale for {} rounds (stuck at {}), refreshing via RPC",
-                        stale_rounds, current_slot
-                    );
-                    match self.leader_tracker.refresh_slot_from_rpc().await {
-                        Ok(fresh_slot) => {
-                            eprintln!("[TPU] 🔄 Refreshed slot: {} -> {}", current_slot, fresh_slot);
-                        }
-                        Err(e) => {
-                            warn!("Failed to refresh slot from RPC: {}", e);
-                        }
-                    }
+                    let _ = self.leader_tracker.refresh_slot_from_rpc().await;
                 }
             } else {
                 stale_rounds = 0;
@@ -369,62 +335,34 @@ impl TpuClient {
             }
             
             // 1. Get slot-aware leaders (1 or 2 based on slot position)
-            let (leaders, slot_position) = self.leader_tracker.get_slot_aware_leaders().await;
+            let (leaders, _slot_position) = self.leader_tracker.get_slot_aware_leaders().await;
             
             // Fallback to fixed fanout if slot estimation is unreliable
             let send_result = if leaders.is_empty() {
-                eprintln!(
-                    "[TPU] ⚠️ Round {}: slot unreliable, falling back to fanout {}",
-                    rounds, self.fanout
-                );
                 self.connection_manager
                     .send_transaction_with_fanout(&tx_data, self.fanout)
                     .await
             } else {
-                let current_slot = self.leader_tracker.current_slot().await;
-                let hedge_indicator = if slot_position == 3 { " (hedging)" } else { "" };
-                eprintln!(
-                    "[TPU] 📤 Round {}: slot {} (pos {}/4) -> {} leader(s){}",
-                    rounds, current_slot, slot_position, leaders.len(), hedge_indicator
-                );
                 self.connection_manager
                     .send_to_leaders(&tx_data, &leaders)
                     .await
             };
             
-            match &send_result {
-                Ok(result) => {
-                    total_leaders_sent += result.leader_count as u32;
-                }
-                Err(e) => {
-                    eprintln!("[TPU] ⚠️ Round {}: send failed: {}", rounds, e);
-                }
+            if let Ok(result) = &send_result {
+                total_leaders_sent += result.leader_count as u32;
             }
             
             // 2. Check if confirmed
-            match self.check_confirmed(&signature).await {
-                Ok(true) => {
-                    let latency = start.elapsed().as_millis() as u32;
-                    eprintln!(
-                        "[TPU] ✅ CONFIRMED after {} rounds, {} leaders, {}ms",
-                        rounds, total_leaders_sent, latency
-                    );
-                    return Ok(SendUntilConfirmedResult {
-                        confirmed: true,
-                        signature: signature_str,
-                        rounds,
-                        total_leaders_sent,
-                        latency_ms: latency,
-                        error: None,
-                    });
-                }
-                Ok(false) => {
-                    // Not confirmed yet, continue
-                }
-                Err(e) => {
-                    // RPC error, log and continue
-                    warn!("Confirmation check failed: {}", e);
-                }
+            if let Ok(true) = self.check_confirmed(&signature).await {
+                let latency = start.elapsed().as_millis() as u32;
+                return Ok(SendUntilConfirmedResult {
+                    confirmed: true,
+                    signature: signature_str,
+                    rounds,
+                    total_leaders_sent,
+                    latency_ms: latency,
+                    error: None,
+                });
             }
             
             // 3. Wait one slot before next round
@@ -442,10 +380,6 @@ impl TpuClient {
         let latency = start.elapsed().as_millis() as u32;
         
         if final_confirmed {
-            eprintln!(
-                "[TPU] ✅ CONFIRMED (final check) after {} rounds, {} leaders, {}ms",
-                rounds, total_leaders_sent, latency
-            );
             Ok(SendUntilConfirmedResult {
                 confirmed: true,
                 signature: signature_str,
@@ -455,10 +389,6 @@ impl TpuClient {
                 error: None,
             })
         } else {
-            eprintln!(
-                "[TPU] ❌ TIMEOUT after {} rounds, {} leaders, {}ms",
-                rounds, total_leaders_sent, latency
-            );
             Ok(SendUntilConfirmedResult {
                 confirmed: false,
                 signature: signature_str,
@@ -583,8 +513,6 @@ impl TpuClient {
     /// Shuts down the client and closes all connections.
     #[napi]
     pub fn shutdown(&mut self) {
-        info!("Shutting down TpuClient");
-
         // Send shutdown signal
         if let Some(tx) = self.shutdown_tx.take() {
             let _ = tx.send(());

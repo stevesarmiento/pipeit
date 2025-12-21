@@ -187,12 +187,6 @@ impl ScheduleTracker {
             return Ok(false); // Still in current epoch
         }
 
-        log::info!(
-            "Rotating epoch: {} -> {}",
-            self.curr_epoch_slot_start,
-            self.next_epoch_slot_start
-        );
-
         // Rotate to next epoch
         self.curr_epoch_slot_start = self.next_epoch_slot_start;
         self.next_epoch_slot_start += self.slots_in_epoch;

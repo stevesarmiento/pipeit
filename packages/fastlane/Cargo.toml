@@ -1,6 +1,6 @@
 [package]
 name = "pipeit-fastlane"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2021"
 description = "Native QUIC client for direct Solana TPU transaction submission"
 license = "MIT"
@@ -33,10 +33,6 @@ dashmap = "6"
 # Error handling
 anyhow = "1"
 thiserror = "1"
-
-# Logging
-log = "0.4"
-env_logger = "0.11"
 
 [build-dependencies]
 napi-build = "2"
