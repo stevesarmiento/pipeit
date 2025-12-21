@@ -39,8 +39,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/actions
       '@pipeit/core':
-        specifier: ^0.2.2
-        version: 0.2.2(59e1c826774811eacd0a7dd223ad1500)
+        specifier: ^0.2.3
+        version: 0.2.3(59e1c826774811eacd0a7dd223ad1500)
       '@pipeit/fastlane':
         specifier: ^0.1.1
         version: 0.1.1
@@ -1120,8 +1120,8 @@ packages:
       react: '>= 16.8'
       react-dom: '>= 16.8'
 
-  '@pipeit/core@0.2.2':
-    resolution: {integrity: sha512-Dg9Kzl5Q8mwSBUUgKgtSxmet9Uc+1+BF6hkeGbZbRjQDU+zA/B6PHr4MCNMz5gJu/+czR1ySS0OTOwjv44yNAQ==}
+  '@pipeit/core@0.2.3':
+    resolution: {integrity: sha512-ZDy+8GLf51F1BSlgjUDShPugS30eeHCbst9pfYqlm9tNWDypMMrfvRYgUdxwxgT3xNYZEf3bKAdVkKOKFQFsig==}
     peerDependencies:
       '@solana/addresses': '*'
       '@solana/codecs-strings': '*'
@@ -6153,7 +6153,7 @@ snapshots:
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
 
-  '@pipeit/core@0.2.2(59e1c826774811eacd0a7dd223ad1500)':
+  '@pipeit/core@0.2.3(59e1c826774811eacd0a7dd223ad1500)':
     dependencies:
       '@solana/addresses': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/codecs-strings': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
