@@ -11,6 +11,7 @@ import type {
     GetEpochInfoApi,
     GetSignatureStatusesApi,
     SendTransactionApi,
+    SimulateTransactionApi,
 } from '@solana/rpc';
 import type { RpcSubscriptions, SignatureNotificationsApi, SlotNotificationsApi } from '@solana/rpc-subscriptions';
 import {
@@ -27,6 +28,11 @@ import {
     signTransactionMessageWithSigners,
     sendAndConfirmTransactionFactory,
 } from '@solana/kit';
+import {
+    fillProvisorySetComputeUnitLimitInstruction,
+    estimateComputeUnitLimitFactory,
+    estimateAndUpdateProvisoryComputeUnitLimitFactory,
+} from '@solana-program/compute-budget';
 
 /**
  * Configuration for executing an instruction plan.
@@ -35,7 +41,7 @@ export interface ExecutePlanConfig {
     /**
      * RPC client.
      */
-    rpc: Rpc<GetEpochInfoApi & GetSignatureStatusesApi & SendTransactionApi & GetLatestBlockhashApi>;
+    rpc: Rpc<GetEpochInfoApi & GetSignatureStatusesApi & SendTransactionApi & GetLatestBlockhashApi & SimulateTransactionApi>;
 
     /**
      * RPC subscriptions client.
@@ -113,17 +119,18 @@ export interface ExecutePlanConfig {
 export async function executePlan(plan: InstructionPlan, config: ExecutePlanConfig): Promise<TransactionPlanResult> {
     const { rpc, rpcSubscriptions, signer, commitment = 'confirmed', abortSignal } = config;
 
-    // Create transaction planner
+    // Create transaction planner with provisory CU instruction
     const planner = createTransactionPlanner({
         createTransactionMessage: async () => {
             // Fetch latest blockhash
             const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
 
-            // Create transaction message with fee payer and blockhash
+            // Create transaction message with fee payer, blockhash, and provisory CU instruction
             return pipe(
                 createTransactionMessage({ version: 0 }),
                 tx => setTransactionMessageFeePayer(signer.address, tx),
                 tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
+                tx => fillProvisorySetComputeUnitLimitInstruction(tx),
             );
         },
     });
@@ -134,11 +141,18 @@ export async function executePlan(plan: InstructionPlan, config: ExecutePlanConf
     // Create send and confirm factory
     const sendAndConfirm = sendAndConfirmTransactionFactory({ rpc, rpcSubscriptions });
 
-    // Create transaction executor
+    // Create CU estimation helpers
+    const estimateCULimit = estimateComputeUnitLimitFactory({ rpc });
+    const estimateAndSetCULimit = estimateAndUpdateProvisoryComputeUnitLimitFactory(estimateCULimit);
+
+    // Create transaction executor with CU estimation
     const executor = createTransactionPlanExecutor({
         executeTransactionMessage: async message => {
+            // Estimate and update the provisory CU instruction with actual value
+            const estimatedMessage = await estimateAndSetCULimit(message);
+
             // Sign the transaction
-            const signedTransaction = await signTransactionMessageWithSigners(message);
+            const signedTransaction = await signTransactionMessageWithSigners(estimatedMessage);
 
             // Send and confirm - cast to expected type since we know it has blockhash lifetime
             await sendAndConfirm(signedTransaction as Parameters<typeof sendAndConfirm>[0], { commitment });

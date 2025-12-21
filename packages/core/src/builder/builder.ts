@@ -80,7 +80,6 @@ import { getBase58Decoder } from '@solana/codecs-strings';
 import { SolanaError, SOLANA_ERROR__TRANSACTION__FEE_PAYER_MISSING } from '@solana/errors';
 import type { BuilderState, RequiredState, LifetimeConstraint, ExecuteConfig } from '../types.js';
 import { validateTransaction, validateTransactionSize } from '../validation/index.js';
-import { packInstructions } from '../packing/index.js';
 
 // Import new modules
 import {
@@ -92,6 +91,11 @@ import {
   PRIORITY_FEE_LEVELS,
   type PriorityFeeLevel,
 } from '../compute-budget/index.js';
+import {
+  fillProvisorySetComputeUnitLimitInstruction,
+  estimateComputeUnitLimitFactory,
+  estimateAndUpdateProvisoryComputeUnitLimitFactory,
+} from '@solana-program/compute-budget';
 import { fetchNonceValue, type DurableNonceConfig } from '../nonce/index.js';
 import {
   type AddressesByLookupTableAddress,
@@ -450,7 +454,10 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
     
     // 1. Compute unit limit
     const computeUnits = await this.resolveComputeUnits();
-    if (computeUnits !== null) {
+    if (computeUnits === TransactionBuilder.PROVISORY_CU_SENTINEL) {
+      // Use provisory instruction - will be estimated via simulation during execute()
+      message = fillProvisorySetComputeUnitLimitInstruction(message);
+    } else if (computeUnits !== null) {
       message = appendTransactionMessageInstruction(
         createSetComputeUnitLimitInstruction(computeUnits),
         message
@@ -520,8 +527,27 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
   }
 
   /**
+   * Sentinel value indicating provisory CU instruction should be used.
+   * The actual CU limit will be estimated via simulation during execute().
+   */
+  private static readonly PROVISORY_CU_SENTINEL = -1;
+
+  /**
+   * Check if the current compute units config uses the simulate strategy.
+   */
+  private isSimulateCUStrategy(): boolean {
+    const { computeUnits } = this.config;
+    if (typeof computeUnits === 'object' && computeUnits.strategy === 'simulate') {
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Resolve compute units based on configuration.
    * Returns null if no compute unit instruction should be added.
+   * Returns PROVISORY_CU_SENTINEL if a provisory instruction should be added
+   * (will be updated via simulation during execute()).
    */
   private async resolveComputeUnits(): Promise<number | null> {
     const { computeUnits } = this.config;
@@ -545,12 +571,10 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
       return computeUnits.units ?? 200_000;
     }
     
-    // Simulate strategy - would need simulation first
-    // For now, return a sensible default
+    // Simulate strategy - use provisory pattern
+    // The actual CU limit will be estimated via simulation during execute()
     if (computeUnits.strategy === 'simulate') {
-      // Simulation-based compute unit estimation would be done during execute()
-      // For build(), return a safe default
-      return computeUnits.units ?? 200_000;
+      return TransactionBuilder.PROVISORY_CU_SENTINEL;
     }
     
     return null;
@@ -634,7 +658,15 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
     }
     
     // Build message using the unified build method
-    const message = await (this as any).build();
+    let message = await (this as any).build();
+    
+    // If using simulate strategy, estimate and update the provisory CU instruction
+    if (this.isSimulateCUStrategy()) {
+      const rpcWithSim = this.config.rpc as unknown as Rpc<SimulateTransactionApi>;
+      const estimateCULimit = estimateComputeUnitLimitFactory({ rpc: rpcWithSim });
+      const estimateAndSetCULimit = estimateAndUpdateProvisoryComputeUnitLimitFactory(estimateCULimit);
+      message = await estimateAndSetCULimit(message);
+    }
     
     // Sign transaction
     const signedTransaction: any = await signTransactionMessageWithSigners(message);
@@ -742,7 +774,19 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
     }
     
     // Build message using the unified build method
-    const message = await (builderToUse as any).build();
+    let message = await (builderToUse as any).build();
+    
+    // If using simulate strategy, estimate and update the provisory CU instruction
+    if (builderToUse.isSimulateCUStrategy()) {
+      const rpcWithSim = this.config.rpc as unknown as Rpc<SimulateTransactionApi>;
+      const estimateCULimit = estimateComputeUnitLimitFactory({ rpc: rpcWithSim });
+      const estimateAndSetCULimit = estimateAndUpdateProvisoryComputeUnitLimitFactory(estimateCULimit);
+      message = await estimateAndSetCULimit(message);
+      
+      if (this.config.logLevel !== 'silent') {
+        console.log(`[Pipeit] Estimated compute units via simulation`);
+      }
+    }
     
     // Sign transaction
     const signedTransaction: any = await signTransactionMessageWithSigners(message);
@@ -983,56 +1027,6 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
       remaining: TRANSACTION_SIZE_LIMIT - size,
       percentUsed: (size / TRANSACTION_SIZE_LIMIT) * 100,
       canFitMore: size < TRANSACTION_SIZE_LIMIT,
-    };
-  }
-
-  /**
-   * Add instructions with auto-packing. Returns overflow instructions that did not fit.
-   * Useful for batching large instruction sets across multiple transactions.
-   *
-   * @param instructions - Array of instructions to add
-   * @returns Object with the new builder (with packed instructions) and overflow array
-   *
-   * @example
-   * ```ts
-   * const { builder: packed, overflow } = await baseBuilder
-   *   .addInstructionsWithPacking(manyInstructions);
-   *
-   * // Execute the first batch
-   * await packed.execute({ rpcSubscriptions });
-   *
-   * // Handle overflow in another transaction
-   * if (overflow.length > 0) {
-   *   const { builder: packed2 } = await baseBuilder
-   *     .addInstructionsWithPacking(overflow);
-   *   await packed2.execute({ rpcSubscriptions });
-   * }
-   * ```
-   */
-  async addInstructionsWithPacking(
-    instructions: readonly Instruction[]
-  ): Promise<{ builder: TransactionBuilder<TState>; overflow: Instruction[] }> {
-    if (!this.feePayer) {
-      throw new SolanaError(SOLANA_ERROR__TRANSACTION__FEE_PAYER_MISSING);
-    }
-    
-    if (!this.config.rpc) {
-      throw new Error('RPC required for packing. Pass rpc in constructor.');
-    }
-    
-    // Build a base message to calculate sizes against
-    const baseMessage = await (this as any).build();
-    
-    // Pack instructions
-    const result = packInstructions(baseMessage, [...instructions]);
-    
-    // Create a new builder with the packed instructions
-    const builder = this.clone();
-    builder.instructions = [...this.instructions, ...result.packed];
-    
-    return {
-      builder,
-      overflow: result.overflow,
     };
   }
 

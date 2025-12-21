@@ -219,6 +219,9 @@ importers:
 
   packages/core:
     devDependencies:
+      '@solana-program/compute-budget':
+        specifier: '*'
+        version: 0.11.0(@solana/kit@5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)))
       '@solana/addresses':
         specifier: '*'
         version: 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
@@ -1690,6 +1693,11 @@ packages:
 
   '@solana-mobile/wallet-standard-mobile@0.4.3':
     resolution: {integrity: sha512-LLMQs/KgRZpftIhwOLCM2VZLMdA2vIghJjKsYUIiy1FBJS9GEkGDLJdbujb92lfAdmYwbyTuolIRik7JMPH3Kg==}
+
+  '@solana-program/compute-budget@0.11.0':
+    resolution: {integrity: sha512-7f1ePqB/eURkTwTOO9TNIdUXZcyrZoX3Uy2hNo7cXMfNhPFWp9AVgIyRNBc2jf15sdUa9gNpW+PfP2iV8AYAaw==}
+    peerDependencies:
+      '@solana/kit': ^5.0
 
   '@solana-program/system@0.9.1':
     resolution: {integrity: sha512-2N30CgYJw0qX8jKU8vW808yLmx5oRoDSM+FC6tqhsLQiph7agK9eRXJlnrq6OUfTAZd5yCYQHQvGtx0S8I9SAA==}
@@ -6725,6 +6733,10 @@ snapshots:
       - react
       - react-native
       - typescript
+
+  '@solana-program/compute-budget@0.11.0(@solana/kit@5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)))':
+    dependencies:
+      '@solana/kit': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
 
   '@solana-program/system@0.9.1(@solana/kit@5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)))':
     dependencies:

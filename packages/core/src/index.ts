@@ -73,9 +73,6 @@ export * from './helpers.js';
 // Signers - re-exports from Kit
 export * from './signers/index.js';
 
-// Packing - message packing utilities
-export * from './packing/index.js';
-
 // Compute Budget - priority fees and compute units
 export * from './compute-budget/index.js';
 
