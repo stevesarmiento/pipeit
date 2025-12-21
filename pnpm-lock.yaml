@@ -39,11 +39,11 @@ importers:
         specifier: workspace:*
         version: link:../../packages/actions
       '@pipeit/core':
-        specifier: ^0.2.3
-        version: 0.2.3(59e1c826774811eacd0a7dd223ad1500)
+        specifier: workspace:*
+        version: link:../../packages/core
       '@pipeit/fastlane':
-        specifier: ^0.1.1
-        version: 0.1.1
+        specifier: workspace:*
+        version: link:../../packages/fastlane
       '@radix-ui/react-accordion':
         specifier: ^1.2.12
         version: 1.2.12(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -1122,28 +1122,6 @@ packages:
     peerDependencies:
       react: '>= 16.8'
       react-dom: '>= 16.8'
-
-  '@pipeit/core@0.2.3':
-    resolution: {integrity: sha512-ZDy+8GLf51F1BSlgjUDShPugS30eeHCbst9pfYqlm9tNWDypMMrfvRYgUdxwxgT3xNYZEf3bKAdVkKOKFQFsig==}
-    peerDependencies:
-      '@solana/addresses': '*'
-      '@solana/codecs-strings': '*'
-      '@solana/errors': '*'
-      '@solana/functional': '*'
-      '@solana/instruction-plans': '*'
-      '@solana/instructions': '*'
-      '@solana/kit': ^5.0.0
-      '@solana/programs': '*'
-      '@solana/rpc': '*'
-      '@solana/rpc-subscriptions': '*'
-      '@solana/rpc-types': '*'
-      '@solana/signers': '*'
-      '@solana/transaction-messages': '*'
-      '@solana/transactions': '*'
-
-  '@pipeit/fastlane@0.1.1':
-    resolution: {integrity: sha512-D68jx6opwkeWp5AfczPOXNdZDbTZ4dnJ64zZWcvQZie7zaHK31GV/NcXKTYVjhJPwIBw437wxaOzAbTYuDA45Q==}
-    engines: {node: '>= 18'}
 
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
@@ -6181,25 +6159,6 @@ snapshots:
     dependencies:
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
-
-  '@pipeit/core@0.2.3(59e1c826774811eacd0a7dd223ad1500)':
-    dependencies:
-      '@solana/addresses': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
-      '@solana/codecs-strings': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
-      '@solana/errors': 5.0.0(typescript@5.9.3)
-      '@solana/functional': 5.0.0(typescript@5.9.3)
-      '@solana/instruction-plans': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
-      '@solana/instructions': 5.0.0(typescript@5.9.3)
-      '@solana/kit': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
-      '@solana/programs': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
-      '@solana/rpc': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
-      '@solana/rpc-subscriptions': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
-      '@solana/rpc-types': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
-      '@solana/signers': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
-      '@solana/transaction-messages': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
-      '@solana/transactions': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
-
-  '@pipeit/fastlane@0.1.1': {}
 
   '@pkgjs/parseargs@0.11.0':
     optional: true
