@@ -168,6 +168,8 @@ impl TpuClient {
         let lt_clone = leader_tracker.clone();
         let cm_clone = connection_manager.clone();
         let prewarm = config.prewarm_connections.unwrap_or(true);
+        let fanout = config.fanout.unwrap_or(4);
+        let prewarm_lookahead = (fanout as u64) * 4;
 
         runtime.spawn(async move {
             // IMPORTANT: Fetch validator sockets FIRST before starting slot listener
@@ -194,9 +196,8 @@ impl TpuClient {
             let prewarm_task = if prewarm {
                 Some(tokio::spawn(async move {
                     loop {
-                        // Prewarm connections to next 16 slots worth of leaders
-                        // (fanout * 4 to match leader lookahead)
-                        cm_clone.prewarm_connections(16).await;
+                        // Prewarm connections to next fanout * 4 slots (leader lookahead).
+                        cm_clone.prewarm_connections(prewarm_lookahead).await;
                         tokio::time::sleep(Duration::from_millis(400)).await;
                     }
                 }))
@@ -214,9 +215,6 @@ impl TpuClient {
                 task.abort();
             }
         });
-
-        // Default fanout to 4 if not specified
-        let fanout = config.fanout.unwrap_or(4);
 
         Ok(Self {
             leader_tracker,
@@ -528,5 +526,4 @@ impl Drop for TpuClient {
         self.shutdown();
     }
 }
-
 

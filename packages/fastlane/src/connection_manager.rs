@@ -112,7 +112,7 @@ pub struct TpuConnectionManager {
     /// Leader tracker for routing.
     leader_tracker: Arc<LeaderTracker>,
     /// Round-robin counter for endpoint selection.
-    next_endpoint: AtomicUsize,
+    next_endpoint: Arc<AtomicUsize>,
 }
 
 impl TpuConnectionManager {
@@ -171,7 +171,7 @@ impl TpuConnectionManager {
             endpoints,
             connections: Arc::new(DashMap::new()),
             leader_tracker,
-            next_endpoint: AtomicUsize::new(0),
+            next_endpoint: Arc::new(AtomicUsize::new(0)),
         })
     }
 
@@ -586,8 +586,8 @@ impl Clone for TpuConnectionManager {
             endpoints: self.endpoints.clone(),
             connections: self.connections.clone(),
             leader_tracker: self.leader_tracker.clone(),
-            // Each clone starts with its own round-robin counter
-            next_endpoint: AtomicUsize::new(0),
+            // Share round-robin counter across clones for true distribution.
+            next_endpoint: self.next_endpoint.clone(),
         }
     }
 }
@@ -605,5 +605,4 @@ impl std::fmt::Debug for TpuConnectionManager {
             .finish()
     }
 }
-
 
