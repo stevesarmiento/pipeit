@@ -285,27 +285,21 @@ impl LeaderTracker {
         let mut new_sockets = HashMap::new();
 
         for node in nodes {
-            if let Some(gossip) = node.gossip {
-                let ip = gossip.ip();
+            // Standard TPU QUIC socket (full SocketAddr from RPC)
+            let tpu_socket = node.tpu_quic.map(|addr| addr.to_string());
 
-                // Standard TPU QUIC socket
-                let tpu_socket = node.tpu_quic.map(|addr| format!("{}:{}", ip, addr.port()));
+            // TPU forwards QUIC socket (preferred by validators)
+            let tpu_forwards_socket = node.tpu_forwards_quic.map(|addr| addr.to_string());
 
-                // TPU forwards QUIC socket (preferred by validators)
-                let tpu_forwards_socket = node
-                    .tpu_forwards_quic
-                    .map(|addr| format!("{}:{}", ip, addr.port()));
-
-                // Only add if at least one socket is available
-                if tpu_socket.is_some() || tpu_forwards_socket.is_some() {
-                    new_sockets.insert(
-                        node.pubkey.to_string(),
-                        TpuSockets {
-                            tpu_socket,
-                            tpu_forwards_socket,
-                        },
-                    );
-                }
+            // Only add if at least one socket is available
+            if tpu_socket.is_some() || tpu_forwards_socket.is_some() {
+                new_sockets.insert(
+                    node.pubkey.to_string(),
+                    TpuSockets {
+                        tpu_socket,
+                        tpu_forwards_socket,
+                    },
+                );
             }
         }
 
@@ -414,5 +408,4 @@ impl std::fmt::Debug for LeaderTracker {
             .finish()
     }
 }
-
 
