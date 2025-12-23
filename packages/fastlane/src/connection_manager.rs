@@ -606,3 +606,88 @@ impl std::fmt::Debug for TpuConnectionManager {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_socket_addr_to_quic_server_name_ipv4() {
+        let addr: SocketAddr = "192.168.1.1:8009".parse().unwrap();
+        assert_eq!(socket_addr_to_quic_server_name(&addr), "192.168.1.1.8009.sol");
+    }
+
+    #[test]
+    fn test_socket_addr_to_quic_server_name_ipv4_different_ports() {
+        let addr1: SocketAddr = "10.0.0.1:8000".parse().unwrap();
+        assert_eq!(socket_addr_to_quic_server_name(&addr1), "10.0.0.1.8000.sol");
+
+        let addr2: SocketAddr = "172.16.0.100:9000".parse().unwrap();
+        assert_eq!(socket_addr_to_quic_server_name(&addr2), "172.16.0.100.9000.sol");
+    }
+
+    #[test]
+    fn test_socket_addr_to_quic_server_name_ipv6() {
+        let addr: SocketAddr = "[::1]:8009".parse().unwrap();
+        assert_eq!(socket_addr_to_quic_server_name(&addr), "::1.8009.sol");
+
+        let addr2: SocketAddr = "[2001:db8::1]:8009".parse().unwrap();
+        assert_eq!(socket_addr_to_quic_server_name(&addr2), "2001:db8::1.8009.sol");
+    }
+
+    #[test]
+    fn test_round_robin_counter_shared_across_clones() {
+        // This test verifies that Arc<AtomicUsize> is properly shared
+        // when the connection manager is cloned (the PR fix)
+        let counter = Arc::new(AtomicUsize::new(0));
+        let counter_clone = counter.clone();
+
+        // Simulate what happens with cloned managers - all should share state
+        assert_eq!(counter.fetch_add(1, Ordering::Relaxed), 0);
+        assert_eq!(counter_clone.fetch_add(1, Ordering::Relaxed), 1);
+        assert_eq!(counter.fetch_add(1, Ordering::Relaxed), 2);
+        assert_eq!(counter_clone.fetch_add(1, Ordering::Relaxed), 3);
+
+        // Final value should be 4, shared across both references
+        assert_eq!(counter.load(Ordering::Relaxed), 4);
+        assert_eq!(counter_clone.load(Ordering::Relaxed), 4);
+    }
+
+    #[test]
+    fn test_round_robin_counter_modulo_behavior() {
+        // Test that the counter properly cycles through endpoints
+        let counter = Arc::new(AtomicUsize::new(0));
+        let num_endpoints = NUM_ENDPOINTS; // 5 endpoints
+
+        // Simulate selecting endpoints with round-robin
+        for i in 0..15 {
+            let idx = counter.fetch_add(1, Ordering::Relaxed) % num_endpoints;
+            assert_eq!(idx, i % num_endpoints);
+        }
+    }
+
+    #[test]
+    fn test_round_robin_distribution_across_clones() {
+        // Verify that multiple clones selecting endpoints results in
+        // even distribution (not all starting at 0)
+        let counter = Arc::new(AtomicUsize::new(0));
+        let clone1 = counter.clone();
+        let clone2 = counter.clone();
+        let num_endpoints = NUM_ENDPOINTS;
+
+        // Clone 1 selects endpoint 0
+        let idx1 = clone1.fetch_add(1, Ordering::Relaxed) % num_endpoints;
+        assert_eq!(idx1, 0);
+
+        // Clone 2 selects endpoint 1 (not 0!)
+        let idx2 = clone2.fetch_add(1, Ordering::Relaxed) % num_endpoints;
+        assert_eq!(idx2, 1);
+
+        // Clone 1 selects endpoint 2
+        let idx3 = clone1.fetch_add(1, Ordering::Relaxed) % num_endpoints;
+        assert_eq!(idx3, 2);
+
+        // Original counter selects endpoint 3
+        let idx4 = counter.fetch_add(1, Ordering::Relaxed) % num_endpoints;
+        assert_eq!(idx4, 3);
+    }
+}

@@ -409,3 +409,50 @@ impl std::fmt::Debug for LeaderTracker {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_slot_position_basic_cycle() {
+        // Slot position cycles 0-3 within leader's 4-slot window
+        assert_eq!(LeaderTracker::get_slot_position(0), 0);
+        assert_eq!(LeaderTracker::get_slot_position(1), 1);
+        assert_eq!(LeaderTracker::get_slot_position(2), 2);
+        assert_eq!(LeaderTracker::get_slot_position(3), 3);
+    }
+
+    #[test]
+    fn test_get_slot_position_wraps_correctly() {
+        // Position wraps back to 0 after slot 3
+        assert_eq!(LeaderTracker::get_slot_position(4), 0);
+        assert_eq!(LeaderTracker::get_slot_position(5), 1);
+        assert_eq!(LeaderTracker::get_slot_position(6), 2);
+        assert_eq!(LeaderTracker::get_slot_position(7), 3);
+        assert_eq!(LeaderTracker::get_slot_position(8), 0);
+    }
+
+    #[test]
+    fn test_get_slot_position_large_slots() {
+        // Test with realistic slot numbers (mainnet is in the hundreds of millions)
+        assert_eq!(LeaderTracker::get_slot_position(100), 0); // 100 % 4 = 0
+        assert_eq!(LeaderTracker::get_slot_position(101), 1);
+        assert_eq!(LeaderTracker::get_slot_position(102), 2);
+        assert_eq!(LeaderTracker::get_slot_position(103), 3);
+
+        // Very large slot numbers
+        assert_eq!(LeaderTracker::get_slot_position(300_000_000), 0);
+        assert_eq!(LeaderTracker::get_slot_position(300_000_001), 1);
+        assert_eq!(LeaderTracker::get_slot_position(300_000_002), 2);
+        assert_eq!(LeaderTracker::get_slot_position(300_000_003), 3);
+    }
+
+    #[test]
+    fn test_get_slot_position_hedge_slot() {
+        // Position 3 is the "hedge" slot where we should send to next leader too
+        assert_eq!(LeaderTracker::get_slot_position(3), 3);
+        assert_eq!(LeaderTracker::get_slot_position(7), 3);
+        assert_eq!(LeaderTracker::get_slot_position(11), 3);
+        assert_eq!(LeaderTracker::get_slot_position(99), 3); // 99 % 4 = 3
+    }
+}
