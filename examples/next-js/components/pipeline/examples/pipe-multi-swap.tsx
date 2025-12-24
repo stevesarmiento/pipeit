@@ -46,7 +46,7 @@ export function usePipeMultiSwapPipeline() {
                     const { address } = await import('@solana/kit');
 
                     const lookupTables = result.addressLookupTableAddresses ?? [];
-                    const lookupTableAddrs = lookupTables.map(addr => address(addr));
+                    const lookupTableAddrs = lookupTables.map((addr: string) => address(addr));
 
                     const { value: blockhash } = await (ctx.rpc as any).getLatestBlockhash().send();
 
@@ -88,7 +88,7 @@ export function usePipeMultiSwapPipeline() {
                     const { address } = await import('@solana/kit');
 
                     const lookupTables = result.addressLookupTableAddresses ?? [];
-                    const lookupTableAddrs = lookupTables.map(addr => address(addr));
+                    const lookupTableAddrs = lookupTables.map((addr: string) => address(addr));
 
                     const { value: blockhash } = await (ctx.rpc as any).getLatestBlockhash().send();
 

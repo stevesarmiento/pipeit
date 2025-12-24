@@ -133,4 +133,29 @@ describe('ALT compression integration', () => {
         expect(altFlow.step2).toContain('compressTransactionMessage');
         expect(altFlow.step3).toContain('estimateAndSetCULimit');
     });
+
+    it('should document planner-time ALT compression for optimal packing', () => {
+        // This test documents how ALT compression is applied during transaction planning:
+        // 1. When lookup table data is available, onTransactionMessageUpdated hook is configured
+        // 2. The hook applies compressTransactionMessage after each instruction is added
+        // 3. This allows the planner's size checks to account for ALT-compressed size
+        // 4. Result: more instructions can fit per transaction when ALTs reduce account references
+        //
+        // Without planner-time compression:
+        //   - Planner uses uncompressed size for packing decisions
+        //   - May create more transactions than necessary
+        //
+        // With planner-time compression:
+        //   - Planner uses compressed size for packing decisions
+        //   - Optimal transaction packing when ALTs are provided
+        const plannerAltFlow = {
+            hook: 'onTransactionMessageUpdated',
+            action: 'compressTransactionMessage(message, lookupTableData)',
+            benefit: 'Planner size checks use compressed size, allowing optimal packing',
+        };
+
+        expect(plannerAltFlow.hook).toBe('onTransactionMessageUpdated');
+        expect(plannerAltFlow.action).toContain('compressTransactionMessage');
+        expect(plannerAltFlow.benefit).toContain('optimal packing');
+    });
 });

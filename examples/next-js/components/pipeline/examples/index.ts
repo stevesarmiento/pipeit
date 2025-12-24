@@ -3,6 +3,7 @@ export { useBatchedTransfersPipeline, batchedTransfersCode } from './batched-tra
 export { useMixedPipeline, mixedPipelineCode } from './mixed-pipeline';
 export { useInstructionPlanPipeline, instructionPlanCode } from './instruction-plan';
 export { useJupiterSwapPipeline, jupiterSwapCode } from './jupiter-swap';
+export { useTitanSwapPipeline, titanSwapCode } from './titan-swap';
 export { usePipeMultiSwapPipeline, pipeMultiSwapCode } from './pipe-multi-swap';
 export { useJitoBundlePipeline, jitoBundleCode } from './jito-bundle';
 export {

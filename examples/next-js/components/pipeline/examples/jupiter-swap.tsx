@@ -43,11 +43,11 @@ export function useJupiterSwapPipeline() {
 
                 // Get lookup table addresses from Jupiter response and convert to Address types
                 const lookupTables = result.addressLookupTableAddresses ?? [];
-                const lookupTableAddrs = lookupTables.map(addr => address(addr));
+                const lookupTableAddrs = lookupTables.map((addr: string) => address(addr));
 
                 const signature = await new TransactionBuilder({
                     rpc: ctx.rpc as any,
-                    computeUnits: result.computeUnits ?? 400_000,
+                    computeUnits: 400_000,
                     // Use lookup tables to compress the transaction
                     lookupTableAddresses: lookupTableAddrs.length > 0 ? lookupTableAddrs : undefined,
                 })

@@ -30,6 +30,10 @@ import {
     signTransactionMessageWithSigners,
     sendAndConfirmTransactionFactory,
 } from '@solana/kit';
+import type {
+    BaseTransactionMessage,
+    TransactionMessageWithFeePayer,
+} from '@solana/transaction-messages';
 import {
     fillProvisorySetComputeUnitLimitInstruction,
     estimateComputeUnitLimitFactory,
@@ -211,7 +215,7 @@ export async function executePlan(plan: InstructionPlan, config: ExecutePlanConf
     // Resolve lookup table data once (prefetched or fetched from addresses)
     const lookupTableData = await resolveLookupTableData(config);
 
-    // Create transaction planner with provisory CU instruction
+    // Create transaction planner with provisory CU instruction and optional ALT compression hook
     const planner = createTransactionPlanner({
         createTransactionMessage: async () => {
             // Fetch latest blockhash
@@ -225,6 +229,13 @@ export async function executePlan(plan: InstructionPlan, config: ExecutePlanConf
                 tx => fillProvisorySetComputeUnitLimitInstruction(tx),
             );
         },
+        // Apply ALT compression during planning so size checks account for compressed size.
+        // This allows the planner to pack more instructions per transaction when ALTs are used.
+        ...(lookupTableData && {
+            onTransactionMessageUpdated: <TMessage extends BaseTransactionMessage & TransactionMessageWithFeePayer>(
+                message: TMessage,
+            ): TMessage => compressTransactionMessage(message, lookupTableData),
+        }),
     });
 
     // Plan the instructions into transactions
