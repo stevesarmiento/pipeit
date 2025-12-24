@@ -7,11 +7,9 @@ export default defineConfig(options => ({
         'adapters/jupiter': 'src/adapters/jupiter.ts',
     },
     format: ['cjs', 'esm'],
-    dts: options.watch
-        ? false
-        : {
-              resolve: true,
-          },
+    dts: {
+        resolve: true,
+    },
     tsconfig: './tsconfig.json',
     splitting: false,
     sourcemap: true,

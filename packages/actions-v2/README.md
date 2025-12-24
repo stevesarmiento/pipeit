@@ -87,6 +87,7 @@ For more control, you can use the individual functions:
 ```typescript
 import {
     createTitanClient,
+    TITAN_DEMO_BASE_URLS,
     getTitanSwapQuote,
     selectTitanRoute,
     getTitanSwapInstructionPlanFromRoute,
@@ -94,7 +95,11 @@ import {
 
 // Create a client
 const client = createTitanClient({
-    baseUrl: 'https://api.titan.ag/api/v1',
+    // Option A: pick a demo region (us1 | jp1 | de1)
+    demoRegion: 'us1',
+    // Option B: specify a full base URL (demo or production)
+    // baseUrl: TITAN_DEMO_BASE_URLS.jp1,
+    // baseUrl: 'https://api.titan.ag/api/v1',
     authToken: 'optional-jwt-for-fees',
 });
 

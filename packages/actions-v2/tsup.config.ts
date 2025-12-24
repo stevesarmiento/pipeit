@@ -6,11 +6,9 @@ export default defineConfig(options => ({
         'titan/index': 'src/titan/index.ts',
     },
     format: ['cjs', 'esm'],
-    dts: options.watch
-        ? false
-        : {
-              resolve: true,
-          },
+    dts: {
+        resolve: true,
+    },
     tsconfig: './tsconfig.json',
     splitting: false,
     sourcemap: true,

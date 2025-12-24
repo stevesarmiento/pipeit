@@ -7,7 +7,14 @@
  */
 
 // Client
-export { createTitanClient, type TitanClient, type TitanClientConfig } from './client.js';
+export {
+    createTitanClient,
+    TITAN_DEMO_BASE_URLS,
+    TitanApiError,
+    type TitanClient,
+    type TitanClientConfig,
+    type TitanDemoRegion,
+} from './client.js';
 
 // Types
 export type {
@@ -24,6 +31,9 @@ export {
     getTitanSwapQuote,
     selectTitanRoute,
     getTitanSwapInstructionPlanFromRoute,
+    NoInstructionsError,
+    NoRoutesError,
+    ProviderNotFoundError,
     type TitanSwapPlanResult,
     type TitanSwapPlanOptions,
 } from './plan-swap.js';

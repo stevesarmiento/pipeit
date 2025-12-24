@@ -18,11 +18,53 @@ import type {
 import { encodeBase58 } from './convert.js';
 
 /**
+ * Demo REST API base URLs by region.
+ */
+export const TITAN_DEMO_BASE_URLS = {
+    /** Ohio, USA */
+    us1: 'https://us1.api.demo.titan.exchange',
+    /** Tokyo, Japan */
+    jp1: 'https://jp1.api.demo.titan.exchange',
+    /** Frankfurt, Germany */
+    de1: 'https://de1.api.demo.titan.exchange',
+} as const;
+
+export type TitanDemoRegion = keyof typeof TITAN_DEMO_BASE_URLS;
+
+function normalizeBaseUrl(baseUrl: string): string {
+    const trimmed = baseUrl.trim();
+    if (!trimmed) {
+        return trimmed;
+    }
+
+    // Relative paths (e.g. /api/titan for proxy) should stay as-is
+    const isRelative = trimmed.startsWith('/');
+    const hasProtocol = /^https?:\/\//i.test(trimmed);
+    const normalized = isRelative || hasProtocol ? trimmed : `https://${trimmed}`;
+
+    // Normalize trailing slashes so we can safely join paths.
+    return normalized.replace(/\/+$/, '');
+}
+
+function joinUrl(baseUrl: string, path: string): string {
+    const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+    const normalizedPath = path.replace(/^\/+/, '');
+    return `${normalizedBaseUrl}/${normalizedPath}`;
+}
+
+/**
  * Configuration for the Titan client.
  */
 export interface TitanClientConfig {
-    /** REST API base URL (default: https://api.titan.ag/api/v1) */
+    /**
+     * REST API base URL.
+     *
+     * If not provided, defaults to the demo endpoint for `demoRegion` (us1).
+     * You may pass a hostname without a protocol (https:// will be assumed).
+     */
     baseUrl?: string;
+    /** Demo region to use when baseUrl is not provided (default: us1) */
+    demoRegion?: TitanDemoRegion;
     /** Authentication token (optional, for fee collection) */
     authToken?: string;
     /** Custom fetch implementation (for testing or environments without global fetch) */
@@ -74,16 +116,20 @@ function pubkeyToString(pubkey: TitanPubkey | string): string {
  */
 export function createTitanClient(config: TitanClientConfig = {}): TitanClient {
     const {
-        baseUrl = 'https://api.titan.ag/api/v1',
+        baseUrl: baseUrlInput,
+        demoRegion = 'us1',
         authToken,
         fetch: customFetch = globalThis.fetch,
     } = config;
+
+    const baseUrl = normalizeBaseUrl(baseUrlInput ?? TITAN_DEMO_BASE_URLS[demoRegion]);
 
     /**
      * Make a GET request to the Titan API.
      */
     async function get<T>(path: string, params?: URLSearchParams): Promise<T> {
-        const url = params ? `${baseUrl}${path}?${params}` : `${baseUrl}${path}`;
+        const base = joinUrl(baseUrl, path);
+        const url = params ? `${base}?${params}` : base;
 
         const headers: Record<string, string> = {};
         if (authToken) {
@@ -155,11 +201,11 @@ export function createTitanClient(config: TitanClientConfig = {}): TitanClient {
                 urlParams.set('outputAccount', pubkeyToString(transaction.outputAccount));
             }
 
-            return get<SwapQuotes>('/quote/swap', urlParams);
+            return get<SwapQuotes>('/api/v1/quote/swap', urlParams);
         },
 
         async getInfo(): Promise<ServerInfo> {
-            return get<ServerInfo>('/info');
+            return get<ServerInfo>('/api/v1/info');
         },
 
         async listProviders(includeIcons = false): Promise<ProviderInfo[]> {
@@ -167,7 +213,7 @@ export function createTitanClient(config: TitanClientConfig = {}): TitanClient {
             if (includeIcons) {
                 params.set('includeIcons', 'true');
             }
-            return get<ProviderInfo[]>('/providers', params);
+            return get<ProviderInfo[]>('/api/v1/providers', params);
         },
 
         async getVenues(includeProgramIds = false): Promise<VenueInfo> {
@@ -175,7 +221,7 @@ export function createTitanClient(config: TitanClientConfig = {}): TitanClient {
             if (includeProgramIds) {
                 params.set('includeProgramIds', 'true');
             }
-            return get<VenueInfo>('/venues', params);
+            return get<VenueInfo>('/api/v1/venues', params);
         },
     };
 }

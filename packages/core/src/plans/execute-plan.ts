@@ -5,7 +5,6 @@
  */
 
 import type { Address } from '@solana/addresses';
-import type { TransactionSigner } from '@solana/signers';
 import type {
     Rpc,
     GetLatestBlockhashApi,
@@ -34,6 +33,7 @@ import type {
     BaseTransactionMessage,
     TransactionMessageWithFeePayer,
 } from '@solana/transaction-messages';
+import { addSignersToTransactionMessage, type TransactionSigner } from '@solana/signers';
 import {
     fillProvisorySetComputeUnitLimitInstruction,
     estimateComputeUnitLimitFactory,
@@ -227,6 +227,8 @@ export async function executePlan(plan: InstructionPlan, config: ExecutePlanConf
                 tx => setTransactionMessageFeePayer(signer.address, tx),
                 tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
                 tx => fillProvisorySetComputeUnitLimitInstruction(tx),
+                // Attach signer so CU simulation + signing works (Kit requires this metadata)
+                tx => addSignersToTransactionMessage([signer], tx),
             );
         },
         // Apply ALT compression during planning so size checks account for compressed size.
@@ -256,11 +258,16 @@ export async function executePlan(plan: InstructionPlan, config: ExecutePlanConf
                 ? compressTransactionMessage(message, lookupTableData)
                 : message;
 
+            // Ensure signer is attached for CU simulation (and any later signing)
+            const messageWithSigners = addSignersToTransactionMessage([signer], compressedMessage);
+
             // Estimate and update the provisory CU instruction with actual value
-            const estimatedMessage = await estimateAndSetCULimit(compressedMessage);
+            const estimatedMessage = await estimateAndSetCULimit(messageWithSigners);
 
             // Sign the transaction
-            const signedTransaction = await signTransactionMessageWithSigners(estimatedMessage);
+            const signedTransaction = await signTransactionMessageWithSigners(
+                addSignersToTransactionMessage([signer], estimatedMessage),
+            );
 
             // Send and confirm - cast to expected type since we know it has blockhash lifetime
             await sendAndConfirm(signedTransaction as Parameters<typeof sendAndConfirm>[0], { commitment });
