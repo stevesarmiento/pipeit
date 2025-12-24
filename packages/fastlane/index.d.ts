@@ -85,6 +85,7 @@ export declare class TpuClient {
   /**
    * Sends a serialized transaction to TPU endpoints (single attempt).
    *
+   * Uses slot-aware leader selection when available, falling back to fanout.
    * Returns detailed per-leader results including retry statistics.
    * For higher landing rates, use `send_until_confirmed` instead.
    */

@@ -42,8 +42,8 @@ importers:
         specifier: ^0.2.5
         version: 0.2.5(59e1c826774811eacd0a7dd223ad1500)
       '@pipeit/fastlane':
-        specifier: ^0.1.2
-        version: 0.1.2
+        specifier: ^0.1.3
+        version: 0.1.3
       '@radix-ui/react-accordion':
         specifier: ^1.2.12
         version: 1.2.12(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -1144,8 +1144,8 @@ packages:
       '@solana/transaction-messages': '*'
       '@solana/transactions': '*'
 
-  '@pipeit/fastlane@0.1.2':
-    resolution: {integrity: sha512-c4WJuDmfazLBHVHHqvfeZrmIiPBTWtldT/hAzZnZQ/8qqWx8hz8Jm9cJ2I9cXemtwryn9z1SIil0m45cV6azjA==}
+  '@pipeit/fastlane@0.1.3':
+    resolution: {integrity: sha512-jg4Ydzu0NA9RSJivEVV/jUdC9MNj7ebQ6od2/ouTXu2JKGEju1K2TBh+5JKbzPhHcYLSzH30b1v1gL+CIwj1aA==}
     engines: {node: '>= 18'}
 
   '@pkgjs/parseargs@0.11.0':
@@ -6207,7 +6207,7 @@ snapshots:
       '@solana/transaction-messages': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/transactions': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
 
-  '@pipeit/fastlane@0.1.2': {}
+  '@pipeit/fastlane@0.1.3': {}
 
   '@pkgjs/parseargs@0.11.0':
     optional: true
