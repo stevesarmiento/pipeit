@@ -64,6 +64,41 @@ const plan = sequentialInstructionPlan([ix1, ix2, ix3, ix4, ix5]);
 const result = await executePlan(plan, { rpc, rpcSubscriptions, signer });
 ```
 
+#### With Address Lookup Tables
+
+`executePlan` supports address lookup table (ALT) compression for reducing transaction size:
+
+```typescript
+import { sequentialInstructionPlan, executePlan } from '@pipeit/core';
+import { address } from '@solana/addresses';
+
+const plan = sequentialInstructionPlan([swapInstruction, transferInstruction]);
+
+// Option 1: Provide ALT addresses (will be fetched automatically)
+// Note: RPC must include GetAccountInfoApi when using lookupTableAddresses
+const result = await executePlan(plan, {
+    rpc,
+    rpcSubscriptions,
+    signer,
+    lookupTableAddresses: [
+        address('ALT1111111111111111111111111111111111111111'),
+        address('ALT2222222222222222222222222222222222222222'),
+    ],
+});
+
+// Option 2: Provide pre-fetched lookup table data (no additional RPC requirements)
+const result = await executePlan(plan, {
+    rpc,
+    rpcSubscriptions,
+    signer,
+    addressesByLookupTable: {
+        [altAddress]: [addr1, addr2, addr3],
+    },
+});
+```
+
+> **Note:** For single-transaction workflows, `TransactionBuilder.execute()` also supports ALTs and provides additional features like priority fees and auto-retry. Use `executePlan` when you need Kit's transaction planner to automatically batch instructions across multiple transactions.
+
 ## TransactionBuilder API
 
 ### Configuration
