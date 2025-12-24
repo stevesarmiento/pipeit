@@ -285,27 +285,21 @@ impl LeaderTracker {
         let mut new_sockets = HashMap::new();
 
         for node in nodes {
-            if let Some(gossip) = node.gossip {
-                let ip = gossip.ip();
+            // Standard TPU QUIC socket (full SocketAddr from RPC)
+            let tpu_socket = node.tpu_quic.map(|addr| addr.to_string());
 
-                // Standard TPU QUIC socket
-                let tpu_socket = node.tpu_quic.map(|addr| format!("{}:{}", ip, addr.port()));
+            // TPU forwards QUIC socket (preferred by validators)
+            let tpu_forwards_socket = node.tpu_forwards_quic.map(|addr| addr.to_string());
 
-                // TPU forwards QUIC socket (preferred by validators)
-                let tpu_forwards_socket = node
-                    .tpu_forwards_quic
-                    .map(|addr| format!("{}:{}", ip, addr.port()));
-
-                // Only add if at least one socket is available
-                if tpu_socket.is_some() || tpu_forwards_socket.is_some() {
-                    new_sockets.insert(
-                        node.pubkey.to_string(),
-                        TpuSockets {
-                            tpu_socket,
-                            tpu_forwards_socket,
-                        },
-                    );
-                }
+            // Only add if at least one socket is available
+            if tpu_socket.is_some() || tpu_forwards_socket.is_some() {
+                new_sockets.insert(
+                    node.pubkey.to_string(),
+                    TpuSockets {
+                        tpu_socket,
+                        tpu_forwards_socket,
+                    },
+                );
             }
         }
 
@@ -415,4 +409,50 @@ impl std::fmt::Debug for LeaderTracker {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
 
+    #[test]
+    fn test_get_slot_position_basic_cycle() {
+        // Slot position cycles 0-3 within leader's 4-slot window
+        assert_eq!(LeaderTracker::get_slot_position(0), 0);
+        assert_eq!(LeaderTracker::get_slot_position(1), 1);
+        assert_eq!(LeaderTracker::get_slot_position(2), 2);
+        assert_eq!(LeaderTracker::get_slot_position(3), 3);
+    }
+
+    #[test]
+    fn test_get_slot_position_wraps_correctly() {
+        // Position wraps back to 0 after slot 3
+        assert_eq!(LeaderTracker::get_slot_position(4), 0);
+        assert_eq!(LeaderTracker::get_slot_position(5), 1);
+        assert_eq!(LeaderTracker::get_slot_position(6), 2);
+        assert_eq!(LeaderTracker::get_slot_position(7), 3);
+        assert_eq!(LeaderTracker::get_slot_position(8), 0);
+    }
+
+    #[test]
+    fn test_get_slot_position_large_slots() {
+        // Test with realistic slot numbers (mainnet is in the hundreds of millions)
+        assert_eq!(LeaderTracker::get_slot_position(100), 0); // 100 % 4 = 0
+        assert_eq!(LeaderTracker::get_slot_position(101), 1);
+        assert_eq!(LeaderTracker::get_slot_position(102), 2);
+        assert_eq!(LeaderTracker::get_slot_position(103), 3);
+
+        // Very large slot numbers
+        assert_eq!(LeaderTracker::get_slot_position(300_000_000), 0);
+        assert_eq!(LeaderTracker::get_slot_position(300_000_001), 1);
+        assert_eq!(LeaderTracker::get_slot_position(300_000_002), 2);
+        assert_eq!(LeaderTracker::get_slot_position(300_000_003), 3);
+    }
+
+    #[test]
+    fn test_get_slot_position_hedge_slot() {
+        // Position 3 is the "hedge" slot where we should send to next leader too
+        assert_eq!(LeaderTracker::get_slot_position(3), 3);
+        assert_eq!(LeaderTracker::get_slot_position(7), 3);
+        assert_eq!(LeaderTracker::get_slot_position(11), 3);
+        assert_eq!(LeaderTracker::get_slot_position(99), 3); // 99 % 4 = 3
+    }
+}

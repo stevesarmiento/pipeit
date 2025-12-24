@@ -168,6 +168,8 @@ impl TpuClient {
         let lt_clone = leader_tracker.clone();
         let cm_clone = connection_manager.clone();
         let prewarm = config.prewarm_connections.unwrap_or(true);
+        let fanout = config.fanout.unwrap_or(4);
+        let prewarm_lookahead = (fanout as u64) * 4;
 
         runtime.spawn(async move {
             // IMPORTANT: Fetch validator sockets FIRST before starting slot listener
@@ -194,9 +196,8 @@ impl TpuClient {
             let prewarm_task = if prewarm {
                 Some(tokio::spawn(async move {
                     loop {
-                        // Prewarm connections to next 16 slots worth of leaders
-                        // (fanout * 4 to match leader lookahead)
-                        cm_clone.prewarm_connections(16).await;
+                        // Prewarm connections to next fanout * 4 slots (leader lookahead).
+                        cm_clone.prewarm_connections(prewarm_lookahead).await;
                         tokio::time::sleep(Duration::from_millis(400)).await;
                     }
                 }))
@@ -215,9 +216,6 @@ impl TpuClient {
             }
         });
 
-        // Default fanout to 4 if not specified
-        let fanout = config.fanout.unwrap_or(4);
-
         Ok(Self {
             leader_tracker,
             connection_manager,
@@ -231,6 +229,7 @@ impl TpuClient {
 
     /// Sends a serialized transaction to TPU endpoints (single attempt).
     ///
+    /// Uses slot-aware leader selection when available, falling back to fanout.
     /// Returns detailed per-leader results including retry statistics.
     /// For higher landing rates, use `send_until_confirmed` instead.
     #[napi]
@@ -239,11 +238,18 @@ impl TpuClient {
         let cm = self.connection_manager.clone();
         let fanout = self.fanout;
 
-        let result = cm
-            .send_transaction_with_fanout(tx_data, fanout)
-            .await
-            .context("Failed to send transaction")
-            .map_err(anyhow_to_napi)?;
+        let (leaders, _slot_position) = self.leader_tracker.get_slot_aware_leaders().await;
+        let result = if leaders.is_empty() {
+            cm.send_transaction_with_fanout(tx_data, fanout)
+                .await
+                .context("Failed to send transaction")
+                .map_err(anyhow_to_napi)?
+        } else {
+            cm.send_to_leaders(tx_data, &leaders)
+                .await
+                .context("Failed to send transaction")
+                .map_err(anyhow_to_napi)?
+        };
 
         // Convert internal LeaderDeliveryResult to NAPI LeaderSendResult
         let leaders: Vec<LeaderSendResult> = result
@@ -528,5 +534,3 @@ impl Drop for TpuClient {
         self.shutdown();
     }
 }
-
-
