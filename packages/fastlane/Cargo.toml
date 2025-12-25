@@ -39,6 +39,9 @@ thiserror = "1"
 [build-dependencies]
 napi-build = "2"
 
+[patch.crates-io]
+protobuf-src = { path = "vendor/protobuf-src" }
+
 [profile.release]
 lto = false
 opt-level = 3

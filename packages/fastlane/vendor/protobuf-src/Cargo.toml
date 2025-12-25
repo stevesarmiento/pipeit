@@ -1,0 +1,10 @@
+[package]
+name = "protobuf-src"
+version = "1.1.0+21.5"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+description = "Local override to supply a prebuilt protoc without building C++ protobuf"
+
+[dependencies]
+protoc-bin-vendored = "2"
