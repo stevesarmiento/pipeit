@@ -416,18 +416,18 @@ impl LeaderTracker {
             .await
             .context("Failed to subscribe to gRPC slot updates")?;
 
-        let mut ready_set = false;
-        while let Some(result) = stream.next().await {
-            let update = result.context("gRPC slot stream error")?;
-            if let Some(UpdateOneof::Slot(slot_update)) = update.update_oneof {
-                let slot = slot_update.slot;
-                let mut tracker = self.slots_tracker.write().await;
-                tracker.record(SlotEvent::Start(slot));
-                if !ready_set {
-                    let mut ready = self.ready.write().await;
-                    *ready = true;
-                    ready_set = true;
-                }
+            let mut ready_set = false;
+            while let Some(result) = stream.next().await {
+                let update = result.context("gRPC slot stream error")?;
+                if let Some(UpdateOneof::Slot(slot_update)) = update.update_oneof {
+                    let slot = slot_update.slot;
+                    let mut tracker = self.slots_tracker.write().await;
+                    tracker.record_monotonic(slot);
+                    if !ready_set {
+                        let mut ready = self.ready.write().await;
+                        *ready = true;
+                        ready_set = true;
+                    }
             }
         }
 
