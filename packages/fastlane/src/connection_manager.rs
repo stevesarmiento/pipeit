@@ -46,6 +46,9 @@ const RETRY_DELAY_MS: u64 = 50;
 /// 1 second is enough for connect + send on a healthy validator.
 const LEADER_SEND_TIMEOUT: Duration = Duration::from_secs(1);
 
+/// Per-peer send queue capacity to absorb bursts without spawning extra tasks.
+const PER_PEER_QUEUE_CAPACITY: usize = 1024;
+
 /// Generates proper QUIC server name (SNI) from socket address.
 /// 
 /// This format is required for validators to properly route QUIC connections.
@@ -96,6 +99,16 @@ struct CachedConnection {
     conn: Option<QuinnConnection>,
 }
 
+#[derive(Clone)]
+struct PeerSender {
+    tx: tokio::sync::mpsc::Sender<PeerSendRequest>,
+}
+
+struct PeerSendRequest {
+    tx_data: Vec<u8>,
+    respond_to: tokio::sync::oneshot::Sender<Result<()>>,
+}
+
 /// Manages QUIC connections to Solana TPU endpoints.
 ///
 /// Features:
@@ -109,6 +122,8 @@ pub struct TpuConnectionManager {
     endpoints: Vec<Endpoint>,
     /// Cached connections by address.
     connections: Arc<DashMap<String, CachedConnection>>,
+    /// Per-peer send workers to serialize sends and reuse connections.
+    peer_senders: Arc<DashMap<String, PeerSender>>,
     /// Leader tracker for routing.
     leader_tracker: Arc<LeaderTracker>,
     /// Round-robin counter for endpoint selection.
@@ -170,6 +185,7 @@ impl TpuConnectionManager {
         Ok(Self {
             endpoints,
             connections: Arc::new(DashMap::new()),
+            peer_senders: Arc::new(DashMap::new()),
             leader_tracker,
             next_endpoint: Arc::new(AtomicUsize::new(0)),
         })
@@ -461,6 +477,69 @@ impl TpuConnectionManager {
 
     /// Sends transaction data to a specific leader (single attempt).
     async fn send_to_leader_once(&self, tx_data: &[u8], tpu_address: &str) -> Result<()> {
+        self.send_via_peer_queue(tx_data, tpu_address).await
+    }
+
+    /// Sends transaction data via the per-peer queue to serialize access.
+    async fn send_via_peer_queue(&self, tx_data: &[u8], tpu_address: &str) -> Result<()> {
+        let sender = self.get_or_create_peer_sender(tpu_address);
+        let (respond_to, response) = tokio::sync::oneshot::channel();
+        let request = PeerSendRequest {
+            tx_data: tx_data.to_vec(),
+            respond_to,
+        };
+
+        match sender.tx.try_send(request) {
+            Ok(()) => {}
+            Err(err) => {
+                self.peer_senders.remove(tpu_address);
+                return Err(anyhow!("Peer queue full or closed: {}", err));
+            }
+        }
+
+        response
+            .await
+            .context("Peer sender dropped before responding")?
+    }
+
+    fn get_or_create_peer_sender(&self, tpu_address: &str) -> PeerSender {
+        use dashmap::mapref::entry::Entry;
+
+        match self.peer_senders.entry(tpu_address.to_string()) {
+            Entry::Occupied(entry) => entry.get().clone(),
+            Entry::Vacant(entry) => {
+                let (tx, rx) = tokio::sync::mpsc::channel(PER_PEER_QUEUE_CAPACITY);
+                let sender = PeerSender { tx: tx.clone() };
+                let manager = self.clone();
+                let address = entry.key().clone();
+
+                tokio::spawn(async move {
+                    manager.peer_sender_loop(address, rx).await;
+                });
+
+                entry.insert(sender.clone());
+                sender
+            }
+        }
+    }
+
+    async fn peer_sender_loop(
+        &self,
+        tpu_address: String,
+        mut rx: tokio::sync::mpsc::Receiver<PeerSendRequest>,
+    ) {
+        while let Some(request) = rx.recv().await {
+            let result = self
+                .send_to_leader_once_direct(&request.tx_data, &tpu_address)
+                .await;
+            let _ = request.respond_to.send(result);
+        }
+
+        self.peer_senders.remove(&tpu_address);
+    }
+
+    /// Sends transaction data directly to a specific leader (single attempt).
+    async fn send_to_leader_once_direct(&self, tx_data: &[u8], tpu_address: &str) -> Result<()> {
         let conn = self.get_or_create_connection(tpu_address).await?;
 
         // Open unidirectional stream for transaction
@@ -577,6 +656,7 @@ impl TpuConnectionManager {
             }
         }
         self.connections.clear();
+        self.peer_senders.clear();
     }
 }
 
@@ -585,6 +665,7 @@ impl Clone for TpuConnectionManager {
         Self {
             endpoints: self.endpoints.clone(),
             connections: self.connections.clone(),
+            peer_senders: self.peer_senders.clone(),
             leader_tracker: self.leader_tracker.clone(),
             // Share round-robin counter across clones for true distribution.
             next_endpoint: self.next_endpoint.clone(),

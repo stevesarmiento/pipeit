@@ -30,6 +30,11 @@ pub struct TpuClientConfig {
     pub rpc_url: String,
     /// WebSocket URL for slot update subscriptions.
     pub ws_url: String,
+    /// Optional gRPC URL for Yellowstone slot subscriptions.
+    /// When set, this takes precedence over WebSocket tracking.
+    pub grpc_url: Option<String>,
+    /// Optional gRPC x-token for authenticated Yellowstone endpoints.
+    pub grpc_x_token: Option<String>,
     /// Number of upcoming leaders to send transactions to (default: 2).
     pub fanout: Option<u32>,
     /// Whether to pre-warm connections to upcoming leaders (default: true).
@@ -145,7 +150,12 @@ impl TpuClient {
 
         // Initialize leader tracker
         let leader_tracker = runtime.block_on(async {
-            LeaderTracker::new(config.rpc_url.clone(), config.ws_url.clone())
+            LeaderTracker::new(
+                config.rpc_url.clone(),
+                config.ws_url.clone(),
+                config.grpc_url.clone(),
+                config.grpc_x_token.clone(),
+            )
                 .await
                 .context("Failed to create leader tracker")
         }).map_err(anyhow_to_napi)?;
@@ -182,11 +192,11 @@ impl TpuClient {
                 let _ = lt_for_slots.run_slot_listener().await;
             });
 
-            // Start socket updater (every 60 seconds)
+            // Start socket updater (every 10 seconds for fresher TPU sockets)
             let lt_for_sockets = lt_clone.clone();
             let socket_updater = tokio::spawn(async move {
                 lt_for_sockets
-                    .run_socket_updater(Duration::from_secs(60))
+                    .run_socket_updater(Duration::from_secs(10))
                     .await;
             });
 
