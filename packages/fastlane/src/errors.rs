@@ -67,12 +67,7 @@ pub fn classify_error(error: &anyhow::Error) -> TpuErrorCode {
         TpuErrorCode::ConnectionFailed
     } else if msg.contains("stream") && (msg.contains("closed") || msg.contains("reset")) {
         TpuErrorCode::StreamClosed
-    } else if msg.contains("rate")
-        || msg.contains("limit")
-        || msg.contains("too many")
-        || msg.contains("queue full")
-        || msg.contains("channel full")
-    {
+    } else if msg.contains("rate") || msg.contains("limit") || msg.contains("too many") {
         TpuErrorCode::RateLimited
     } else if msg.contains("timeout") || msg.contains("timed out") {
         TpuErrorCode::Timeout
