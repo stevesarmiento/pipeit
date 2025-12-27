@@ -1,60 +1,39 @@
 /**
- * @pipeit/actions - High-level DeFi actions for Solana.
+ * @pipeit/actions - Composable InstructionPlan factories for Solana DeFi.
  *
- * A simple, composable API for building DeFi transactions on Solana.
- * Uses pluggable adapters to avoid vendor lock-in.
+ * This package provides Kit-compatible InstructionPlan factories that can be:
+ * - Executed directly with `@pipeit/core`'s executePlan
+ * - Composed with other InstructionPlans using Kit's plan combinators
+ * - Used by anyone in the Kit ecosystem
  *
  * @example
  * ```ts
- * import { pipe } from '@pipeit/actions'
- * import { jupiter } from '@pipeit/actions/adapters'
- * import { SOL, USDC } from '@pipeit/actions/tokens'
+ * import { getTitanSwapPlan } from '@pipeit/actions/titan';
+ * import { executePlan } from '@pipeit/core';
  *
- * // Swap SOL for USDC using Jupiter
- * const result = await pipe({
+ * // Get a swap plan from Titan
+ * const { plan, lookupTableAddresses } = await getTitanSwapPlan({
+ *   inputMint: SOL_MINT,
+ *   outputMint: USDC_MINT,
+ *   amount: 1_000_000_000n,
+ *   user: signer.address,
+ * });
+ *
+ * // Execute with ALT support
+ * await executePlan(plan, {
  *   rpc,
  *   rpcSubscriptions,
  *   signer,
- *   adapters: { swap: jupiter() }
- * })
- *   .swap({ inputMint: SOL, outputMint: USDC, amount: 10_000_000n })
- *   .execute()
- *
- * console.log('Transaction:', result.signature)
+ *   lookupTableAddresses,
+ * });
  * ```
  *
  * @packageDocumentation
  */
 
-// Core API
-export { pipe, Pipe } from './pipe.js';
+// Re-export Titan module
+export * from './titan/index.js';
 
-// Errors
-export {
-    NoActionsError,
-    NoAdapterError,
-    ActionExecutionError,
-    isNoActionsError,
-    isNoAdapterError,
-    isActionExecutionError,
-} from './errors.js';
-
-// Types
-export type {
-    ActionContext,
-    ActionExecutor,
-    ActionFactory,
-    ActionResult,
-    ActionsRpcApi,
-    ActionsRpcSubscriptionsApi,
-    ExecuteOptions,
-    PipeConfig,
-    PipeHooks,
-    PipeResult,
-    SwapAdapter,
-    SwapParams,
-    SwapResult,
-    // Re-exported from core for convenience
-    PriorityFeeLevel,
-    PriorityFeeConfig,
-} from './types.js';
+// Note: Metis module is NOT re-exported here to avoid naming conflicts
+// (both Titan and Metis have SwapMode, RoutePlanStep, etc.)
+// Import Metis directly via: import { ... } from '@pipeit/actions/metis'

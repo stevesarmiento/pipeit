@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+const JUPITER_API_BASE = 'https://api.jup.ag/swap/v1';
+
 /**
- * Next.js API route proxy for Jupiter swap-instructions API.
- * Proxies requests to Jupiter's swap-instructions API to work around network/DNS restrictions.
+ * Next.js API route proxy for Jupiter Metis swap-instructions API.
+ * Proxies requests to Jupiter's swap-instructions API with API key authentication.
  */
 export async function POST(request: NextRequest) {
     try {
@@ -17,18 +19,26 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Missing required field: userPublicKey' }, { status: 400 });
         }
 
-        const response = await fetch('https://lite-api.jup.ag/swap/v1/swap-instructions', {
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+        };
+
+        // Add API key if available
+        if (process.env.JUPITER_API_KEY) {
+            headers['x-api-key'] = process.env.JUPITER_API_KEY;
+        }
+
+        const response = await fetch(`${JUPITER_API_BASE}/swap-instructions`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-            },
+            headers,
+            cache: 'no-store',
             body: JSON.stringify(body),
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Jupiter API error response:', response.status, errorText);
+            console.error('Jupiter swap-instructions API error:', response.status, errorText);
             throw new Error(`Jupiter API error: ${response.status} - ${errorText.substring(0, 200)}`);
         }
 

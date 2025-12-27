@@ -6,7 +6,7 @@
 
 export { createFlow, TransactionFlow } from './flow.js';
 export type {
-    // Shared types (used by both core and @pipeit/actions)
+    // Shared types
     FlowRpcApi,
     FlowRpcSubscriptionsApi,
     BaseContext,
