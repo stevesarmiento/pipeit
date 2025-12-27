@@ -33,3 +33,7 @@
 
 // Re-export Titan module
 export * from './titan/index.js';
+
+// Note: Metis module is NOT re-exported here to avoid naming conflicts
+// (both Titan and Metis have SwapMode, RoutePlanStep, etc.)
+// Import Metis directly via: import { ... } from '@pipeit/actions-v2/metis'

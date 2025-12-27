@@ -4,6 +4,7 @@ export default defineConfig(options => ({
     entry: {
         index: 'src/index.ts',
         'titan/index': 'src/titan/index.ts',
+        'metis/index': 'src/metis/index.ts',
     },
     format: ['cjs', 'esm'],
     dts: {

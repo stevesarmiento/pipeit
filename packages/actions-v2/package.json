@@ -17,6 +17,11 @@
       "types": "./dist/titan/index.d.ts",
       "import": "./dist/titan/index.js",
       "require": "./dist/titan/index.cjs"
+    },
+    "./metis": {
+      "types": "./dist/metis/index.d.ts",
+      "import": "./dist/metis/index.js",
+      "require": "./dist/metis/index.cjs"
     }
   },
   "files": [
@@ -35,6 +40,8 @@
     "defi",
     "swap",
     "titan",
+    "jupiter",
+    "metis",
     "instruction-plans",
     "transaction"
   ],
