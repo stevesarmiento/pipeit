@@ -1,7 +1,7 @@
 {
   "name": "@pipeit/actions",
-  "version": "0.1.0",
-  "description": "Composable DeFi InstructionPlan factories for Solana (Titan-first)",
+  "version": "0.1.1",
+  "description": "Composable DeFi InstructionPlan factories for Solana",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
