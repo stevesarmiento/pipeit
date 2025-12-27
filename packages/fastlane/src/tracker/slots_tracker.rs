@@ -88,6 +88,20 @@ impl SlotsTracker {
         self.record(SlotEvent::End(slot))
     }
 
+    /// Records a slot update from a monotonic source (e.g., gRPC).
+    ///
+    /// Ignores out-of-order or duplicate slots and bypasses outlier filtering.
+    pub fn record_monotonic(&mut self, slot: Slot) -> Slot {
+        if slot <= self.current_slot {
+            return self.current_slot;
+        }
+
+        self.current_slot = slot;
+        self.recent_events.clear();
+        self.recent_events.push_back(SlotEvent::Start(slot));
+        self.current_slot
+    }
+
     /// Estimates the current slot based on recent events.
     ///
     /// Uses a median-based approach to filter outliers:
@@ -181,5 +195,4 @@ mod tests {
         assert_eq!(tracker.current_slot(), 3);
     }
 }
-
 

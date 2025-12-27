@@ -30,7 +30,7 @@ pub struct LeaderInfo {
 
 /// TPU socket addresses for a validator.
 /// Stores both normal and forwards ports for flexible routing.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TpuSockets {
     /// Standard TPU QUIC socket address.
     pub tpu_socket: Option<String>,
@@ -52,6 +52,10 @@ pub struct LeaderTracker {
     rpc_url: String,
     /// WebSocket URL for subscriptions.
     ws_url: String,
+    /// Optional Yellowstone gRPC URL for slot subscriptions.
+    grpc_url: Option<String>,
+    /// Optional Yellowstone gRPC x-token for authenticated endpoints.
+    grpc_x_token: Option<String>,
     /// Real-time slot tracker.
     pub slots_tracker: RwLock<SlotsTracker>,
     /// Leader schedule tracker.
@@ -69,7 +73,12 @@ impl LeaderTracker {
     ///
     /// * `rpc_url` - RPC endpoint URL
     /// * `ws_url` - WebSocket endpoint URL
-    pub async fn new(rpc_url: String, ws_url: String) -> Result<Self> {
+    pub async fn new(
+        rpc_url: String,
+        ws_url: String,
+        grpc_url: Option<String>,
+        grpc_x_token: Option<String>,
+    ) -> Result<Self> {
         let rpc_client = RpcClient::new(rpc_url.clone());
 
         let schedule_tracker = ScheduleTracker::new(&rpc_client)
@@ -79,6 +88,8 @@ impl LeaderTracker {
         Ok(Self {
             rpc_url,
             ws_url,
+            grpc_url,
+            grpc_x_token,
             slots_tracker: RwLock::new(SlotsTracker::new()),
             schedule_tracker: RwLock::new(schedule_tracker),
             leader_sockets: RwLock::new(HashMap::new()),
@@ -272,7 +283,7 @@ impl LeaderTracker {
     /// Updates the leader socket addresses from cluster nodes.
     ///
     /// Fetches both normal TPU QUIC and TPU forwards QUIC addresses.
-    /// Should be called periodically (e.g., every 60 seconds) as
+    /// Should be called periodically (e.g., every 10 seconds) as
     /// validator IPs can change.
     pub async fn update_leader_sockets(&self) -> Result<()> {
         let rpc_client = RpcClient::new(self.rpc_url.clone());
@@ -282,29 +293,39 @@ impl LeaderTracker {
             .await
             .context("Failed to fetch cluster nodes")?;
 
-        let mut new_sockets = HashMap::new();
+        let mut sockets = self.leader_sockets.write().await;
+        let mut seen = HashSet::new();
 
         for node in nodes {
+            let pubkey = node.pubkey.to_string();
+            seen.insert(pubkey.clone());
+
             // Standard TPU QUIC socket (full SocketAddr from RPC)
             let tpu_socket = node.tpu_quic.map(|addr| addr.to_string());
 
             // TPU forwards QUIC socket (preferred by validators)
             let tpu_forwards_socket = node.tpu_forwards_quic.map(|addr| addr.to_string());
 
-            // Only add if at least one socket is available
+            // Only store if at least one socket is available
             if tpu_socket.is_some() || tpu_forwards_socket.is_some() {
-                new_sockets.insert(
-                    node.pubkey.to_string(),
-                    TpuSockets {
-                        tpu_socket,
-                        tpu_forwards_socket,
-                    },
-                );
+                let new_entry = TpuSockets {
+                    tpu_socket,
+                    tpu_forwards_socket,
+                };
+
+                let needs_update = sockets
+                    .get(&pubkey)
+                    .map(|existing| existing != &new_entry)
+                    .unwrap_or(true);
+
+                if needs_update {
+                    sockets.insert(pubkey, new_entry);
+                }
             }
         }
 
-        let mut sockets = self.leader_sockets.write().await;
-        *sockets = new_sockets;
+        // Remove validators no longer present in the cluster nodes response.
+        sockets.retain(|pubkey, _| seen.contains(pubkey));
 
         Ok(())
     }
@@ -324,9 +345,18 @@ impl LeaderTracker {
         }
     }
 
-    /// Inner slot listener that handles the WebSocket connection.
+    /// Inner slot listener that handles the configured connection.
     /// Returns when the connection ends (either normally or due to error).
     async fn run_slot_listener_inner(&self) -> Result<()> {
+        if let Some(grpc_url) = self.grpc_url.as_ref() {
+            return self.run_grpc_slot_listener_inner(grpc_url).await;
+        }
+
+        self.run_wss_slot_listener_inner().await
+    }
+
+    /// Inner slot listener that handles the WebSocket connection.
+    async fn run_wss_slot_listener_inner(&self) -> Result<()> {
         let ws_client = PubsubClient::new(&self.ws_url)
             .await
             .context("Failed to connect to WebSocket")?;
@@ -347,6 +377,76 @@ impl LeaderTracker {
         }
 
         // Stream ended - will trigger reconnect in the outer loop
+        Ok(())
+    }
+
+    /// Inner slot listener that handles the Yellowstone gRPC connection.
+    async fn run_grpc_slot_listener_inner(&self, grpc_url: &str) -> Result<()> {
+        use yellowstone_grpc_client::{ClientTlsConfig, GeyserGrpcBuilder};
+        use yellowstone_grpc_proto::geyser::{
+            SubscribeRequest, SubscribeRequestFilterSlots,
+            subscribe_update::UpdateOneof,
+        };
+
+        let mut builder = GeyserGrpcBuilder::from_shared(grpc_url.to_string())
+            .context("Failed to build gRPC client")?;
+        let x_token = self.grpc_x_token.clone();
+        builder = builder.x_token(x_token).context("Failed to set gRPC x-token")?;
+
+        let mut client = builder
+            .tls_config(ClientTlsConfig::default().with_enabled_roots())
+            .context("Failed to configure gRPC TLS")?
+            .connect()
+            .await
+            .context("Failed to connect to gRPC endpoint")?;
+
+        let subscribe_request = SubscribeRequest {
+            slots: std::collections::HashMap::from([(
+                "fastlane-slot-tracker".to_string(),
+                SubscribeRequestFilterSlots {
+                    interslot_updates: Some(true),
+                    ..Default::default()
+                },
+            )]),
+            ..Default::default()
+        };
+
+        let mut stream = client
+            .subscribe_once(subscribe_request)
+            .await
+            .context("Failed to subscribe to gRPC slot updates")?;
+
+        let mut ready_set = false;
+        while let Some(result) = stream.next().await {
+            let update = result.context("gRPC slot stream error")?;
+            if let Some(UpdateOneof::Slot(slot_update)) = update.update_oneof {
+                let slot = slot_update.slot;
+
+                // Record the slot update (monotonic source; bypass outlier filtering)
+                let curr_slot = {
+                    let mut tracker = self.slots_tracker.write().await;
+                    tracker.record_monotonic(slot)
+                };
+
+                // Mark as ready once we start receiving updates
+                if !ready_set {
+                    let mut ready = self.ready.write().await;
+                    *ready = true;
+                    ready_set = true;
+                }
+
+                // Check if we need to rotate to next epoch (keep schedule fresh across epoch boundaries)
+                let needs_rotation = {
+                    let schedule_tracker = self.schedule_tracker.read().await;
+                    curr_slot >= schedule_tracker.next_epoch_slot_start()
+                };
+
+                if needs_rotation {
+                    self.rotate_epoch(curr_slot).await?;
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -405,6 +505,7 @@ impl std::fmt::Debug for LeaderTracker {
         f.debug_struct("LeaderTracker")
             .field("rpc_url", &self.rpc_url)
             .field("ws_url", &self.ws_url)
+            .field("grpc_url", &self.grpc_url)
             .finish()
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "pipeit-fastlane"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 description = "Native QUIC client for direct Solana TPU transaction submission"
 license = "MIT"
@@ -26,6 +26,8 @@ solana-sdk = "3.0"
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 futures-util = "0.3"
+yellowstone-grpc-client = { version = "10.2.0" }
+yellowstone-grpc-proto = { version = "10.1.1" }
 
 # Data structures
 dashmap = "6"
@@ -37,8 +39,9 @@ thiserror = "1"
 [build-dependencies]
 napi-build = "2"
 
+[patch.crates-io]
+protobuf-src = { path = "vendor/protobuf-src" }
+
 [profile.release]
 lto = false
 opt-level = 3
-
-

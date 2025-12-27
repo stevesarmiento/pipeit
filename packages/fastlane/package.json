@@ -1,6 +1,6 @@
 {
     "name": "@pipeit/fastlane",
-    "version": "0.1.3",
+    "version": "0.1.4",
     "description": "Native QUIC client for direct Solana TPU transaction submission",
     "main": "index.js",
     "types": "index.d.ts",
