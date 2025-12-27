@@ -9,6 +9,13 @@ export interface TpuClientConfig {
   rpcUrl: string
   /** WebSocket URL for slot update subscriptions. */
   wsUrl: string
+  /**
+   * Optional gRPC URL for Yellowstone slot subscriptions.
+   * When set, this takes precedence over WebSocket tracking.
+   */
+  grpcUrl?: string
+  /** Optional gRPC x-token for authenticated Yellowstone endpoints. */
+  grpcXToken?: string
   /** Number of upcoming leaders to send transactions to (default: 2). */
   fanout?: number
   /** Whether to pre-warm connections to upcoming leaders (default: true). */
@@ -85,6 +92,7 @@ export declare class TpuClient {
   /**
    * Sends a serialized transaction to TPU endpoints (single attempt).
    *
+   * Uses slot-aware leader selection when available, falling back to fanout.
    * Returns detailed per-leader results including retry statistics.
    * For higher landing rates, use `send_until_confirmed` instead.
    */
