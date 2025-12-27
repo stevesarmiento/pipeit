@@ -3,8 +3,8 @@ import { defineConfig } from 'tsup';
 export default defineConfig(options => ({
     entry: {
         index: 'src/index.ts',
-        'adapters/index': 'src/adapters/index.ts',
-        'adapters/jupiter': 'src/adapters/jupiter.ts',
+        'titan/index': 'src/titan/index.ts',
+        'metis/index': 'src/metis/index.ts',
     },
     format: ['cjs', 'esm'],
     dts: {
@@ -19,6 +19,7 @@ export default defineConfig(options => ({
         '@pipeit/core',
         '@solana/kit',
         '@solana/addresses',
+        '@solana/instruction-plans',
         '@solana/instructions',
         '@solana/rpc',
         '@solana/rpc-subscriptions',

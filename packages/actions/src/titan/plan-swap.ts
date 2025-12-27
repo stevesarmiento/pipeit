@@ -207,7 +207,7 @@ export function getTitanSwapInstructionPlanFromRoute(route: SwapRoute): Instruct
  *
  * @example
  * ```ts
- * import { getTitanSwapPlan } from '@pipeit/actions-v2/titan';
+ * import { getTitanSwapPlan } from '@pipeit/actions/titan';
  * import { executePlan } from '@pipeit/core';
  *
  * const { plan, lookupTableAddresses, quote } = await getTitanSwapPlan({

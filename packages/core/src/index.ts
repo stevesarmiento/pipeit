@@ -28,7 +28,7 @@ export type {
 // Flow API - for multi-step transaction orchestration with dynamic context
 export { createFlow, TransactionFlow } from './flow/index.js';
 export type {
-    // Shared types (used by @pipeit/actions)
+    // Shared types
     FlowRpcApi,
     FlowRpcSubscriptionsApi,
     BaseContext,

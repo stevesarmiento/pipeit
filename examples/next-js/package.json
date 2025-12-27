@@ -12,7 +12,6 @@
     "dependencies": {
         "@phosphor-icons/react": "^2.1.10",
         "@pipeit/actions": "workspace:*",
-        "@pipeit/actions-v2": "workspace:*",
         "@pipeit/core": "workspace:*",
         "@pipeit/fastlane": "workspace:*",
         "@radix-ui/react-accordion": "^1.2.12",

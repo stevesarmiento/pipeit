@@ -22,7 +22,7 @@ Built on modern Solana libraries (@solana/kit) with a focus on type safety, deve
 | Package | Description | Docs |
 |---------|-------------|------|
 | [@pipeit/core](./packages/core) | Transaction builder with smart defaults, flows, and execution strategies | [README](./packages/core/README.md) |
-| [@pipeit/actions](./packages/actions) | High-level DeFi actions with pluggable adapters | [README](./packages/actions/README.md) |
+| [@pipeit/actions](./packages/actions) | InstructionPlan factories for DeFi (Titan, Metis) | [README](./packages/actions/README.md) |
 | [@pipeit/fastlane](./packages/fastlane) | Native Rust QUIC client for direct TPU submission | [Package](./packages/fastlane) |
 
 ## Package Overview
@@ -35,12 +35,12 @@ The foundation package for transaction building:
 - Kit instruction-plans integration
 - Server exports for server components based TPU handlers
 
-### @pipeit/actions (WIP)
-High-level DeFi operations:
-- Simple, composable API for swaps and other DeFi actions
-- Pluggable adapters (Jupiter, with more coming)
-- Automatic address lookup table handling
-- Lifecycle hooks for monitoring execution
+### @pipeit/actions
+Composable InstructionPlan factories for DeFi:
+- Kit-compatible InstructionPlans for swap operations
+- Titan and Metis aggregator integration
+- Address lookup table support
+- Composable with Kit's plan combinators
 
 ### @pipeit/fastlane
 Ultra-fast transaction submission:
@@ -57,7 +57,7 @@ Ultra-fast transaction submission:
 pipeit/
 ├── packages/
 │   ├── @pipeit/core        # Transaction builder, flows, execution
-│   ├── @pipeit/actions     # High-level DeFi actions
+│   ├── @pipeit/actions     # InstructionPlan factories for DeFi
 │   └── @pipeit/fastlane    # Native QUIC TPU client
 └── examples/
     └── next-js/            # Example application
@@ -74,7 +74,7 @@ pipeit/
 # Transaction builder (recommended starting point)
 pnpm install @pipeit/core @solana/kit
 
-# High-level DeFi actions
+# DeFi operations (swaps via Titan/Metis)
 pnpm install @pipeit/actions @pipeit/core @solana/kit
 
 # TPU direct submission (server-side only)
@@ -126,22 +126,29 @@ const result = await createFlow({ rpc, rpcSubscriptions, signer })
 ### DeFi Swap
 
 ```typescript
-import { pipe } from '@pipeit/actions';
-import { jupiter } from '@pipeit/actions/adapters';
+import { getTitanSwapPlan } from '@pipeit/actions/titan';
+import { executePlan } from '@pipeit/core';
 
-const result = await pipe({
-    rpc,
-    rpcSubscriptions,
-    signer,
-    adapters: { swap: jupiter() },
-})
-    .swap({
+// Get a swap plan from Titan
+const { plan, lookupTableAddresses, quote } = await getTitanSwapPlan({
+    swap: {
         inputMint: 'So11111111111111111111111111111111111111112', // SOL
         outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
         amount: 100_000_000n, // 0.1 SOL
         slippageBps: 50,
-    })
-    .execute();
+    },
+    transaction: {
+        userPublicKey: signer.address,
+    },
+});
+
+// Execute with ALT support
+await executePlan(plan, {
+    rpc,
+    rpcSubscriptions,
+    signer,
+    lookupTableAddresses,
+});
 ```
 
 ## Execution Strategies

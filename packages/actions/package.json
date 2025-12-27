@@ -1,7 +1,7 @@
 {
   "name": "@pipeit/actions",
-  "version": "0.1.1",
-  "description": "High-level DeFi actions for Solana with pluggable protocol adapters",
+  "version": "0.1.0",
+  "description": "Composable DeFi InstructionPlan factories for Solana (Titan-first)",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -13,15 +13,15 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
-    "./adapters": {
-      "types": "./dist/adapters/index.d.ts",
-      "import": "./dist/adapters/index.js",
-      "require": "./dist/adapters/index.cjs"
+    "./titan": {
+      "types": "./dist/titan/index.d.ts",
+      "import": "./dist/titan/index.js",
+      "require": "./dist/titan/index.cjs"
     },
-    "./adapters/jupiter": {
-      "types": "./dist/adapters/jupiter.d.ts",
-      "import": "./dist/adapters/jupiter.js",
-      "require": "./dist/adapters/jupiter.cjs"
+    "./metis": {
+      "types": "./dist/metis/index.d.ts",
+      "import": "./dist/metis/index.js",
+      "require": "./dist/metis/index.cjs"
     }
   },
   "files": [
@@ -39,24 +39,31 @@
     "solana",
     "defi",
     "swap",
+    "titan",
     "jupiter",
-    "actions",
+    "metis",
+    "instruction-plans",
     "transaction"
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@pipeit/core": "^0.2.1",
+    "@pipeit/core": "^0.2.5",
     "@solana/kit": "^5.0.0",
     "@solana/addresses": "*",
+    "@solana/instruction-plans": "*",
     "@solana/instructions": "*",
     "@solana/rpc": "*",
     "@solana/rpc-subscriptions": "*",
     "@solana/signers": "*",
     "@solana/transactions": "*"
   },
+  "dependencies": {
+    "@msgpack/msgpack": "^3.0.0"
+  },
   "devDependencies": {
     "@pipeit/core": "workspace:*",
     "@solana/addresses": "*",
+    "@solana/instruction-plans": "*",
     "@solana/instructions": "*",
     "@solana/kit": "^5.0.0",
     "@solana/rpc": "*",

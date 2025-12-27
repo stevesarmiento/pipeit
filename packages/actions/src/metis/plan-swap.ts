@@ -165,7 +165,7 @@ export function getMetisSwapInstructionPlanFromResponse(
  *
  * @example
  * ```ts
- * import { getMetisSwapPlan } from '@pipeit/actions-v2/metis';
+ * import { getMetisSwapPlan } from '@pipeit/actions/metis';
  * import { executePlan } from '@pipeit/core';
  *
  * const { plan, lookupTableAddresses, quote } = await getMetisSwapPlan({

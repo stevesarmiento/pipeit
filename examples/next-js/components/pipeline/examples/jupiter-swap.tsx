@@ -8,7 +8,7 @@ import {
     metisInstructionToKit,
     type QuoteResponse,
     type SwapInstructionsResponse,
-} from '@pipeit/actions-v2/metis';
+} from '@pipeit/actions/metis';
 import { address } from '@solana/kit';
 
 // Token addresses
@@ -19,7 +19,7 @@ const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 const JUPITER_PROXY_URL = '/api/jupiter';
 
 /**
- * Example: Jupiter Swap using @pipeit/actions-v2/metis
+ * Example: Jupiter Swap using @pipeit/actions/metis
  *
  * This demonstrates using the Metis module to get swap instructions,
  * then executing them via TransactionBuilder with full control.
@@ -142,7 +142,7 @@ export function useJupiterSwapPipeline() {
     return visualPipeline;
 }
 
-export const jupiterSwapCode = `import { createMetisClient, metisInstructionToKit } from '@pipeit/actions-v2/metis'
+export const jupiterSwapCode = `import { createMetisClient, metisInstructionToKit } from '@pipeit/actions/metis'
 import { TransactionBuilder } from '@pipeit/core'
 import { address } from '@solana/kit'
 

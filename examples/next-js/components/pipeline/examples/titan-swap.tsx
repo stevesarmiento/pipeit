@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { executePlan, createFlow, type FlowConfig, type TransactionPlanResult } from '@pipeit/core';
 import { VisualPipeline } from '@/lib/visual-pipeline';
-import { getTitanSwapPlan } from '@pipeit/actions-v2/titan';
+import { getTitanSwapPlan } from '@pipeit/actions/titan';
 import { getSignatureFromTransaction } from '@solana/kit';
 
 // Token addresses
@@ -14,7 +14,7 @@ const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 const TITAN_PROXY_URL = '/api/titan';
 
 /**
- * Example: Titan Swap using @pipeit/actions-v2
+ * Example: Titan Swap using @pipeit/actions
  *
  * This demonstrates using the new InstructionPlan-first approach with Titan,
  * including ALT (Address Lookup Table) support for optimal transaction packing.
@@ -74,7 +74,7 @@ export function useTitanSwapPipeline() {
     return visualPipeline;
 }
 
-export const titanSwapCode = `import { getTitanSwapPlan, TITAN_DEMO_BASE_URLS } from '@pipeit/actions-v2/titan'
+export const titanSwapCode = `import { getTitanSwapPlan, TITAN_DEMO_BASE_URLS } from '@pipeit/actions/titan'
 import { executePlan } from '@pipeit/core'
 import { getSignatureFromTransaction } from '@solana/kit'
 
