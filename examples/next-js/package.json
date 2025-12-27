@@ -13,7 +13,7 @@
         "@phosphor-icons/react": "^2.1.10",
         "@pipeit/actions": "workspace:*",
         "@pipeit/core": "^0.2.5",
-        "@pipeit/fastlane": "^0.1.2",
+        "@pipeit/fastlane": "^0.1.5",
         "@radix-ui/react-accordion": "^1.2.12",
         "@radix-ui/react-avatar": "^1.1.10",
         "@radix-ui/react-dialog": "^1.1.15",
