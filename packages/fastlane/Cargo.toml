@@ -1,6 +1,6 @@
 [package]
 name = "pipeit-fastlane"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 description = "Native QUIC client for direct Solana TPU transaction submission"
 license = "MIT"

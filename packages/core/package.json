@@ -1,6 +1,6 @@
 {
     "name": "@pipeit/core",
-    "version": "0.2.5",
+    "version": "0.2.6",
     "description": "Type-safe transaction builder for Solana with smart defaults",
     "type": "module",
     "main": "./dist/index.cjs",
