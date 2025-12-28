@@ -158,8 +158,18 @@ jobs:
           registry-url: https://registry.npmjs.org/
           cache: pnpm
 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
+
+      - name: Regenerate JS + types (index.js / index.d.ts)
+        run: pnpm exec napi build --platform --release --target x86_64-unknown-linux-gnu
+        shell: bash
+        working-directory: packages/fastlane
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -172,6 +182,10 @@ jobs:
           cp artifacts/bindings-x86_64-unknown-linux-gnu/*.node .
           cp artifacts/bindings-x86_64-pc-windows-msvc/*.node .
           ls -la *.node
+        working-directory: packages/fastlane
+
+      - name: Verify gRPC config is present in types
+        run: node -e "const fs=require('node:fs'); const dts=fs.readFileSync('index.d.ts','utf8'); const required=['grpcUrl','grpcXToken']; const missing=required.filter(k=>!dts.includes(k)); if(missing.length){ console.error('Missing fields in index.d.ts:', missing.join(', ')); process.exit(1);} console.log('index.d.ts contains gRPC fields');"
         working-directory: packages/fastlane
 
       - name: Publish
