@@ -31,15 +31,15 @@ Demonstrates the value proposition of Pipeit with:
 
 Interactive demos of various pipeline patterns with real mainnet transactions:
 
-| Example | Description |
-|---------|-------------|
-| **Simple Transfer** | Single instruction, single transaction - baseline example |
-| **Batched Transfers** | Multiple transfers batched into one atomic transaction |
-| **Mixed Pipeline** | Instruction and transaction steps - shows when batching breaks |
-| **Jupiter Swap** | Token swap using Jupiter aggregator |
-| **Pipe Multi-Swap** | SOL → USDC → BONK sequential swaps with Flow orchestration |
-| **Jito Bundle** | MEV-protected bundle submission with Jito tip instructions |
-| **TPU Direct** | Direct QUIC submission to validator TPU - bypass RPC for max speed |
+| Example               | Description                                                        |
+| --------------------- | ------------------------------------------------------------------ |
+| **Simple Transfer**   | Single instruction, single transaction - baseline example          |
+| **Batched Transfers** | Multiple transfers batched into one atomic transaction             |
+| **Mixed Pipeline**    | Instruction and transaction steps - shows when batching breaks     |
+| **Jupiter Swap**      | Token swap using Jupiter aggregator                                |
+| **Titan Swap**        | Token swap using Titan aggregator                                  |
+| **Jito Bundle**       | MEV-protected bundle submission with Jito tip instructions         |
+| **TPU Direct**        | Direct QUIC submission to validator TPU - bypass RPC for max speed |
 
 Each example includes:
 
@@ -102,7 +102,7 @@ Multi-step examples demonstrate:
 ## Dependencies
 
 - `@pipeit/core` - Transaction builder
-- `@pipeit/actions` - DeFi actions (Jupiter swaps)
+- `@pipeit/actions` - DeFi actions (Titan, Metis swaps)
 - `@pipeit/fastlane` - TPU direct submission
 - `@solana/kit` - Solana primitives
 - `@solana/connector` - Wallet connection

@@ -26,7 +26,7 @@ export const AppNav = React.memo(() => {
             {
                 threshold: 0,
                 rootMargin: '-64px 0px 0px 0px', // Account for nav height
-            }
+            },
         );
 
         observer.observe(heroCopyButtons);

@@ -265,6 +265,3 @@ describe('ParallelSubmitError', () => {
         expect(error.errors[1].endpoint).toBe('https://rpc2.example.com');
     });
 });
-
-
-

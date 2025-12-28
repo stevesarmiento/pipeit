@@ -1,6 +1,12 @@
 # @pipeit/actions
 
-High-level DeFi actions for Solana with a simple, composable API. Uses pluggable adapters to avoid vendor lock-in.
+Composable InstructionPlan factories for Solana DeFi, starting with Titan integration.
+
+This package provides Kit-compatible `InstructionPlan` factories that can be:
+
+- Executed directly with `@pipeit/core`'s `executePlan`
+- Composed with other InstructionPlans using Kit's plan combinators
+- Used by anyone in the Kit ecosystem
 
 ## Installation
 
@@ -11,383 +17,270 @@ pnpm install @pipeit/actions @pipeit/core @solana/kit
 ## Quick Start
 
 ```typescript
-import { pipe } from '@pipeit/actions';
-import { jupiter } from '@pipeit/actions/adapters';
+import { getTitanSwapPlan } from '@pipeit/actions/titan';
+import { executePlan } from '@pipeit/core';
 import { createSolanaRpc, createSolanaRpcSubscriptions } from '@solana/kit';
 
 const rpc = createSolanaRpc('https://api.mainnet-beta.solana.com');
 const rpcSubscriptions = createSolanaRpcSubscriptions('wss://api.mainnet-beta.solana.com');
 
-// Swap SOL for USDC using Jupiter
-const result = await pipe({
-    rpc,
-    rpcSubscriptions,
-    signer,
-    adapters: { swap: jupiter() },
-})
-    .swap({
+// Get a swap plan from Titan
+const { plan, lookupTableAddresses, quote } = await getTitanSwapPlan({
+    swap: {
         inputMint: 'So11111111111111111111111111111111111111112', // SOL
         outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
-        amount: 10_000_000n, // 0.1 SOL
+        amount: 1_000_000_000n, // 1 SOL
         slippageBps: 50, // 0.5%
-    })
-    .execute();
-
-console.log('Transaction:', result.signature);
-```
-
-## Pipe API
-
-The `pipe()` function creates a fluent builder for composing DeFi actions into atomic transactions.
-
-### Configuration
-
-```typescript
-interface PipeConfig {
-    rpc: Rpc<ActionsRpcApi>;
-    rpcSubscriptions: RpcSubscriptions<ActionsRpcSubscriptionsApi>;
-    signer: TransactionSigner;
-    adapters?: {
-        swap?: SwapAdapter;
-    };
-    priorityFee?: PriorityFeeLevel | PriorityFeeConfig;
-    computeUnits?: 'auto' | number;
-    autoRetry?: boolean | { maxAttempts: number; backoff: 'linear' | 'exponential' };
-    logLevel?: 'silent' | 'minimal' | 'verbose';
-}
-```
-
-### Adding Actions
-
-#### Swap Action
-
-```typescript
-pipe({ rpc, rpcSubscriptions, signer, adapters: { swap: jupiter() } }).swap({
-    inputMint: 'So11111111111111111111111111111111111111112',
-    outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-    amount: 10_000_000n,
-    slippageBps: 50, // Optional, default: 50 (0.5%)
-});
-```
-
-#### Custom Actions
-
-```typescript
-pipe({ rpc, rpcSubscriptions, signer }).add(async ctx => ({
-    instructions: [myCustomInstruction],
-    computeUnits: 200_000, // Optional hint
-    addressLookupTableAddresses: ['...'], // Optional ALT addresses
-    data: { custom: 'data' }, // Optional metadata
-}));
-```
-
-### Executing
-
-```typescript
-// Basic execution
-const result = await pipe({ rpc, rpcSubscriptions, signer, adapters: { swap: jupiter() } })
-  .swap({ ... })
-  .execute();
-
-console.log('Signature:', result.signature);
-console.log('Action results:', result.actionResults);
-
-// With options
-const result = await pipe({ rpc, rpcSubscriptions, signer, adapters: { swap: jupiter() } })
-  .swap({ ... })
-  .execute({
-    commitment: 'confirmed',
-    abortSignal: abortController.signal
-  });
-```
-
-### Simulating
-
-Test action sequences before execution:
-
-```typescript
-const simulation = await pipe({ rpc, rpcSubscriptions, signer, adapters: { swap: jupiter() } })
-  .swap({ ... })
-  .simulate();
-
-if (simulation.success) {
-  console.log('Estimated compute units:', simulation.unitsConsumed);
-  console.log('Logs:', simulation.logs);
-} else {
-  console.error('Simulation failed:', simulation.error);
-}
-```
-
-### Lifecycle Hooks
-
-Monitor action execution progress:
-
-```typescript
-pipe({ rpc, rpcSubscriptions, signer, adapters: { swap: jupiter() } })
-  .swap({ ... })
-  .onActionStart((index) => console.log(`Starting action ${index}`))
-  .onActionComplete((index, result) => {
-    console.log(`Action ${index} completed with ${result.instructions.length} instructions`);
-  })
-  .onActionError((index, error) => {
-    console.error(`Action ${index} failed:`, error);
-  })
-  .execute();
-```
-
-### Chaining Multiple Actions
-
-All actions in a pipe execute atomically in a single transaction:
-
-```typescript
-const result = await pipe({ rpc, rpcSubscriptions, signer, adapters: { swap: jupiter() } })
-    .swap({ inputMint: SOL, outputMint: USDC, amount: 10_000_000n })
-    .add(async ctx => ({
-        instructions: [transferInstruction],
-    }))
-    .swap({ inputMint: USDC, outputMint: BONK, amount: 5_000_000n })
-    .execute();
-```
-
-## Adapters
-
-Adapters provide protocol-specific implementations for actions. Pipeit includes built-in adapters and supports custom adapters.
-
-### Jupiter Adapter
-
-Jupiter adapter for token swaps across all Solana DEXs:
-
-```typescript
-import { jupiter } from '@pipeit/actions/adapters';
-
-// Default configuration
-const adapter = jupiter();
-
-// Custom configuration
-const adapter = jupiter({
-    apiUrl: 'https://lite-api.jup.ag/swap/v1', // Default
-    wrapAndUnwrapSol: true, // Default: auto-wrap/unwrap SOL
-    dynamicComputeUnitLimit: true, // Default: use Jupiter's CU estimate
-    prioritizationFeeLamports: 'auto', // Default: use Jupiter's fee estimate
-});
-```
-
-**Configuration Options:**
-
-- `apiUrl` - Base URL for Jupiter API (default: `https://lite-api.jup.ag/swap/v1`)
-- `wrapAndUnwrapSol` - Automatically wrap/unwrap SOL (default: `true`)
-- `dynamicComputeUnitLimit` - Use Jupiter's compute unit estimate (default: `true`)
-- `prioritizationFeeLamports` - Priority fee in lamports or `'auto'` (default: `'auto'`)
-
-### Creating Custom Adapters
-
-Implement the `SwapAdapter` interface:
-
-```typescript
-import type { SwapAdapter, SwapParams, ActionContext } from '@pipeit/actions';
-
-const mySwapAdapter: SwapAdapter = {
-  swap: (params: SwapParams) => async (ctx: ActionContext) => {
-    // Call your DEX API
-    const quote = await fetchQuote(params);
-    const instructions = await buildSwapInstructions(quote, ctx.signer.address);
-
-    return {
-      instructions,
-      computeUnits: 300_000,  // Optional
-      addressLookupTableAddresses: ['...'],  // Optional
-      data: {
-        inputAmount: BigInt(quote.inAmount),
-        outputAmount: BigInt(quote.outAmount),
-        priceImpactPct: quote.priceImpact,
-      },
-    };
-  },
-};
-
-// Use your custom adapter
-pipe({ rpc, rpcSubscriptions, signer, adapters: { swap: mySwapAdapter } })
-  .swap({ ... })
-  .execute();
-```
-
-## Configuration
-
-### Priority Fees
-
-```typescript
-// Preset levels
-pipe({
-    rpc,
-    rpcSubscriptions,
-    signer,
-    adapters: { swap: jupiter() },
-    priorityFee: 'high', // none | low | medium | high | veryHigh
-});
-
-// Custom configuration
-pipe({
-    rpc,
-    rpcSubscriptions,
-    signer,
-    adapters: { swap: jupiter() },
-    priorityFee: {
-        strategy: 'percentile',
-        percentile: 75,
     },
-});
-```
-
-### Compute Units
-
-```typescript
-// Auto (collects from actions or uses default)
-pipe({
-    rpc,
-    rpcSubscriptions,
-    signer,
-    adapters: { swap: jupiter() },
-    computeUnits: 'auto',
-});
-
-// Fixed limit
-pipe({
-    rpc,
-    rpcSubscriptions,
-    signer,
-    adapters: { swap: jupiter() },
-    computeUnits: 400_000,
-});
-```
-
-### Auto-Retry
-
-```typescript
-// Default retry (3 attempts, exponential backoff)
-pipe({
-    rpc,
-    rpcSubscriptions,
-    signer,
-    adapters: { swap: jupiter() },
-    autoRetry: true,
-});
-
-// Custom retry configuration
-pipe({
-    rpc,
-    rpcSubscriptions,
-    signer,
-    adapters: { swap: jupiter() },
-    autoRetry: {
-        maxAttempts: 5,
-        backoff: 'exponential', // or 'linear'
+    transaction: {
+        userPublicKey: signer.address,
+        createOutputTokenAccount: true,
     },
 });
 
-// No retry
-pipe({
+console.log(`Swapping 1 SOL for ~${quote.outputAmount / 1_000_000n} USDC`);
+
+// Execute with ALT support for optimal transaction packing
+await executePlan(plan, {
     rpc,
     rpcSubscriptions,
     signer,
-    adapters: { swap: jupiter() },
-    autoRetry: false,
+    lookupTableAddresses,
 });
 ```
 
-### Logging
+## Titan API
+
+### `getTitanSwapPlan`
+
+The main entry point that fetches a quote, selects the best route, and returns a composable plan.
 
 ```typescript
-pipe({
+import { getTitanSwapPlan } from '@pipeit/actions/titan';
+
+const { plan, lookupTableAddresses, quote, providerId, route } = await getTitanSwapPlan(
+    {
+        swap: {
+            inputMint: 'So11111111111111111111111111111111111111112',
+            outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+            amount: 1_000_000_000n,
+            slippageBps: 50,
+            // Optional filters
+            dexes: ['Raydium', 'Orca'], // Only use these DEXes
+            excludeDexes: ['Phoenix'], // Exclude these DEXes
+            onlyDirectRoutes: false, // Allow multi-hop routes
+            providers: ['titan'], // Only use specific providers
+        },
+        transaction: {
+            userPublicKey: signer.address,
+            createOutputTokenAccount: true,
+            closeInputTokenAccount: false,
+        },
+    },
+    {
+        // Optional: specify a provider
+        providerId: 'titan',
+    },
+);
+```
+
+### Lower-Level APIs
+
+For more control, you can use the individual functions:
+
+```typescript
+import {
+    createTitanClient,
+    TITAN_DEMO_BASE_URLS,
+    getTitanSwapQuote,
+    selectTitanRoute,
+    getTitanSwapInstructionPlanFromRoute,
+} from '@pipeit/actions/titan';
+
+// Create a client
+const client = createTitanClient({
+    // Option A: pick a demo region (us1 | jp1 | de1)
+    demoRegion: 'us1',
+    // Option B: specify a full base URL (demo or production)
+    // baseUrl: TITAN_DEMO_BASE_URLS.jp1,
+    // baseUrl: 'https://api.titan.ag/api/v1',
+    authToken: 'optional-jwt-for-fees',
+});
+
+// Get quotes from all providers
+const quotes = await getTitanSwapQuote(client, {
+    swap: { inputMint, outputMint, amount },
+    transaction: { userPublicKey },
+});
+
+// Select the best route (or a specific provider)
+const { providerId, route } = selectTitanRoute(quotes, {
+    providerId: 'titan', // Optional: use specific provider
+});
+
+// Build the instruction plan
+const plan = getTitanSwapInstructionPlanFromRoute(route);
+
+// Extract ALT addresses
+const lookupTableAddresses = route.addressLookupTables.map(titanPubkeyToAddress);
+```
+
+## Composing Plans
+
+The real power of InstructionPlans is composition. Combine multiple plans:
+
+```typescript
+import { getTitanSwapPlan } from '@pipeit/actions/titan';
+import { sequentialInstructionPlan, parallelInstructionPlan, singleInstructionPlan } from '@solana/instruction-plans';
+import { executePlan } from '@pipeit/core';
+
+// Swap SOL → USDC
+const swapResult = await getTitanSwapPlan({
+    swap: {
+        inputMint: SOL_MINT,
+        outputMint: USDC_MINT,
+        amount: 10_000_000_000n, // 10 SOL
+    },
+    transaction: { userPublicKey: signer.address },
+});
+
+// Add a transfer instruction
+const transferPlan = singleInstructionPlan(transferInstruction);
+
+// Combine: swap then transfer
+const combinedPlan = sequentialInstructionPlan([swapResult.plan, transferPlan]);
+
+// Execute with all ALTs
+await executePlan(combinedPlan, {
     rpc,
     rpcSubscriptions,
     signer,
-    adapters: { swap: jupiter() },
-    logLevel: 'verbose', // silent | minimal | verbose
+    lookupTableAddresses: swapResult.lookupTableAddresses,
 });
 ```
 
-## Address Lookup Tables
+## ALT (Address Lookup Table) Support
 
-Actions can return address lookup table addresses, which are automatically fetched and used for transaction compression:
+Titan swaps often require Address Lookup Tables to stay under transaction size limits. The `@pipeit/core` `executePlan` function handles this automatically:
+
+1. **Planner-time compression**: ALTs are used during transaction planning, so Kit can pack more instructions per transaction.
+2. **Executor-time compression**: Messages are compressed before simulation and signing, ensuring what you simulate is what you send.
 
 ```typescript
-const result = await pipe({ rpc, rpcSubscriptions, signer, adapters: { swap: jupiter() } })
-  .swap({ ... })
-  .execute();
+// Option 1: Pass ALT addresses (core will fetch them)
+await executePlan(plan, {
+    rpc,
+    rpcSubscriptions,
+    signer,
+    lookupTableAddresses: swapResult.lookupTableAddresses,
+});
 
-// Jupiter adapter automatically includes ALT addresses if needed
-// Pipe fetches and applies them automatically
+// Option 2: Pre-fetch ALT data yourself
+import { fetchAddressLookupTables } from '@pipeit/core';
+
+const addressesByLookupTable = await fetchAddressLookupTables(rpc, swapResult.lookupTableAddresses);
+
+await executePlan(plan, {
+    rpc,
+    rpcSubscriptions,
+    signer,
+    addressesByLookupTable,
+});
+```
+
+## Swap Modes
+
+Titan supports two swap modes:
+
+- **ExactIn** (default): Swap exactly N input tokens, get variable output
+- **ExactOut**: Get exactly N output tokens, use variable input
+
+```typescript
+// ExactIn: Swap exactly 1 SOL, get as much USDC as possible
+const exactInResult = await getTitanSwapPlan({
+    swap: {
+        inputMint: SOL_MINT,
+        outputMint: USDC_MINT,
+        amount: 1_000_000_000n, // 1 SOL
+        swapMode: 'ExactIn',
+    },
+    transaction: { userPublicKey: signer.address },
+});
+
+// ExactOut: Get exactly 100 USDC, use as little SOL as possible
+const exactOutResult = await getTitanSwapPlan({
+    swap: {
+        inputMint: SOL_MINT,
+        outputMint: USDC_MINT,
+        amount: 100_000_000n, // 100 USDC
+        swapMode: 'ExactOut',
+    },
+    transaction: { userPublicKey: signer.address },
+});
 ```
 
 ## Error Handling
 
 ```typescript
 import {
-  NoActionsError,
-  NoAdapterError,
-  ActionExecutionError,
-  isNoActionsError,
-  isNoAdapterError,
-  isActionExecutionError
-} from '@pipeit/actions';
+    TitanApiError,
+    NoRoutesError,
+    ProviderNotFoundError,
+    NoInstructionsError,
+} from '@pipeit/actions/titan';
 
 try {
-  const result = await pipe({ rpc, rpcSubscriptions, signer, adapters: { swap: jupiter() } })
-    .swap({ ... })
-    .execute();
+    const result = await getTitanSwapPlan({ ... });
 } catch (error) {
-  if (isNoActionsError(error)) {
-    console.error('No actions added to pipe');
-  } else if (isNoAdapterError(error)) {
-    console.error(`Adapter not configured: ${error.adapterName}`);
-  } else if (isActionExecutionError(error)) {
-    console.error(`Action ${error.actionIndex} failed:`, error.cause);
-  }
+    if (error instanceof TitanApiError) {
+        console.error(`API error (${error.statusCode}): ${error.responseBody}`);
+    } else if (error instanceof NoRoutesError) {
+        console.error(`No routes available for quote ${error.quoteId}`);
+    } else if (error instanceof ProviderNotFoundError) {
+        console.error(`Provider ${error.providerId} not found. Available: ${error.availableProviders}`);
+    } else if (error instanceof NoInstructionsError) {
+        console.error('Route has no instructions (may only provide pre-built transaction)');
+    }
 }
 ```
 
 ## Type Exports
 
-### Main Classes
+### Client
 
-- `Pipe` - Fluent builder class
+- `createTitanClient` - Create a Titan REST API client
+- `TitanClient` - Client interface
+- `TitanClientConfig` - Client configuration
 
-### Functions
+### Plan Building
 
-- `pipe` - Create a new pipe instance
+- `getTitanSwapPlan` - Main entry point
+- `getTitanSwapQuote` - Fetch raw quotes
+- `selectTitanRoute` - Select best route from quotes
+- `getTitanSwapInstructionPlanFromRoute` - Build plan from route
+- `TitanSwapPlanResult` - Result type
+- `TitanSwapPlanOptions` - Options type
 
 ### Types
 
-- `PipeConfig` - Configuration for creating a pipe
-- `PipeResult` - Result from executing a pipe
-- `ExecuteOptions` - Options for execution
-- `PipeHooks` - Lifecycle hooks
+- `SwapQuoteParams` - Quote request parameters
+- `SwapQuotes` - Quote response
+- `SwapRoute` - Individual route
+- `RoutePlanStep` - Step in a route
+- `SwapMode` - 'ExactIn' | 'ExactOut'
 
-### Action Types
+### Errors
 
-- `ActionContext` - Context passed to actions
-- `ActionExecutor` - Function that executes an action
-- `ActionFactory` - Factory function for creating action executors
-- `ActionResult` - Result returned by an action
+- `TitanApiError` - API request failed
+- `NoRoutesError` - No routes available
+- `ProviderNotFoundError` - Requested provider not found
+- `NoInstructionsError` - Route has no instructions
 
-### Swap Types
+### Conversion Utilities
 
-- `SwapParams` - Parameters for swap action
-- `SwapResult` - Extended result for swap actions
-- `SwapAdapter` - Interface for swap adapters
-
-### Error Types
-
-- `NoActionsError` - No actions added to pipe
-- `NoAdapterError` - Required adapter not configured
-- `ActionExecutionError` - Action execution failed
-
-### Re-exported from Core
-
-- `PriorityFeeLevel` - Priority fee level type
-- `PriorityFeeConfig` - Priority fee configuration
-- `ActionsRpcApi` - Minimum RPC API required
-- `ActionsRpcSubscriptionsApi` - Minimum RPC subscriptions API required
+- `titanInstructionToKit` - Convert Titan instruction to Kit
+- `titanPubkeyToAddress` - Convert Titan pubkey to Kit Address
+- `encodeBase58` - Encode bytes as base58
 
 ## License
 

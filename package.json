@@ -1,31 +1,33 @@
 {
-  "name": "@pipeit/monorepo",
-  "private": true,
-  "type": "module",
-  "packageManager": "pnpm@10.26.0",
-  "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "test": "turbo run test",
-    "typecheck": "turbo run typecheck",
-    "clean": "turbo run clean"
-  },
-  "devDependencies": {
-    "@solana/prettier-config-solana": "^0.0.6",
-    "@types/node": "^24.10.0",
-    "prettier": "^3.6.2",
-    "turbo": "^2.7.2",
-    "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
-  },
-  "pnpm": {
-    "overrides": {
-      "globalthis@1.0.4": "npm:@ungap/global-this@^0.4.4"
+    "name": "@pipeit/monorepo",
+    "private": true,
+    "type": "module",
+    "packageManager": "pnpm@10.26.2",
+    "scripts": {
+        "build": "turbo run build",
+        "dev": "turbo run dev",
+        "lint": "turbo run lint",
+        "test": "turbo run test",
+        "typecheck": "turbo run typecheck",
+        "clean": "turbo run clean",
+        "format": "prettier --write .",
+        "format:check": "prettier --check ."
+    },
+    "devDependencies": {
+        "@solana/prettier-config-solana": "^0.0.6",
+        "@types/node": "^24.10.0",
+        "prettier": "^3.6.2",
+        "turbo": "^2.7.2",
+        "typescript": "^5.9.3",
+        "vitest": "^3.2.4"
+    },
+    "pnpm": {
+        "overrides": {
+            "globalthis@1.0.4": "npm:@ungap/global-this@^0.4.4"
+        }
+    },
+    "engines": {
+        "node": ">=20.18.0",
+        "pnpm": "^10"
     }
-  },
-  "engines": {
-    "node": ">=20.18.0",
-    "pnpm": "^10"
-  }
 }

@@ -64,6 +64,41 @@ const plan = sequentialInstructionPlan([ix1, ix2, ix3, ix4, ix5]);
 const result = await executePlan(plan, { rpc, rpcSubscriptions, signer });
 ```
 
+#### With Address Lookup Tables
+
+`executePlan` supports address lookup table (ALT) compression for reducing transaction size:
+
+```typescript
+import { sequentialInstructionPlan, executePlan } from '@pipeit/core';
+import { address } from '@solana/addresses';
+
+const plan = sequentialInstructionPlan([swapInstruction, transferInstruction]);
+
+// Option 1: Provide ALT addresses (will be fetched automatically)
+// Note: RPC must include GetAccountInfoApi when using lookupTableAddresses
+const result = await executePlan(plan, {
+    rpc,
+    rpcSubscriptions,
+    signer,
+    lookupTableAddresses: [
+        address('ALT1111111111111111111111111111111111111111'),
+        address('ALT2222222222222222222222222222222222222222'),
+    ],
+});
+
+// Option 2: Provide pre-fetched lookup table data (no additional RPC requirements)
+const result = await executePlan(plan, {
+    rpc,
+    rpcSubscriptions,
+    signer,
+    addressesByLookupTable: {
+        [altAddress]: [addr1, addr2, addr3],
+    },
+});
+```
+
+> **Note:** For single-transaction workflows, `TransactionBuilder.execute()` also supports ALTs and provides additional features like priority fees and auto-retry. Use `executePlan` when you need Kit's transaction planner to automatically batch instructions across multiple transactions.
+
 ## TransactionBuilder API
 
 ### Configuration
@@ -118,9 +153,6 @@ builder.addInstruction(instruction);
 
 // Multiple instructions
 builder.addInstructions([ix1, ix2, ix3]);
-
-// With auto-packing (returns overflow instructions)
-const { builder: packed, overflow } = await builder.addInstructionsWithPacking(manyInstructions);
 ```
 
 #### Building
@@ -218,14 +250,28 @@ new TransactionBuilder({ computeUnits: 'auto' });
 // Fixed limit
 new TransactionBuilder({ computeUnits: 300_000 });
 
-// Custom strategy
+// Fixed strategy with custom units
 new TransactionBuilder({
     computeUnits: {
         strategy: 'fixed',
         units: 400_000,
     },
 });
+
+// Simulate strategy - estimates CU via simulation before sending
+// Uses Kit's provisory instruction pattern for accurate estimation
+new TransactionBuilder({
+    computeUnits: {
+        strategy: 'simulate',
+    },
+});
 ```
+
+The `'simulate'` strategy uses Kit's `@solana-program/compute-budget` helpers to:
+
+1. Add a provisory compute unit limit instruction during message building
+2. Simulate the transaction to get accurate CU consumption
+3. Update the instruction with the estimated value before signing and sending
 
 ### Address Lookup Tables
 

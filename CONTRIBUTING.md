@@ -28,7 +28,7 @@ Thank you for your interest in contributing to Pipeit! This document provides gu
 This is a monorepo managed with Turbo and pnpm workspaces:
 
 - `packages/core/` - Main transaction builder with execution strategies, Flow API, and Kit integration
-- `packages/actions/` - High-level DeFi actions with pluggable protocol adapters
+- `packages/actions/` - InstructionPlan factories for DeFi (Titan, Metis)
 - `packages/fastlane/` - Native Rust QUIC client for direct TPU submission (NAPI)
 - `examples/next-js/` - Next.js example application demonstrating usage
 
@@ -103,9 +103,9 @@ pnpm test
 
 ### @pipeit/actions
 
-- Follow adapter pattern for protocol integrations
-- Ensure adapters are pluggable and testable
-- Document adapter interfaces and requirements
+- Build Kit-compatible InstructionPlans
+- Follow existing Titan/Metis patterns for new integrations
+- Document quote/route/plan building pipeline
 - Consider API rate limits and error handling
 
 ### @pipeit/fastlane

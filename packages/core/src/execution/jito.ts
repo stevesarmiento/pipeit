@@ -376,6 +376,3 @@ export async function sendTransactionViaJito(transaction: string, options: SendB
     // Single transaction bundles are valid in Jito
     return sendBundle([transaction], options);
 }
-
-
-

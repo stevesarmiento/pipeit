@@ -1,6 +1,6 @@
 {
     "name": "@pipeit/core",
-    "version": "0.2.5",
+    "version": "0.2.6",
     "description": "Type-safe transaction builder for Solana with smart defaults",
     "type": "module",
     "main": "./dist/index.cjs",
@@ -60,7 +60,8 @@
         "@solana/rpc-types": "*",
         "@solana/signers": "*",
         "@solana/transaction-messages": "*",
-        "@solana/transactions": "*"
+        "@solana/transactions": "*",
+        "@solana-program/compute-budget": "*"
     },
     "peerDependenciesMeta": {
         "@solana/addresses": {
@@ -95,6 +96,9 @@
         },
         "@solana/transactions": {
             "optional": false
+        },
+        "@solana-program/compute-budget": {
+            "optional": false
         }
     },
     "dependencies": {},
@@ -113,6 +117,7 @@
         "@solana/signers": "*",
         "@solana/transaction-messages": "*",
         "@solana/transactions": "*",
+        "@solana-program/compute-budget": "*",
         "@types/node": "^24",
         "tsup": "^8.5.0",
         "typescript": "^5.8.3",

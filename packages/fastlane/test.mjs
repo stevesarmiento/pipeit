@@ -58,11 +58,7 @@ describe('TpuClientConfig', async () => {
 
         // Missing required fields should throw
         // Note: NAPI converts snake_case to camelCase in error messages
-        assert.throws(
-            () => new TpuClient({}),
-            /rpcUrl|wsUrl|rpc_url|ws_url/i,
-            'Should require rpc_url and ws_url'
-        );
+        assert.throws(() => new TpuClient({}), /rpcUrl|wsUrl|rpc_url|ws_url/i, 'Should require rpc_url and ws_url');
         console.log('✓ Config validation works');
     });
 
@@ -173,10 +169,7 @@ describe('TpuClient API', async () => {
         ];
 
         for (const method of expectedMethods) {
-            assert.ok(
-                typeof TpuClient.prototype[method] === 'function',
-                `TpuClient should have ${method} method`
-            );
+            assert.ok(typeof TpuClient.prototype[method] === 'function', `TpuClient should have ${method} method`);
         }
         console.log('✓ TpuClient has all expected methods');
     });

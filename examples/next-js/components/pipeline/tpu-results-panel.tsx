@@ -7,29 +7,18 @@ import type { TpuSubmissionResult, LeaderResult } from './examples/tpu-direct';
 /**
  * Round indicator dot with tooltip showing leaders for that round.
  */
-function RoundDot({ 
-    filled, 
-    index, 
-    leaders 
-}: { 
-    filled: boolean; 
-    index: number;
-    leaders?: LeaderResult[];
-}) {
+function RoundDot({ filled, index, leaders }: { filled: boolean; index: number; leaders?: LeaderResult[] }) {
     const hasLeaders = leaders && leaders.length > 0;
-    
+
     return (
         <div className="relative group">
             <motion.div
-                className={cn(
-                    'w-3 h-3 rounded-full cursor-default',
-                    filled ? 'bg-emerald-500' : 'bg-sand-400',
-                )}
+                className={cn('w-3 h-3 rounded-full cursor-default', filled ? 'bg-emerald-500' : 'bg-sand-400')}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: index * 0.02 }}
             />
-            
+
             {/* Tooltip */}
             {hasLeaders && (
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
@@ -84,9 +73,7 @@ export function TpuResultsPanel({ result, isExecuting }: TpuResultsPanelProps) {
                         ))}
                     </div>
                 </div>
-                <div className="text-xs text-sand-600 font-medium mt-2">
-                        TPU Direct — awaiting execution
-                </div>
+                <div className="text-xs text-sand-600 font-medium mt-2">TPU Direct — awaiting execution</div>
             </div>
         );
     }
@@ -138,44 +125,36 @@ export function TpuResultsPanel({ result, isExecuting }: TpuResultsPanelProps) {
                 {/* 4x4 grid */}
                 <div className="grid grid-cols-8 gap-1.5">
                     {Array.from({ length: 16 }).map((_, i) => (
-                        <RoundDot 
-                            key={i} 
-                            filled={i < filledCount} 
-                            index={i}
-                            leaders={leadersByRound[i]}
-                        />
+                        <RoundDot key={i} filled={i < filledCount} index={i} leaders={leadersByRound[i]} />
                     ))}
                 </div>
             </motion.div>
-                {/* Stats row */}
-                <div className="flex flex-col items-start gap-1.5 text-xs font-medium mt-2">
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-sand-600">Status</span>
-                        <span className={isConfirmed ? 'text-emerald-600' : 'text-amber-600'}>
-                            {isConfirmed ? 'Confirmed' : 'Pending'}
-                        </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-sand-600">Rounds</span>
-                        <span className="text-sand-1000">{rounds}</span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-sand-600">Leaders</span>
-                        <span className="text-sand-1000">{totalLeaders}</span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-sand-600">Time</span>
-                        <span className="text-sand-1000">
-                            {result.latencyMs > 1000 
-                                ? `${(result.latencyMs / 1000).toFixed(1)}s`
-                                : `${result.latencyMs}ms`
-                            }
-                        </span>
-                    </div>
+            {/* Stats row */}
+            <div className="flex flex-col items-start gap-1.5 text-xs font-medium mt-2">
+                <div className="flex items-center gap-1.5">
+                    <span className="text-sand-600">Status</span>
+                    <span className={isConfirmed ? 'text-emerald-600' : 'text-amber-600'}>
+                        {isConfirmed ? 'Confirmed' : 'Pending'}
+                    </span>
                 </div>
+
+                <div className="flex items-center gap-1.5">
+                    <span className="text-sand-600">Rounds</span>
+                    <span className="text-sand-1000">{rounds}</span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                    <span className="text-sand-600">Leaders</span>
+                    <span className="text-sand-1000">{totalLeaders}</span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                    <span className="text-sand-600">Time</span>
+                    <span className="text-sand-1000">
+                        {result.latencyMs > 1000 ? `${(result.latencyMs / 1000).toFixed(1)}s` : `${result.latencyMs}ms`}
+                    </span>
+                </div>
+            </div>
         </div>
     );
 }

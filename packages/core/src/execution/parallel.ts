@@ -334,6 +334,3 @@ export async function submitToRpc(
 
     return data.result;
 }
-
-
-

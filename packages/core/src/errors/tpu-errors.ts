@@ -24,12 +24,7 @@ export type TpuErrorCode =
 /**
  * Error codes that are safe to retry.
  */
-export const TPU_RETRYABLE_ERRORS: TpuErrorCode[] = [
-    'CONNECTION_FAILED',
-    'STREAM_CLOSED',
-    'RATE_LIMITED',
-    'TIMEOUT',
-];
+export const TPU_RETRYABLE_ERRORS: TpuErrorCode[] = ['CONNECTION_FAILED', 'STREAM_CLOSED', 'RATE_LIMITED', 'TIMEOUT'];
 
 /**
  * Error thrown when TPU submission fails.
@@ -73,17 +68,9 @@ export class TpuSubmissionError extends Error {
     /**
      * Creates a TpuSubmissionError from a raw error code string.
      */
-    static fromCode(
-        code: string,
-        message?: string,
-        validatorIdentity?: string,
-    ): TpuSubmissionError {
+    static fromCode(code: string, message?: string, validatorIdentity?: string): TpuSubmissionError {
         const errorCode = code.toUpperCase() as TpuErrorCode;
-        return new TpuSubmissionError(
-            errorCode,
-            message || `TPU submission failed: ${code}`,
-            validatorIdentity,
-        );
+        return new TpuSubmissionError(errorCode, message || `TPU submission failed: ${code}`, validatorIdentity);
     }
 }
 

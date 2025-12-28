@@ -4,13 +4,15 @@
  * @packageDocumentation
  */
 
-import type { TransactionSigner } from '@solana/signers';
+import type { Address } from '@solana/addresses';
 import type {
     Rpc,
     GetLatestBlockhashApi,
+    GetMultipleAccountsApi,
     GetEpochInfoApi,
     GetSignatureStatusesApi,
     SendTransactionApi,
+    SimulateTransactionApi,
 } from '@solana/rpc';
 import type { RpcSubscriptions, SignatureNotificationsApi, SlotNotificationsApi } from '@solana/rpc-subscriptions';
 import {
@@ -26,17 +28,35 @@ import {
     setTransactionMessageLifetimeUsingBlockhash,
     signTransactionMessageWithSigners,
     sendAndConfirmTransactionFactory,
+    fetchAddressesForLookupTables,
 } from '@solana/kit';
+import type { BaseTransactionMessage, TransactionMessageWithFeePayer } from '@solana/transaction-messages';
+import { addSignersToTransactionMessage, type TransactionSigner } from '@solana/signers';
+import {
+    fillProvisorySetComputeUnitLimitInstruction,
+    estimateComputeUnitLimitFactory,
+    estimateAndUpdateProvisoryComputeUnitLimitFactory,
+} from '@solana-program/compute-budget';
+import { type AddressesByLookupTableAddress, compressTransactionMessage } from '../lookup-tables/index.js';
 
 /**
- * Configuration for executing an instruction plan.
+ * Base RPC API required for executing instruction plans.
  */
-export interface ExecutePlanConfig {
-    /**
-     * RPC client.
-     */
-    rpc: Rpc<GetEpochInfoApi & GetSignatureStatusesApi & SendTransactionApi & GetLatestBlockhashApi>;
+type BaseRpcApi = GetEpochInfoApi &
+    GetSignatureStatusesApi &
+    SendTransactionApi &
+    GetLatestBlockhashApi &
+    SimulateTransactionApi;
 
+/**
+ * RPC API required when fetching lookup tables (includes GetMultipleAccountsApi).
+ */
+type RpcApiWithLookupFetch = BaseRpcApi & GetMultipleAccountsApi;
+
+/**
+ * Base configuration for executing an instruction plan (no ALT support).
+ */
+interface ExecutePlanConfigBase {
     /**
      * RPC subscriptions client.
      */
@@ -57,6 +77,83 @@ export interface ExecutePlanConfig {
      */
     abortSignal?: AbortSignal;
 }
+
+/**
+ * Configuration without any ALT support (original behavior).
+ */
+interface ExecutePlanConfigNoAlt extends ExecutePlanConfigBase {
+    /**
+     * RPC client.
+     */
+    rpc: Rpc<BaseRpcApi>;
+
+    /**
+     * Not used in this variant.
+     */
+    lookupTableAddresses?: undefined;
+
+    /**
+     * Not used in this variant.
+     */
+    addressesByLookupTable?: undefined;
+}
+
+/**
+ * Configuration with lookup table addresses to fetch.
+ * Requires RPC client with GetMultipleAccountsApi.
+ */
+interface ExecutePlanConfigWithLookupAddresses extends ExecutePlanConfigBase {
+    /**
+     * RPC client with GetMultipleAccountsApi for fetching lookup tables.
+     */
+    rpc: Rpc<RpcApiWithLookupFetch>;
+
+    /**
+     * Address lookup table addresses to fetch and use for transaction compression.
+     * Tables will be fetched once and used to compress all transaction messages.
+     */
+    lookupTableAddresses: Address[];
+
+    /**
+     * Not used when lookupTableAddresses is provided.
+     */
+    addressesByLookupTable?: undefined;
+}
+
+/**
+ * Configuration with pre-fetched lookup table data.
+ * Does not require GetAccountInfoApi since tables are already fetched.
+ */
+interface ExecutePlanConfigWithLookupData extends ExecutePlanConfigBase {
+    /**
+     * RPC client.
+     */
+    rpc: Rpc<BaseRpcApi>;
+
+    /**
+     * Not used when addressesByLookupTable is provided.
+     */
+    lookupTableAddresses?: undefined;
+
+    /**
+     * Pre-fetched lookup table data for transaction compression.
+     * Use this to avoid fetching tables if you already have the data.
+     */
+    addressesByLookupTable: AddressesByLookupTableAddress;
+}
+
+/**
+ * Configuration for executing an instruction plan.
+ *
+ * Supports optional address lookup table (ALT) compression:
+ * - Provide `lookupTableAddresses` to fetch and use ALTs (requires `GetMultipleAccountsApi` on RPC)
+ * - Provide `addressesByLookupTable` with pre-fetched data (no additional RPC requirements)
+ * - Omit both for original behavior without ALT compression
+ */
+export type ExecutePlanConfig =
+    | ExecutePlanConfigNoAlt
+    | ExecutePlanConfigWithLookupAddresses
+    | ExecutePlanConfigWithLookupData;
 
 /**
  * Execute a Kit instruction plan using TransactionBuilder features.
@@ -113,19 +210,32 @@ export interface ExecutePlanConfig {
 export async function executePlan(plan: InstructionPlan, config: ExecutePlanConfig): Promise<TransactionPlanResult> {
     const { rpc, rpcSubscriptions, signer, commitment = 'confirmed', abortSignal } = config;
 
-    // Create transaction planner
+    // Resolve lookup table data once (prefetched or fetched from addresses)
+    const lookupTableData = await resolveLookupTableData(config);
+
+    // Create transaction planner with provisory CU instruction and optional ALT compression hook
     const planner = createTransactionPlanner({
         createTransactionMessage: async () => {
             // Fetch latest blockhash
             const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
 
-            // Create transaction message with fee payer and blockhash
+            // Create transaction message with fee payer, blockhash, and provisory CU instruction
             return pipe(
                 createTransactionMessage({ version: 0 }),
                 tx => setTransactionMessageFeePayer(signer.address, tx),
                 tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
+                tx => fillProvisorySetComputeUnitLimitInstruction(tx),
+                // Attach signer so CU simulation + signing works (Kit requires this metadata)
+                tx => addSignersToTransactionMessage([signer], tx),
             );
         },
+        // Apply ALT compression during planning so size checks account for compressed size.
+        // This allows the planner to pack more instructions per transaction when ALTs are used.
+        ...(lookupTableData && {
+            onTransactionMessageUpdated: <TMessage extends BaseTransactionMessage & TransactionMessageWithFeePayer>(
+                message: TMessage,
+            ): TMessage => compressTransactionMessage(message, lookupTableData),
+        }),
     });
 
     // Plan the instructions into transactions
@@ -134,11 +244,26 @@ export async function executePlan(plan: InstructionPlan, config: ExecutePlanConf
     // Create send and confirm factory
     const sendAndConfirm = sendAndConfirmTransactionFactory({ rpc, rpcSubscriptions });
 
-    // Create transaction executor
+    // Create CU estimation helpers
+    const estimateCULimit = estimateComputeUnitLimitFactory({ rpc });
+    const estimateAndSetCULimit = estimateAndUpdateProvisoryComputeUnitLimitFactory(estimateCULimit);
+
+    // Create transaction executor with CU estimation and ALT compression
     const executor = createTransactionPlanExecutor({
         executeTransactionMessage: async message => {
+            // Apply ALT compression before CU estimation (if lookup tables provided)
+            const compressedMessage = lookupTableData ? compressTransactionMessage(message, lookupTableData) : message;
+
+            // Ensure signer is attached for CU simulation (and any later signing)
+            const messageWithSigners = addSignersToTransactionMessage([signer], compressedMessage);
+
+            // Estimate and update the provisory CU instruction with actual value
+            const estimatedMessage = await estimateAndSetCULimit(messageWithSigners);
+
             // Sign the transaction
-            const signedTransaction = await signTransactionMessageWithSigners(message);
+            const signedTransaction = await signTransactionMessageWithSigners(
+                addSignersToTransactionMessage([signer], estimatedMessage),
+            );
 
             // Send and confirm - cast to expected type since we know it has blockhash lifetime
             await sendAndConfirm(signedTransaction as Parameters<typeof sendAndConfirm>[0], { commitment });
@@ -151,4 +276,29 @@ export async function executePlan(plan: InstructionPlan, config: ExecutePlanConf
 
     // Execute the plan
     return executor(transactionPlan, abortSignal ? { abortSignal } : {});
+}
+
+/**
+ * Resolve lookup table data from config.
+ * - If `addressesByLookupTable` is provided, use it directly.
+ * - If `lookupTableAddresses` is provided, fetch the tables.
+ * - Otherwise, return undefined (no ALT compression).
+ */
+async function resolveLookupTableData(config: ExecutePlanConfig): Promise<AddressesByLookupTableAddress | undefined> {
+    // Use pre-fetched data if provided
+    if (config.addressesByLookupTable) {
+        return config.addressesByLookupTable;
+    }
+
+    // Fetch tables if addresses provided
+    if (config.lookupTableAddresses && config.lookupTableAddresses.length > 0) {
+        // TypeScript knows rpc has GetMultipleAccountsApi when lookupTableAddresses is provided
+        const rpcWithLookupFetch = config.rpc as Rpc<RpcApiWithLookupFetch>;
+        return fetchAddressesForLookupTables(config.lookupTableAddresses, rpcWithLookupFetch, {
+            commitment: config.commitment ?? 'confirmed',
+        });
+    }
+
+    // No ALT compression
+    return undefined;
 }

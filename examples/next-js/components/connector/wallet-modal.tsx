@@ -146,7 +146,9 @@ export function WalletModal({ open, onOpenChange }: WalletModalProps) {
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        {isConnecting && <Spinner size={16} className="text-primary-foreground" />}
+                                                        {isConnecting && (
+                                                            <Spinner size={16} className="text-primary-foreground" />
+                                                        )}
                                                         <Avatar className="h-10 w-10">
                                                             {walletInfo.wallet.icon && (
                                                                 <AvatarImage
@@ -217,7 +219,12 @@ export function WalletModal({ open, onOpenChange }: WalletModalProps) {
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex items-center gap-2">
-                                                                    {isConnecting && <Spinner size={16} className="text-primary-foreground" />}
+                                                                    {isConnecting && (
+                                                                        <Spinner
+                                                                            size={16}
+                                                                            className="text-primary-foreground"
+                                                                        />
+                                                                    )}
                                                                     <Avatar className="h-10 w-10">
                                                                         {walletInfo.wallet.icon && (
                                                                             <AvatarImage
@@ -280,9 +287,7 @@ export function WalletModal({ open, onOpenChange }: WalletModalProps) {
                                                             <div className="font-medium text-sm text-sand-1500">
                                                                 {walletInfo.wallet.name}
                                                             </div>
-                                                            <div className="text-xs text-sand-700">
-                                                                Not installed
-                                                            </div>
+                                                            <div className="text-xs text-sand-700">Not installed</div>
                                                         </div>
                                                     </div>
                                                     <ExternalLink className="h-4 w-4 text-sand-600" />
@@ -301,9 +306,7 @@ export function WalletModal({ open, onOpenChange }: WalletModalProps) {
                                         Install a Solana wallet extension to get started
                                     </p>
                                     <div className="flex gap-2 justify-center">
-                                        <Button
-                                            onClick={() => window.open('https://phantom.app', '_blank')}
-                                        >
+                                        <Button onClick={() => window.open('https://phantom.app', '_blank')}>
                                             Get Phantom
                                         </Button>
                                         <Button

@@ -36,3 +36,12 @@ export {
     shouldAddComputeUnitInstruction,
     getComputeUnitLimit,
 } from './compute-units.js';
+
+// Re-export Kit's compute-budget helpers for convenience
+export {
+    getSetComputeUnitLimitInstruction,
+    getSetComputeUnitPriceInstruction,
+    estimateComputeUnitLimitFactory,
+    fillProvisorySetComputeUnitLimitInstruction,
+    estimateAndUpdateProvisoryComputeUnitLimitFactory,
+} from '@solana-program/compute-budget';

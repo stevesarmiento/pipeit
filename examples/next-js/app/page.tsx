@@ -76,7 +76,7 @@ export default function Home() {
                     afterCode={afterCode}
                 />
             </div>
-            
+
             {/* Playground - sticky at top, covers content as it scrolls behind */}
             <Playground />
         </div>
