@@ -5,21 +5,15 @@
  */
 
 import { address, type Address } from '@solana/addresses';
+import { getBase64Encoder } from '@solana/kit';
 import type { Instruction, AccountMeta as KitAccountMeta, AccountRole } from '@solana/instructions';
 import type { MetisInstruction, AccountMeta } from './types.js';
 
 /**
  * Decode a base64 string to Uint8Array.
- * Works in both Node.js and browser environments.
  */
 export function decodeBase64(base64: string): Uint8Array {
-    // Use atob which is available in both modern Node.js (>=16) and browsers
-    const binaryString = atob(base64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes;
+    return Uint8Array.from(getBase64Encoder().encode(base64));
 }
 
 /**

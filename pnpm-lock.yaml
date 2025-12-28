@@ -42,8 +42,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
       '@pipeit/fastlane':
-        specifier: workspace:*
-        version: link:../../packages/fastlane
+        specifier: 0.1.5
+        version: 0.1.5
       '@radix-ui/react-accordion':
         specifier: ^1.2.12
         version: 1.2.12(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -226,6 +226,9 @@ importers:
 
   packages/core:
     devDependencies:
+      '@solana-program/address-lookup-table':
+        specifier: '*'
+        version: 0.10.0(@solana/kit@5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)))
       '@solana-program/compute-budget':
         specifier: '*'
         version: 0.11.0(@solana/kit@5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)))
@@ -1137,6 +1140,10 @@ packages:
       react: '>= 16.8'
       react-dom: '>= 16.8'
 
+  '@pipeit/fastlane@0.1.5':
+    resolution: {integrity: sha512-Ngv+sSbD6/wCInJnnfk5Sw4eiPYHr2j2TQ62Qn6UD1iGizKQKjsQ76gp/4l5z468YCHRi+rRBeOPmw4eZoUdQA==}
+    engines: {node: '>= 18'}
+
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
@@ -1682,6 +1689,11 @@ packages:
 
   '@solana-mobile/wallet-standard-mobile@0.4.3':
     resolution: {integrity: sha512-LLMQs/KgRZpftIhwOLCM2VZLMdA2vIghJjKsYUIiy1FBJS9GEkGDLJdbujb92lfAdmYwbyTuolIRik7JMPH3Kg==}
+
+  '@solana-program/address-lookup-table@0.10.0':
+    resolution: {integrity: sha512-lcp+IYwoFBODhg8vXsh5vpxweLxpSKqjAu8P1LyqQxgk2yqwYmJGA79YKa+lZvsQjP/c0rzIZYWIGxFMMes2zA==}
+    peerDependencies:
+      '@solana/kit': ^5.0
 
   '@solana-program/compute-budget@0.11.0':
     resolution: {integrity: sha512-7f1ePqB/eURkTwTOO9TNIdUXZcyrZoX3Uy2hNo7cXMfNhPFWp9AVgIyRNBc2jf15sdUa9gNpW+PfP2iV8AYAaw==}
@@ -6181,6 +6193,8 @@ snapshots:
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
 
+  '@pipeit/fastlane@0.1.5': {}
+
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
@@ -6705,6 +6719,10 @@ snapshots:
       - react
       - react-native
       - typescript
+
+  '@solana-program/address-lookup-table@0.10.0(@solana/kit@5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)))':
+    dependencies:
+      '@solana/kit': 5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
 
   '@solana-program/compute-budget@0.11.0(@solana/kit@5.0.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)))':
     dependencies:

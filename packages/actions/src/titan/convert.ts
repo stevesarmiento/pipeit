@@ -4,14 +4,10 @@
  * @packageDocumentation
  */
 
-import { address, type Address } from '@solana/addresses';
+import { getAddressDecoder, type Address } from '@solana/addresses';
 import type { Instruction, AccountMeta, AccountRole } from '@solana/instructions';
+import { getBase58Decoder } from '@solana/kit';
 import type { TitanPubkey, TitanInstruction, TitanAccountMeta } from './types.js';
-
-/**
- * Base58 alphabet used by Solana.
- */
-const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
 /**
  * Encode bytes as a base58 string.
@@ -26,31 +22,8 @@ const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvw
  * ```
  */
 export function encodeBase58(bytes: Uint8Array): string {
-    if (bytes.length === 0) return '';
-
-    // Count leading zeros
-    let leadingZeros = 0;
-    for (const byte of bytes) {
-        if (byte === 0) leadingZeros++;
-        else break;
-    }
-
-    // Convert to BigInt
-    let num = 0n;
-    for (const byte of bytes) {
-        num = num * 256n + BigInt(byte);
-    }
-
-    // Convert to base58
-    let result = '';
-    while (num > 0n) {
-        const remainder = Number(num % 58n);
-        num = num / 58n;
-        result = BASE58_ALPHABET[remainder] + result;
-    }
-
-    // Add leading '1's for zeros
-    return '1'.repeat(leadingZeros) + result;
+    const decoder = getBase58Decoder();
+    return decoder.decode(bytes);
 }
 
 /**
@@ -65,7 +38,8 @@ export function encodeBase58(bytes: Uint8Array): string {
  * ```
  */
 export function titanPubkeyToAddress(pubkey: TitanPubkey): Address {
-    return address(encodeBase58(pubkey));
+    const decoder = getAddressDecoder();
+    return decoder.decode(pubkey);
 }
 
 /**

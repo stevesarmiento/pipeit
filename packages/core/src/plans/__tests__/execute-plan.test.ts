@@ -3,30 +3,23 @@
  *
  * Note: Full integration tests require mocking RPC connections.
  * These tests verify the exports and basic structure.
+ *
+ * For type-level tests verifying ExecutePlanConfig constraints,
+ * see `__typetests__/execute-plan-typetest.ts`.
  */
 
 import { describe, it, expect } from 'vitest';
-import { address } from '@solana/addresses';
-import { executePlan, type ExecutePlanConfig } from '../execute-plan.js';
+import { executePlan } from '../execute-plan.js';
 import {
     sequentialInstructionPlan,
     parallelInstructionPlan,
     createTransactionPlanner,
     createTransactionPlanExecutor,
 } from '../index.js';
-import type { AddressesByLookupTableAddress } from '../../lookup-tables/index.js';
 
 describe('executePlan exports', () => {
     it('should export executePlan function', () => {
         expect(typeof executePlan).toBe('function');
-    });
-
-    it('should export ExecutePlanConfig type (verifiable via usage)', () => {
-        // Type-level test - if this compiles, the type is exported correctly
-        const _config: Partial<ExecutePlanConfig> = {
-            commitment: 'confirmed',
-        };
-        expect(_config.commitment).toBe('confirmed');
     });
 });
 
@@ -48,54 +41,23 @@ describe('Kit re-exports', () => {
     });
 });
 
-describe('ExecutePlanConfig', () => {
-    it('should require SimulateTransactionApi for CU estimation', () => {
-        // This is a compile-time check - the RPC type now includes SimulateTransactionApi
-        // The test documents that CU estimation via simulation is integrated
-        const configDescription = `
-            ExecutePlanConfig now requires:
-            - GetEpochInfoApi
-            - GetSignatureStatusesApi
-            - SendTransactionApi
-            - GetLatestBlockhashApi
-            - SimulateTransactionApi (for CU estimation)
-        `;
-        expect(configDescription).toContain('SimulateTransactionApi');
-    });
-
-    it('should document conditional GetAccountInfoApi requirement for lookup table fetching', () => {
-        // This documents that GetAccountInfoApi is only required when using lookupTableAddresses.
-        // When using addressesByLookupTable (pre-fetched data), GetAccountInfoApi is not required.
-        const altConfigDescription = `
-            ExecutePlanConfig ALT support:
-            - lookupTableAddresses: requires GetAccountInfoApi on RPC (tables will be fetched)
-            - addressesByLookupTable: no additional RPC requirements (pre-fetched data)
-            - omit both: original behavior without ALT compression
-        `;
-        expect(altConfigDescription).toContain('GetAccountInfoApi');
-        expect(altConfigDescription).toContain('addressesByLookupTable');
-        expect(altConfigDescription).toContain('lookupTableAddresses');
-    });
-
-    it('should accept config with addressesByLookupTable (type-level verification)', () => {
-        // Type-level test - if this compiles, the config union correctly allows pre-fetched ALT data
-        // without requiring GetAccountInfoApi on the RPC type
-        const testAltAddress = address('ALT1111111111111111111111111111111111111111');
-        const testAddress1 = address('11111111111111111111111111111111');
-        const testAddress2 = address('22222222222222222222222222222222222222222222');
-
-        const prefetchedData: AddressesByLookupTableAddress = {
-            [testAltAddress]: [testAddress1, testAddress2],
-        };
-
-        // This config shape should be valid - addressesByLookupTable without lookupTableAddresses
-        const _configWithPrefetchedData: Pick<ExecutePlanConfig, 'commitment' | 'addressesByLookupTable'> = {
-            commitment: 'confirmed',
-            addressesByLookupTable: prefetchedData,
-        };
-
-        expect(_configWithPrefetchedData.addressesByLookupTable).toBeDefined();
-        expect(Object.keys(_configWithPrefetchedData.addressesByLookupTable!)).toHaveLength(1);
+describe('ExecutePlanConfig requirements', () => {
+    /**
+     * ExecutePlanConfig requires these RPC APIs:
+     * - GetEpochInfoApi
+     * - GetSignatureStatusesApi
+     * - SendTransactionApi
+     * - GetLatestBlockhashApi
+     * - SimulateTransactionApi (for CU estimation)
+     *
+     * Additionally:
+     * - lookupTableAddresses: requires GetAccountInfoApi (tables will be fetched)
+     * - addressesByLookupTable: no additional requirements (pre-fetched data)
+     *
+     * See `__typetests__/execute-plan-typetest.ts` for compile-time verification.
+     */
+    it('documents RPC API requirements', () => {
+        expect(true).toBe(true);
     });
 });
 
