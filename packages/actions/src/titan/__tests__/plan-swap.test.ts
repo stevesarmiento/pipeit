@@ -105,8 +105,7 @@ describe('selectTitanRoute', () => {
         it('should throw ProviderNotFoundError for unknown provider', () => {
             const quotes = createMockQuotes();
 
-            expect(() => selectTitanRoute(quotes, { providerId: 'unknown-provider' }))
-                .toThrow(ProviderNotFoundError);
+            expect(() => selectTitanRoute(quotes, { providerId: 'unknown-provider' })).toThrow(ProviderNotFoundError);
         });
 
         it('should include available providers in error', () => {

@@ -39,8 +39,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/actions
       '@pipeit/core':
-        specifier: workspace:*
-        version: link:../../packages/core
+        specifier: ^0.2.5
+        version: 0.2.5(59e1c826774811eacd0a7dd223ad1500)
       '@pipeit/fastlane':
         specifier: ^0.1.4
         version: 0.1.4

@@ -3,12 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-    encodeBase58,
-    titanPubkeyToAddress,
-    titanInstructionToKit,
-    titanPubkeysToAddresses,
-} from '../convert.js';
+import { encodeBase58, titanPubkeyToAddress, titanInstructionToKit, titanPubkeysToAddresses } from '../convert.js';
 import type { TitanInstruction, TitanAccountMeta } from '../types.js';
 
 describe('encodeBase58', () => {
@@ -128,10 +123,7 @@ describe('titanPubkeysToAddresses', () => {
     });
 
     it('should convert multiple pubkeys', () => {
-        const pubkeys = [
-            new Uint8Array(32),
-            new Uint8Array(32),
-        ];
+        const pubkeys = [new Uint8Array(32), new Uint8Array(32)];
         const addresses = titanPubkeysToAddresses(pubkeys);
 
         expect(addresses).toHaveLength(2);

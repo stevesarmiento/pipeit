@@ -72,7 +72,9 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en">
-            <body className={`${abcDiatype.variable} ${berkeleyMono.variable} ${inter.variable} antialiased overflow-x-hidden`}>
+            <body
+                className={`${abcDiatype.variable} ${berkeleyMono.variable} ${inter.variable} antialiased overflow-x-hidden`}
+            >
                 <Providers>
                     <AppNav />
                     {children}

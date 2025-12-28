@@ -3,10 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-    getMetisSwapInstructionPlanFromResponse,
-    NoSwapInstructionError,
-} from '../plan-swap.js';
+import { getMetisSwapInstructionPlanFromResponse, NoSwapInstructionError } from '../plan-swap.js';
 import type { SwapInstructionsResponse, MetisInstruction } from '../types.js';
 
 /**
@@ -52,10 +49,7 @@ describe('getMetisSwapInstructionPlanFromResponse', () => {
 
     it('should create a sequential plan when multiple instructions exist', () => {
         const response = createMockSwapInstructionsResponse({
-            computeBudgetInstructions: [
-                createMockInstruction([1]),
-                createMockInstruction([2]),
-            ],
+            computeBudgetInstructions: [createMockInstruction([1]), createMockInstruction([2])],
             setupInstructions: [createMockInstruction([3])],
         });
 
@@ -126,15 +120,9 @@ describe('getMetisSwapInstructionPlanFromResponse', () => {
 
     it('should handle all instruction types being present', () => {
         const response = createMockSwapInstructionsResponse({
-            computeBudgetInstructions: [
-                createMockInstruction([10]),
-                createMockInstruction([11]),
-            ],
+            computeBudgetInstructions: [createMockInstruction([10]), createMockInstruction([11])],
             otherInstructions: [createMockInstruction([20])],
-            setupInstructions: [
-                createMockInstruction([30]),
-                createMockInstruction([31]),
-            ],
+            setupInstructions: [createMockInstruction([30]), createMockInstruction([31])],
             tokenLedgerInstruction: createMockInstruction([40]),
             swapInstruction: createMockInstruction([50]),
             cleanupInstruction: createMockInstruction([60]),

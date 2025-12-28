@@ -137,10 +137,7 @@ describe('getComputeUnitLimit', () => {
     });
 
     it('should include simulated units with buffer', () => {
-        const limit = getComputeUnitLimit(
-            { strategy: 'simulate', buffer: 1.1 },
-            200_000n,
-        );
+        const limit = getComputeUnitLimit({ strategy: 'simulate', buffer: 1.1 }, 200_000n);
         expect(limit).toBe(Math.ceil(200_000 * 1.1));
     });
 });

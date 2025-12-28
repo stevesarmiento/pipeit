@@ -516,7 +516,7 @@ interface TpuSubmissionResult {
     latencyMs: number;
     /** Error message if any */
     error?: string;
-    
+
     // Backwards compatibility fields
     /** @deprecated Use confirmed instead */
     delivered?: boolean;
@@ -592,11 +592,11 @@ async function submitToTpu(
             totalLeadersSent: result.totalLeadersSent,
             latencyMs: result.latencyMs,
         };
-        
+
         if (result.error) {
             response.error = result.error;
         }
-        
+
         return response;
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND') {
@@ -617,7 +617,10 @@ let tpuClientConfig: ResolvedExecutionConfig['tpu'] | null = null;
  */
 async function getTpuClientSingleton(config: ResolvedExecutionConfig['tpu']): Promise<{
     sendTransaction: (tx: Buffer) => Promise<{ delivered: boolean; latencyMs: number; leaderCount: number }>;
-    sendUntilConfirmed: (tx: Buffer, timeoutMs?: number) => Promise<{
+    sendUntilConfirmed: (
+        tx: Buffer,
+        timeoutMs?: number,
+    ) => Promise<{
         confirmed: boolean;
         signature: string;
         rounds: number;
@@ -636,7 +639,10 @@ async function getTpuClientSingleton(config: ResolvedExecutionConfig['tpu']): Pr
     ) {
         return tpuClientInstance as {
             sendTransaction: (tx: Buffer) => Promise<{ delivered: boolean; latencyMs: number; leaderCount: number }>;
-            sendUntilConfirmed: (tx: Buffer, timeoutMs?: number) => Promise<{
+            sendUntilConfirmed: (
+                tx: Buffer,
+                timeoutMs?: number,
+            ) => Promise<{
                 confirmed: boolean;
                 signature: string;
                 rounds: number;
@@ -698,7 +704,7 @@ async function executeTpuStrategy(
 
     // Check if confirmed (new behavior) or delivered (backwards compat)
     const isConfirmed = result.confirmed ?? result.delivered ?? false;
-    
+
     if (!isConfirmed && result.error) {
         throw new ExecutionStrategyError(`TPU submission failed: ${result.error}`);
     }

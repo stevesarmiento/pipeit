@@ -17,13 +17,7 @@ export {
 } from './client.js';
 
 // Types
-export type {
-    SwapQuoteParams,
-    SwapQuotes,
-    SwapRoute,
-    RoutePlanStep,
-    SwapMode,
-} from './types.js';
+export type { SwapQuoteParams, SwapQuotes, SwapRoute, RoutePlanStep, SwapMode } from './types.js';
 
 // Plan builders
 export {

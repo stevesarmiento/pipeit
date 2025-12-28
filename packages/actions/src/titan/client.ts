@@ -7,14 +7,7 @@
  */
 
 import { decode } from '@msgpack/msgpack';
-import type {
-    SwapQuoteParams,
-    SwapQuotes,
-    ServerInfo,
-    ProviderInfo,
-    VenueInfo,
-    TitanPubkey,
-} from './types.js';
+import type { SwapQuoteParams, SwapQuotes, ServerInfo, ProviderInfo, VenueInfo, TitanPubkey } from './types.js';
 import { encodeBase58 } from './convert.js';
 
 /**
@@ -115,12 +108,7 @@ function pubkeyToString(pubkey: TitanPubkey | string): string {
  * ```
  */
 export function createTitanClient(config: TitanClientConfig = {}): TitanClient {
-    const {
-        baseUrl: baseUrlInput,
-        demoRegion = 'us1',
-        authToken,
-        fetch: customFetch = globalThis.fetch,
-    } = config;
+    const { baseUrl: baseUrlInput, demoRegion = 'us1', authToken, fetch: customFetch = globalThis.fetch } = config;
 
     const baseUrl = normalizeBaseUrl(baseUrlInput ?? TITAN_DEMO_BASE_URLS[demoRegion]);
 

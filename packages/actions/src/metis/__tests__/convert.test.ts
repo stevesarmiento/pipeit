@@ -75,12 +75,7 @@ describe('metisInstructionToKit', () => {
 
         const metisIx: MetisInstruction = {
             programId: '11111111111111111111111111111111',
-            accounts: [
-                readonlyAccount,
-                readonlySignerAccount,
-                writableAccount,
-                writableSignerAccount,
-            ],
+            accounts: [readonlyAccount, readonlySignerAccount, writableAccount, writableSignerAccount],
             data: '',
         };
 

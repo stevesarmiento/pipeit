@@ -1,6 +1,16 @@
 'use client';
 
-import { IconArrowDownAppDashedTrianglebadgeExclamationmark, IconArrowtriangleRightAndLineVerticalAndArrowtriangleLeftFill, IconCharacterMagnify, IconCursorarrowClick2, IconDigitalcrownHorizontalArrowClockwiseFill, IconGaugeWithDotsNeedle67percent, IconInfinity, IconTrayAndArrowUpFill, IconXmarkCircleFill } from 'symbols-react';
+import {
+    IconArrowDownAppDashedTrianglebadgeExclamationmark,
+    IconArrowtriangleRightAndLineVerticalAndArrowtriangleLeftFill,
+    IconCharacterMagnify,
+    IconCursorarrowClick2,
+    IconDigitalcrownHorizontalArrowClockwiseFill,
+    IconGaugeWithDotsNeedle67percent,
+    IconInfinity,
+    IconTrayAndArrowUpFill,
+    IconXmarkCircleFill,
+} from 'symbols-react';
 
 const benefits = [
     {
@@ -25,7 +35,7 @@ const benefits = [
     },
     {
         name: 'Durable Nonce Support',
-        description: 'Create long-lived transactions that don\'t expire with blockhash.',
+        description: "Create long-lived transactions that don't expire with blockhash.",
         icon: IconInfinity,
     },
     {

@@ -81,9 +81,7 @@ export function useJupiterSwapPipeline() {
                 ];
 
                 // Convert lookup table addresses
-                const lookupTableAddresses = swapInstructions.addressLookupTableAddresses.map(
-                    addr => address(addr),
-                );
+                const lookupTableAddresses = swapInstructions.addressLookupTableAddresses.map(addr => address(addr));
 
                 console.log('Total instructions:', allInstructions.length);
                 console.log('Lookup tables:', lookupTableAddresses);

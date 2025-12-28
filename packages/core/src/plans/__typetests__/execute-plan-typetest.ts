@@ -9,7 +9,7 @@ import type { Address } from '@solana/addresses';
 import type {
     Rpc,
     GetLatestBlockhashApi,
-    GetAccountInfoApi,
+    GetMultipleAccountsApi,
     GetEpochInfoApi,
     GetSignatureStatusesApi,
     SendTransactionApi,
@@ -28,10 +28,10 @@ type BaseRpcApi = GetEpochInfoApi &
     GetLatestBlockhashApi &
     SimulateTransactionApi;
 
-type RpcApiWithAccountInfo = BaseRpcApi & GetAccountInfoApi;
+type RpcApiWithLookupFetch = BaseRpcApi & GetMultipleAccountsApi;
 
 const baseRpc = null as unknown as Rpc<BaseRpcApi>;
-const rpcWithAccountInfo = null as unknown as Rpc<RpcApiWithAccountInfo>;
+const rpcWithLookupFetch = null as unknown as Rpc<RpcApiWithLookupFetch>;
 const rpcSubscriptions = null as unknown as RpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi>;
 const signer = null as unknown as TransactionSigner;
 const altAddress = null as unknown as Address;
@@ -74,10 +74,10 @@ const addressesByLookupTable = null as unknown as AddressesByLookupTableAddress;
 
 // [DESCRIBE] ExecutePlanConfig with lookupTableAddresses
 {
-    // It requires RPC with GetAccountInfoApi when lookupTableAddresses is provided
+    // It requires RPC with GetMultipleAccountsApi when lookupTableAddresses is provided
     {
         const config: ExecutePlanConfig = {
-            rpc: rpcWithAccountInfo,
+            rpc: rpcWithLookupFetch,
             rpcSubscriptions,
             signer,
             lookupTableAddresses: [altAddress],
@@ -85,7 +85,7 @@ const addressesByLookupTable = null as unknown as AddressesByLookupTableAddress;
         config satisfies ExecutePlanConfig;
     }
 
-    // @ts-expect-error It rejects base RPC (without GetAccountInfoApi) when lookupTableAddresses is provided
+    // @ts-expect-error It rejects base RPC (without GetMultipleAccountsApi) when lookupTableAddresses is provided
     const _invalidConfig: ExecutePlanConfig = {
         rpc: baseRpc,
         rpcSubscriptions,
@@ -124,7 +124,7 @@ const addressesByLookupTable = null as unknown as AddressesByLookupTableAddress;
 {
     // @ts-expect-error It rejects config with both lookupTableAddresses and addressesByLookupTable
     const _invalidConfig: ExecutePlanConfig = {
-        rpc: rpcWithAccountInfo,
+        rpc: rpcWithLookupFetch,
         rpcSubscriptions,
         signer,
         lookupTableAddresses: [altAddress],

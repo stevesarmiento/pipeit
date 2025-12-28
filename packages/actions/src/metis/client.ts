@@ -6,12 +6,7 @@
  * @packageDocumentation
  */
 
-import type {
-    MetisQuoteParams,
-    QuoteResponse,
-    SwapInstructionsRequest,
-    SwapInstructionsResponse,
-} from './types.js';
+import type { MetisQuoteParams, QuoteResponse, SwapInstructionsRequest, SwapInstructionsResponse } from './types.js';
 
 /**
  * Default Metis API base URL.
@@ -89,11 +84,7 @@ export interface MetisClient {
  * ```
  */
 export function createMetisClient(config: MetisClientConfig = {}): MetisClient {
-    const {
-        baseUrl: baseUrlInput,
-        apiKey,
-        fetch: customFetch = globalThis.fetch,
-    } = config;
+    const { baseUrl: baseUrlInput, apiKey, fetch: customFetch = globalThis.fetch } = config;
 
     const baseUrl = normalizeBaseUrl(baseUrlInput ?? METIS_DEFAULT_BASE_URL);
 

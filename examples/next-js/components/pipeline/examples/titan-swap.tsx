@@ -131,9 +131,7 @@ const transactionPlanResult = await executePlan(plan, {
 const signatures = getSignaturesFromTransactionPlanResult(transactionPlanResult)
 console.log('Swap executed:', signatures[signatures.length - 1])`;
 
-function getSignaturesFromTransactionPlanResult(
-    result: TransactionPlanResult,
-): string[] {
+function getSignaturesFromTransactionPlanResult(result: TransactionPlanResult): string[] {
     if (result.kind === 'single') {
         if (result.status.kind !== 'successful') return [];
         return [getSignatureFromTransaction(result.status.transaction)];

@@ -3,6 +3,7 @@
 Composable InstructionPlan factories for Solana DeFi, starting with Titan integration.
 
 This package provides Kit-compatible `InstructionPlan` factories that can be:
+
 - Executed directly with `@pipeit/core`'s `executePlan`
 - Composed with other InstructionPlans using Kit's plan combinators
 - Used by anyone in the Kit ecosystem
@@ -57,27 +58,30 @@ The main entry point that fetches a quote, selects the best route, and returns a
 ```typescript
 import { getTitanSwapPlan } from '@pipeit/actions/titan';
 
-const { plan, lookupTableAddresses, quote, providerId, route } = await getTitanSwapPlan({
-    swap: {
-        inputMint: 'So11111111111111111111111111111111111111112',
-        outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-        amount: 1_000_000_000n,
-        slippageBps: 50,
-        // Optional filters
-        dexes: ['Raydium', 'Orca'], // Only use these DEXes
-        excludeDexes: ['Phoenix'], // Exclude these DEXes
-        onlyDirectRoutes: false, // Allow multi-hop routes
-        providers: ['titan'], // Only use specific providers
+const { plan, lookupTableAddresses, quote, providerId, route } = await getTitanSwapPlan(
+    {
+        swap: {
+            inputMint: 'So11111111111111111111111111111111111111112',
+            outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+            amount: 1_000_000_000n,
+            slippageBps: 50,
+            // Optional filters
+            dexes: ['Raydium', 'Orca'], // Only use these DEXes
+            excludeDexes: ['Phoenix'], // Exclude these DEXes
+            onlyDirectRoutes: false, // Allow multi-hop routes
+            providers: ['titan'], // Only use specific providers
+        },
+        transaction: {
+            userPublicKey: signer.address,
+            createOutputTokenAccount: true,
+            closeInputTokenAccount: false,
+        },
     },
-    transaction: {
-        userPublicKey: signer.address,
-        createOutputTokenAccount: true,
-        closeInputTokenAccount: false,
+    {
+        // Optional: specify a provider
+        providerId: 'titan',
     },
-}, {
-    // Optional: specify a provider
-    providerId: 'titan',
-});
+);
 ```
 
 ### Lower-Level APIs
@@ -127,11 +131,7 @@ The real power of InstructionPlans is composition. Combine multiple plans:
 
 ```typescript
 import { getTitanSwapPlan } from '@pipeit/actions/titan';
-import {
-    sequentialInstructionPlan,
-    parallelInstructionPlan,
-    singleInstructionPlan,
-} from '@solana/instruction-plans';
+import { sequentialInstructionPlan, parallelInstructionPlan, singleInstructionPlan } from '@solana/instruction-plans';
 import { executePlan } from '@pipeit/core';
 
 // Swap SOL → USDC
@@ -148,10 +148,7 @@ const swapResult = await getTitanSwapPlan({
 const transferPlan = singleInstructionPlan(transferInstruction);
 
 // Combine: swap then transfer
-const combinedPlan = sequentialInstructionPlan([
-    swapResult.plan,
-    transferPlan,
-]);
+const combinedPlan = sequentialInstructionPlan([swapResult.plan, transferPlan]);
 
 // Execute with all ALTs
 await executePlan(combinedPlan, {
@@ -181,10 +178,7 @@ await executePlan(plan, {
 // Option 2: Pre-fetch ALT data yourself
 import { fetchAddressLookupTables } from '@pipeit/core';
 
-const addressesByLookupTable = await fetchAddressLookupTables(
-    rpc,
-    swapResult.lookupTableAddresses,
-);
+const addressesByLookupTable = await fetchAddressLookupTables(rpc, swapResult.lookupTableAddresses);
 
 await executePlan(plan, {
     rpc,

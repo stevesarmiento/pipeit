@@ -7,22 +7,10 @@
  */
 
 import type { Address } from '@solana/addresses';
-import {
-    type InstructionPlan,
-    sequentialInstructionPlan,
-    singleInstructionPlan,
-} from '@solana/instruction-plans';
+import { type InstructionPlan, sequentialInstructionPlan, singleInstructionPlan } from '@solana/instruction-plans';
 import { createTitanClient, type TitanClient, type TitanClientConfig } from './client.js';
-import type {
-    SwapQuoteParams,
-    SwapQuotes,
-    SwapRoute,
-    SwapMode,
-} from './types.js';
-import {
-    titanInstructionsToKit,
-    titanPubkeysToAddresses,
-} from './convert.js';
+import type { SwapQuoteParams, SwapQuotes, SwapRoute, SwapMode } from './types.js';
+import { titanInstructionsToKit, titanPubkeysToAddresses } from './convert.js';
 
 /**
  * Result of selecting a route from quotes.
@@ -93,10 +81,7 @@ export interface TitanSwapPlanOptions {
  * });
  * ```
  */
-export async function getTitanSwapQuote(
-    client: TitanClient,
-    params: SwapQuoteParams,
-): Promise<SwapQuotes> {
+export async function getTitanSwapQuote(client: TitanClient, params: SwapQuoteParams): Promise<SwapQuotes> {
     return client.getSwapQuote(params);
 }
 
@@ -117,10 +102,7 @@ export async function getTitanSwapQuote(
  * console.log(`Best route from ${providerId}: ${route.outAmount}`);
  * ```
  */
-export function selectTitanRoute(
-    quotes: SwapQuotes,
-    options?: { providerId?: string },
-): SelectedRoute {
+export function selectTitanRoute(quotes: SwapQuotes, options?: { providerId?: string }): SelectedRoute {
     const providerIds = Object.keys(quotes.quotes);
 
     if (providerIds.length === 0) {
@@ -187,9 +169,7 @@ export function getTitanSwapInstructionPlanFromRoute(route: SwapRoute): Instruct
     }
 
     // Multiple instructions are sequential (setup → swap → cleanup)
-    return sequentialInstructionPlan(
-        instructions.map(ix => singleInstructionPlan(ix)),
-    );
+    return sequentialInstructionPlan(instructions.map(ix => singleInstructionPlan(ix)));
 }
 
 /**

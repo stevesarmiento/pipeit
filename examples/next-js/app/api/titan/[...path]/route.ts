@@ -21,10 +21,7 @@ const TITAN_DEMO_URLS: Record<string, string> = {
  * - region: 'us1' | 'jp1' | 'de1' (default: 'us1') - selects Titan endpoint
  * - ...all other params forwarded to Titan
  */
-export async function GET(
-    request: NextRequest,
-    { params }: { params: Promise<{ path: string[] }> },
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
     const { path } = await params;
     const titanPath = '/' + path.join('/');
     const searchParams = request.nextUrl.searchParams;
@@ -41,9 +38,7 @@ export async function GET(
         }
     });
 
-    const url = forwardParams.toString()
-        ? `${baseUrl}${titanPath}?${forwardParams}`
-        : `${baseUrl}${titanPath}`;
+    const url = forwardParams.toString() ? `${baseUrl}${titanPath}?${forwardParams}` : `${baseUrl}${titanPath}`;
 
     try {
         // Use server-side token from env, or forward client header as fallback
@@ -76,9 +71,9 @@ export async function GET(
         });
     } catch (error) {
         console.error('Titan API proxy error:', error);
-        return new NextResponse(
-            error instanceof Error ? error.message : 'Failed to proxy Titan request',
-            { status: 500, headers: { 'Content-Type': 'text/plain' } },
-        );
+        return new NextResponse(error instanceof Error ? error.message : 'Failed to proxy Titan request', {
+            status: 500,
+            headers: { 'Content-Type': 'text/plain' },
+        });
     }
 }

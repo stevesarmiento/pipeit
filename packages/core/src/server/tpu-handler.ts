@@ -98,7 +98,10 @@ interface TpuClientInstance {
         }>;
         retryCount: number;
     }>;
-    sendUntilConfirmed: (tx: Buffer, timeoutMs?: number) => Promise<{
+    sendUntilConfirmed: (
+        tx: Buffer,
+        timeoutMs?: number,
+    ) => Promise<{
         confirmed: boolean;
         signature: string;
         rounds: number;
@@ -202,21 +205,17 @@ async function getTpuClient(config: { rpcUrl: string; wsUrl: string; fanout: num
 
 /**
  * Wait for the TPU client to have enough known validators.
- * 
+ *
  * The client may be "ready" (slot listener started) but not have
  * leader sockets populated yet. This function waits until enough
  * validators are known or times out.
- * 
+ *
  * @param client - TPU client instance
  * @param minValidators - Minimum number of validators required (default: 10)
  * @param timeoutMs - Maximum time to wait in milliseconds (default: 10000)
  * @returns True if enough validators are available, false if timed out
  */
-async function waitForValidators(
-    client: TpuClientInstance, 
-    minValidators = 10,
-    timeoutMs = 10000
-): Promise<boolean> {
+async function waitForValidators(client: TpuClientInstance, minValidators = 10, timeoutMs = 10000): Promise<boolean> {
     const startTime = Date.now();
     const pollInterval = 200;
     let lastValidatorCount = 0;
@@ -227,7 +226,7 @@ async function waitForValidators(
             if (stats.knownValidators !== lastValidatorCount) {
                 lastValidatorCount = stats.knownValidators;
             }
-            
+
             // Need enough validators for good landing rate
             if (stats.knownValidators >= minValidators && stats.readyState === 'ready') {
                 return true;
@@ -364,7 +363,7 @@ export async function tpuHandler(
             delivered: result.confirmed,
             leaderCount: result.totalLeadersSent,
         };
-        
+
         if (result.error) {
             response.error = result.error;
         }

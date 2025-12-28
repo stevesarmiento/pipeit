@@ -8,7 +8,7 @@ import type { Address } from '@solana/addresses';
 import type {
     Rpc,
     GetLatestBlockhashApi,
-    GetAccountInfoApi,
+    GetMultipleAccountsApi,
     GetEpochInfoApi,
     GetSignatureStatusesApi,
     SendTransactionApi,
@@ -28,32 +28,30 @@ import {
     setTransactionMessageLifetimeUsingBlockhash,
     signTransactionMessageWithSigners,
     sendAndConfirmTransactionFactory,
+    fetchAddressesForLookupTables,
 } from '@solana/kit';
-import type {
-    BaseTransactionMessage,
-    TransactionMessageWithFeePayer,
-} from '@solana/transaction-messages';
+import type { BaseTransactionMessage, TransactionMessageWithFeePayer } from '@solana/transaction-messages';
 import { addSignersToTransactionMessage, type TransactionSigner } from '@solana/signers';
 import {
     fillProvisorySetComputeUnitLimitInstruction,
     estimateComputeUnitLimitFactory,
     estimateAndUpdateProvisoryComputeUnitLimitFactory,
 } from '@solana-program/compute-budget';
-import {
-    type AddressesByLookupTableAddress,
-    fetchAddressLookupTables,
-    compressTransactionMessage,
-} from '../lookup-tables/index.js';
+import { type AddressesByLookupTableAddress, compressTransactionMessage } from '../lookup-tables/index.js';
 
 /**
  * Base RPC API required for executing instruction plans.
  */
-type BaseRpcApi = GetEpochInfoApi & GetSignatureStatusesApi & SendTransactionApi & GetLatestBlockhashApi & SimulateTransactionApi;
+type BaseRpcApi = GetEpochInfoApi &
+    GetSignatureStatusesApi &
+    SendTransactionApi &
+    GetLatestBlockhashApi &
+    SimulateTransactionApi;
 
 /**
- * RPC API required when fetching lookup tables (includes GetAccountInfoApi).
+ * RPC API required when fetching lookup tables (includes GetMultipleAccountsApi).
  */
-type RpcApiWithAccountInfo = BaseRpcApi & GetAccountInfoApi;
+type RpcApiWithLookupFetch = BaseRpcApi & GetMultipleAccountsApi;
 
 /**
  * Base configuration for executing an instruction plan (no ALT support).
@@ -102,13 +100,13 @@ interface ExecutePlanConfigNoAlt extends ExecutePlanConfigBase {
 
 /**
  * Configuration with lookup table addresses to fetch.
- * Requires RPC client with GetAccountInfoApi.
+ * Requires RPC client with GetMultipleAccountsApi.
  */
 interface ExecutePlanConfigWithLookupAddresses extends ExecutePlanConfigBase {
     /**
-     * RPC client with GetAccountInfoApi for fetching lookup tables.
+     * RPC client with GetMultipleAccountsApi for fetching lookup tables.
      */
-    rpc: Rpc<RpcApiWithAccountInfo>;
+    rpc: Rpc<RpcApiWithLookupFetch>;
 
     /**
      * Address lookup table addresses to fetch and use for transaction compression.
@@ -148,7 +146,7 @@ interface ExecutePlanConfigWithLookupData extends ExecutePlanConfigBase {
  * Configuration for executing an instruction plan.
  *
  * Supports optional address lookup table (ALT) compression:
- * - Provide `lookupTableAddresses` to fetch and use ALTs (requires `GetAccountInfoApi` on RPC)
+ * - Provide `lookupTableAddresses` to fetch and use ALTs (requires `GetMultipleAccountsApi` on RPC)
  * - Provide `addressesByLookupTable` with pre-fetched data (no additional RPC requirements)
  * - Omit both for original behavior without ALT compression
  */
@@ -254,9 +252,7 @@ export async function executePlan(plan: InstructionPlan, config: ExecutePlanConf
     const executor = createTransactionPlanExecutor({
         executeTransactionMessage: async message => {
             // Apply ALT compression before CU estimation (if lookup tables provided)
-            const compressedMessage = lookupTableData
-                ? compressTransactionMessage(message, lookupTableData)
-                : message;
+            const compressedMessage = lookupTableData ? compressTransactionMessage(message, lookupTableData) : message;
 
             // Ensure signer is attached for CU simulation (and any later signing)
             const messageWithSigners = addSignersToTransactionMessage([signer], compressedMessage);
@@ -288,9 +284,7 @@ export async function executePlan(plan: InstructionPlan, config: ExecutePlanConf
  * - If `lookupTableAddresses` is provided, fetch the tables.
  * - Otherwise, return undefined (no ALT compression).
  */
-async function resolveLookupTableData(
-    config: ExecutePlanConfig,
-): Promise<AddressesByLookupTableAddress | undefined> {
+async function resolveLookupTableData(config: ExecutePlanConfig): Promise<AddressesByLookupTableAddress | undefined> {
     // Use pre-fetched data if provided
     if (config.addressesByLookupTable) {
         return config.addressesByLookupTable;
@@ -298,13 +292,11 @@ async function resolveLookupTableData(
 
     // Fetch tables if addresses provided
     if (config.lookupTableAddresses && config.lookupTableAddresses.length > 0) {
-        // TypeScript knows rpc has GetAccountInfoApi when lookupTableAddresses is provided
-        const rpcWithAccountInfo = config.rpc as Rpc<RpcApiWithAccountInfo>;
-        return fetchAddressLookupTables(
-            rpcWithAccountInfo,
-            config.lookupTableAddresses,
-            config.commitment ?? 'confirmed',
-        );
+        // TypeScript knows rpc has GetMultipleAccountsApi when lookupTableAddresses is provided
+        const rpcWithLookupFetch = config.rpc as Rpc<RpcApiWithLookupFetch>;
+        return fetchAddressesForLookupTables(config.lookupTableAddresses, rpcWithLookupFetch, {
+            commitment: config.commitment ?? 'confirmed',
+        });
     }
 
     // No ALT compression

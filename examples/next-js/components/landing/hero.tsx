@@ -11,8 +11,8 @@ export function Hero() {
                     without complexity
                 </h1>
                 <p className="text-body-xl text-gray-600 max-w-2xl mx-auto mb-8">
-                    Type-safe, composable transaction builder with automatic retry, priority fees, and smart defaults, and multiple execution paths
-                    built on top of @solana/kit.
+                    Type-safe, composable transaction builder with automatic retry, priority fees, and smart defaults,
+                    and multiple execution paths built on top of @solana/kit.
                 </p>
                 <div id="hero-copy-buttons">
                     <CopyButton

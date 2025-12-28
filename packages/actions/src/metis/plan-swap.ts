@@ -7,11 +7,7 @@
  */
 
 import type { Address } from '@solana/addresses';
-import {
-    type InstructionPlan,
-    sequentialInstructionPlan,
-    singleInstructionPlan,
-} from '@solana/instruction-plans';
+import { type InstructionPlan, sequentialInstructionPlan, singleInstructionPlan } from '@solana/instruction-plans';
 import { createMetisClient, type MetisClient, type MetisClientConfig } from './client.js';
 import type {
     MetisSwapQuoteParams,
@@ -20,10 +16,7 @@ import type {
     SwapInstructionsResponse,
     SwapMode,
 } from './types.js';
-import {
-    metisInstructionToKit,
-    metisLookupTablesToAddresses,
-} from './convert.js';
+import { metisInstructionToKit, metisLookupTablesToAddresses } from './convert.js';
 
 /**
  * Result of building a Metis swap plan.
@@ -109,17 +102,12 @@ export async function getMetisSwapQuote(
  * await executePlan(plan, { rpc, rpcSubscriptions, signer });
  * ```
  */
-export function getMetisSwapInstructionPlanFromResponse(
-    response: SwapInstructionsResponse,
-): InstructionPlan {
+export function getMetisSwapInstructionPlanFromResponse(response: SwapInstructionsResponse): InstructionPlan {
     // NOTE: We intentionally skip computeBudgetInstructions because
     // executePlan handles compute budget estimation automatically.
     // Including Jupiter's compute budget instructions would cause
     // "Transaction contains a duplicate instruction" errors.
-    const allInstructions = [
-        ...response.otherInstructions,
-        ...response.setupInstructions,
-    ];
+    const allInstructions = [...response.otherInstructions, ...response.setupInstructions];
 
     // Add optional tokenLedgerInstruction if present
     if (response.tokenLedgerInstruction) {
@@ -145,9 +133,7 @@ export function getMetisSwapInstructionPlanFromResponse(
     }
 
     // Multiple instructions are sequential
-    return sequentialInstructionPlan(
-        kitInstructions.map(ix => singleInstructionPlan(ix)),
-    );
+    return sequentialInstructionPlan(kitInstructions.map(ix => singleInstructionPlan(ix)));
 }
 
 /**
@@ -244,7 +230,9 @@ export async function getMetisSwapPlan(
         ...(tx.nativeDestinationAccount !== undefined && { nativeDestinationAccount: tx.nativeDestinationAccount }),
         ...(tx.dynamicComputeUnitLimit !== undefined && { dynamicComputeUnitLimit: tx.dynamicComputeUnitLimit }),
         ...(tx.skipUserAccountsRpcCalls !== undefined && { skipUserAccountsRpcCalls: tx.skipUserAccountsRpcCalls }),
-        ...(tx.computeUnitPriceMicroLamports !== undefined && { computeUnitPriceMicroLamports: tx.computeUnitPriceMicroLamports }),
+        ...(tx.computeUnitPriceMicroLamports !== undefined && {
+            computeUnitPriceMicroLamports: tx.computeUnitPriceMicroLamports,
+        }),
         ...(tx.blockhashSlotsToExpiry !== undefined && { blockhashSlotsToExpiry: tx.blockhashSlotsToExpiry }),
     };
 
@@ -255,9 +243,7 @@ export async function getMetisSwapPlan(
     const plan = getMetisSwapInstructionPlanFromResponse(swapInstructionsResponse);
 
     // Extract ALT addresses
-    const lookupTableAddresses = metisLookupTablesToAddresses(
-        swapInstructionsResponse.addressLookupTableAddresses,
-    );
+    const lookupTableAddresses = metisLookupTablesToAddresses(swapInstructionsResponse.addressLookupTableAddresses);
 
     return {
         plan,

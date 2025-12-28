@@ -221,6 +221,3 @@ describe('utility functions', () => {
         });
     });
 });
-
-
-

@@ -268,6 +268,7 @@ new TransactionBuilder({
 ```
 
 The `'simulate'` strategy uses Kit's `@solana-program/compute-budget` helpers to:
+
 1. Add a provisory compute unit limit instruction during message building
 2. Simulate the transaction to get accurate CU consumption
 3. Update the instruction with the estimated value before signing and sending

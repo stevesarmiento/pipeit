@@ -9,6 +9,7 @@ Pipeit is a comprehensive TypeScript SDK for building and executing Solana trans
 Built on modern Solana libraries (@solana/kit) with a focus on type safety, developer experience, and production readiness.
 
 **Key Features:**
+
 - Type-safe transaction building with compile-time validation
 - Multiple execution strategies (Standard RPC, Jito Bundles, Parallel Execution, TPU direct)
 - Multi-step flows with dynamic context between steps
@@ -19,16 +20,18 @@ Built on modern Solana libraries (@solana/kit) with a focus on type safety, deve
 
 ## Packages
 
-| Package | Description | Docs |
-|---------|-------------|------|
-| [@pipeit/core](./packages/core) | Transaction builder with smart defaults, flows, and execution strategies | [README](./packages/core/README.md) |
-| [@pipeit/actions](./packages/actions) | InstructionPlan factories for DeFi (Titan, Metis) | [README](./packages/actions/README.md) |
-| [@pipeit/fastlane](./packages/fastlane) | Native Rust QUIC client for direct TPU submission | [Package](./packages/fastlane) |
+| Package                                 | Description                                                              | Docs                                   |
+| --------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------- |
+| [@pipeit/core](./packages/core)         | Transaction builder with smart defaults, flows, and execution strategies | [README](./packages/core/README.md)    |
+| [@pipeit/actions](./packages/actions)   | InstructionPlan factories for DeFi (Titan, Metis)                        | [README](./packages/actions/README.md) |
+| [@pipeit/fastlane](./packages/fastlane) | Native Rust QUIC client for direct TPU submission                        | [Package](./packages/fastlane)         |
 
 ## Package Overview
 
 ### @pipeit/core
+
 The foundation package for transaction building:
+
 - TransactionBuilder with auto-blockhash, auto-retry, and priority fees
 - Flow API for multi-step workflows with dynamic context
 - Multiple execution strategies (RPC, Jito bundles, parallel execution, TPU direct)
@@ -36,14 +39,18 @@ The foundation package for transaction building:
 - Server exports for server components based TPU handlers
 
 ### @pipeit/actions
+
 Composable InstructionPlan factories for DeFi:
+
 - Kit-compatible InstructionPlans for swap operations
 - Titan and Metis aggregator integration
 - Address lookup table support
 - Composable with Kit's plan combinators
 
 ### @pipeit/fastlane
+
 Ultra-fast transaction submission:
+
 - Native Rust QUIC implementation via NAPI
 - Direct TPU submission bypassing RPC nodes
 - Continuous resubmission until confirmation
@@ -64,6 +71,7 @@ pipeit/
 ```
 
 **Choosing a Package:**
+
 - Building transactions? → `@pipeit/core`
 - DeFi operations (swaps)? → `@pipeit/actions` + `@pipeit/core`
 - Ultra-fast submission? → `@pipeit/fastlane` + `@pipeit/core`
@@ -155,21 +163,18 @@ await executePlan(plan, {
 
 Pipeit supports multiple execution strategies for different use cases:
 
-| Preset | Description | Use Case |
-|--------|-------------|----------|
-| `'standard'` | Default RPC submission | General transactions |
-| `'economical'` | Jito bundle only | MEV-sensitive swaps |
-| `'fast'` | Jito + parallel RPC race | Time-sensitive operations |
-| `'ultra'` | TPU direct + Jito race | Fastest possible (requires `@pipeit/fastlane`) |
+| Preset         | Description              | Use Case                                       |
+| -------------- | ------------------------ | ---------------------------------------------- |
+| `'standard'`   | Default RPC submission   | General transactions                           |
+| `'economical'` | Jito bundle only         | MEV-sensitive swaps                            |
+| `'fast'`       | Jito + parallel RPC race | Time-sensitive operations                      |
+| `'ultra'`      | TPU direct + Jito race   | Fastest possible (requires `@pipeit/fastlane`) |
 
 ```typescript
-const signature = await new TransactionBuilder({ rpc })
-    .setFeePayerSigner(signer)
-    .addInstruction(instruction)
-    .execute({ 
-        rpcSubscriptions,
-        execution: 'fast', // or 'standard', 'economical', 'ultra'
-    });
+const signature = await new TransactionBuilder({ rpc }).setFeePayerSigner(signer).addInstruction(instruction).execute({
+    rpcSubscriptions,
+    execution: 'fast', // or 'standard', 'economical', 'ultra'
+});
 ```
 
 For custom configuration, see the [@pipeit/core README](./packages/core/README.md).
@@ -232,11 +237,13 @@ export { tpuHandler as POST } from '@pipeit/core/server';
 ## Development
 
 ### Prerequisites
+
 - Node.js 20+
 - pnpm 10+
 - Rust (for @pipeit/fastlane development)
 
 ### Setup
+
 ```bash
 git clone https://github.com/stevesarmiento/pipeit.git
 cd pipeit
@@ -244,6 +251,7 @@ pnpm install
 ```
 
 ### Commands
+
 ```bash
 pnpm build       # Build all packages
 pnpm test        # Run all tests
@@ -257,5 +265,5 @@ Contributions are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for 
 
 ## License
 
-MIT 
+MIT
 [LICENSE.md](.LICENSE.md)

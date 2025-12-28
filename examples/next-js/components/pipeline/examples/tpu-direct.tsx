@@ -36,7 +36,7 @@ export interface TpuSubmissionResult {
     latencyMs: number;
     /** Error message if any */
     error?: string;
-    
+
     // Backwards compat
     delivered?: boolean;
     leaderCount?: number;
@@ -57,7 +57,7 @@ export type TpuState =
 /**
  * Hook for the TPU direct pipeline.
  * Returns a VisualPipeline compatible with the playground pattern.
- * 
+ *
  * TPU results are captured via the tpuEvents fetch interceptor.
  */
 export function useTpuDirectPipeline() {
@@ -131,9 +131,7 @@ function TpuLeaderNode({ leader, index }: { leader: LeaderResult; index: number 
                 )}
                 whileHover={{ scale: 1.1 }}
                 animate={{
-                    boxShadow: leader.success
-                        ? '0 0 20px rgba(16, 185, 129, 0.4)'
-                        : '0 0 20px rgba(239, 68, 68, 0.4)',
+                    boxShadow: leader.success ? '0 0 20px rgba(16, 185, 129, 0.4)' : '0 0 20px rgba(239, 68, 68, 0.4)',
                 }}
             >
                 {leader.success ? (
@@ -146,12 +144,7 @@ function TpuLeaderNode({ leader, index }: { leader: LeaderResult; index: number 
                         animate={{ pathLength: 1 }}
                         transition={{ duration: 0.5, delay: index * 0.1 + 0.2 }}
                     >
-                        <motion.path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={3}
-                            d="M5 13l4 4L19 7"
-                        />
+                        <motion.path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                     </motion.svg>
                 ) : (
                     <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -196,9 +189,8 @@ function TpuStatsPanel({ result }: { result: TpuSubmissionResult }) {
     const isConfirmed = result.confirmed ?? result.delivered ?? false;
     const rounds = result.rounds ?? 0;
     const totalLeaders = result.totalLeadersSent ?? result.leaderCount ?? 0;
-    const latencySeconds = result.latencyMs > 1000 
-        ? `${(result.latencyMs / 1000).toFixed(1)}s`
-        : `${result.latencyMs}ms`;
+    const latencySeconds =
+        result.latencyMs > 1000 ? `${(result.latencyMs / 1000).toFixed(1)}s` : `${result.latencyMs}ms`;
 
     return (
         <motion.div
@@ -229,9 +221,7 @@ function TpuStatsPanel({ result }: { result: TpuSubmissionResult }) {
                 {result.signature && (
                     <div className="bg-white rounded-lg p-2 border col-span-2">
                         <div className="text-gray-500 text-xs">Signature</div>
-                        <div className="font-mono text-xs text-gray-700 truncate">
-                            {result.signature}
-                        </div>
+                        <div className="font-mono text-xs text-gray-700 truncate">{result.signature}</div>
                     </div>
                 )}
             </div>
@@ -242,7 +232,13 @@ function TpuStatsPanel({ result }: { result: TpuSubmissionResult }) {
 /**
  * TPU Real-Time Visualization Component.
  */
-export function TpuRealTimeVisualization({ tpuState, lastResult }: { tpuState: TpuState; lastResult: TpuSubmissionResult | null }) {
+export function TpuRealTimeVisualization({
+    tpuState,
+    lastResult,
+}: {
+    tpuState: TpuState;
+    lastResult: TpuSubmissionResult | null;
+}) {
     return (
         <div className="w-full max-w-2xl mx-auto">
             {/* State indicator */}
@@ -318,14 +314,11 @@ export function TpuRealTimeVisualization({ tpuState, lastResult }: { tpuState: T
 
             {/* Rounds visualization */}
             {lastResult && (lastResult.rounds ?? 0) > 0 && (
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mb-6"
-                >
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
                     <div className="text-center mb-4">
                         <span className="text-sm font-medium text-gray-600">
-                            Submission Rounds ({lastResult.rounds} rounds, {lastResult.totalLeadersSent ?? lastResult.leaderCount ?? 0} leaders)
+                            Submission Rounds ({lastResult.rounds} rounds,{' '}
+                            {lastResult.totalLeadersSent ?? lastResult.leaderCount ?? 0} leaders)
                         </span>
                     </div>
                     <div className="flex justify-center flex-wrap gap-2 max-w-md mx-auto">
@@ -336,7 +329,7 @@ export function TpuRealTimeVisualization({ tpuState, lastResult }: { tpuState: T
                                     'w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium',
                                     index === (lastResult.rounds ?? 1) - 1 && lastResult.confirmed
                                         ? 'bg-emerald-500 text-white'
-                                        : 'bg-purple-100 text-purple-600'
+                                        : 'bg-purple-100 text-purple-600',
                                 )}
                                 initial={{ scale: 0, opacity: 0 }}
                                 animate={{ scale: 1, opacity: 1 }}
@@ -351,16 +344,11 @@ export function TpuRealTimeVisualization({ tpuState, lastResult }: { tpuState: T
 
             {/* Stats panel */}
             {lastResult && (
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                >
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
                     <TpuStatsPanel result={lastResult} />
                 </motion.div>
             )}
         </div>
-        
     );
 }
 

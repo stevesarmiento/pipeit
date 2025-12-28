@@ -4,39 +4,12 @@
  * @packageDocumentation
  */
 
-import type { Address } from '@solana/addresses';
-import type { AccountLookupMeta, AccountMeta, AccountRole, Instruction } from '@solana/instructions';
-import type { TransactionMessage } from '@solana/transaction-messages';
+import { isSignerRole } from '@solana/instructions';
+import {
+    compressTransactionMessageUsingAddressLookupTables,
+    type TransactionMessage,
+} from '@solana/transaction-messages';
 import type { AddressesByLookupTableAddress } from './types.js';
-
-/**
- * Check if an account role is a signer role.
- */
-function isSignerRole(role: AccountRole): boolean {
-    return role === 0b0011 || role === 0b0010; // READONLY_SIGNER or WRITABLE_SIGNER
-}
-
-/**
- * Find an address in lookup tables and return a lookup meta if found.
- */
-function findAddressInLookupTables(
-    address: Address,
-    role: AccountRole,
-    addressesByLookupTableAddress: AddressesByLookupTableAddress,
-): AccountLookupMeta | undefined {
-    for (const [lookupTableAddress, addresses] of Object.entries(addressesByLookupTableAddress)) {
-        const index = addresses.indexOf(address);
-        if (index !== -1) {
-            return {
-                address,
-                addressIndex: index,
-                lookupTableAddress: lookupTableAddress as Address,
-                role: role as 0b0000 | 0b0001, // READONLY or WRITABLE (non-signer)
-            };
-        }
-    }
-    return undefined;
-}
 
 /**
  * Compress a transaction message using address lookup tables.
@@ -62,73 +35,15 @@ export function compressTransactionMessage<TMessage extends TransactionMessage>(
     transactionMessage: TMessage,
     addressesByLookupTableAddress: AddressesByLookupTableAddress,
 ): TMessage {
-    // Only works with versioned transactions (version 0)
-    if (transactionMessage.version === 'legacy') {
-        return transactionMessage;
-    }
+    // Address lookup tables only apply to v0 (versioned) transactions.
+    if (transactionMessage.version === 'legacy') return transactionMessage;
 
-    // Build set of program addresses (cannot be in lookup tables)
-    const programAddresses = new Set(transactionMessage.instructions.map(ix => ix.programAddress));
-
-    // Build set of eligible lookup addresses
-    const eligibleLookupAddresses = new Set(
-        Object.values(addressesByLookupTableAddress)
-            .flat()
-            .filter(addr => !programAddresses.has(addr)),
-    );
-
-    if (eligibleLookupAddresses.size === 0) {
-        return transactionMessage;
-    }
-
-    const newInstructions: Instruction[] = [];
-    let updatedAnyInstructions = false;
-
-    for (const instruction of transactionMessage.instructions) {
-        if (!instruction.accounts || instruction.accounts.length === 0) {
-            newInstructions.push(instruction);
-            continue;
-        }
-
-        const newAccounts: (AccountMeta | AccountLookupMeta)[] = [];
-        let updatedAnyAccounts = false;
-
-        for (const account of instruction.accounts) {
-            // Skip if already a lookup, not in any lookup table, or is a signer
-            if (
-                'lookupTableAddress' in account ||
-                !eligibleLookupAddresses.has(account.address) ||
-                isSignerRole(account.role)
-            ) {
-                newAccounts.push(account);
-                continue;
-            }
-
-            // Try to find in lookup tables
-            const lookupMeta = findAddressInLookupTables(account.address, account.role, addressesByLookupTableAddress);
-
-            if (lookupMeta) {
-                newAccounts.push(Object.freeze(lookupMeta));
-                updatedAnyAccounts = true;
-                updatedAnyInstructions = true;
-            } else {
-                newAccounts.push(account);
-            }
-        }
-
-        newInstructions.push(
-            Object.freeze(updatedAnyAccounts ? { ...instruction, accounts: Object.freeze(newAccounts) } : instruction),
-        );
-    }
-
-    if (!updatedAnyInstructions) {
-        return transactionMessage;
-    }
-
-    return Object.freeze({
-        ...transactionMessage,
-        instructions: Object.freeze(newInstructions),
-    }) as TMessage;
+    // Delegate to Kit's implementation (re-exported from `@solana/kit`).
+    // We keep this wrapper to preserve Pipeit's legacy-safe signature.
+    return compressTransactionMessageUsingAddressLookupTables(
+        transactionMessage as Exclude<TransactionMessage, { version: 'legacy' }>,
+        addressesByLookupTableAddress,
+    ) as TMessage;
 }
 
 /**
