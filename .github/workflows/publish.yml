@@ -10,11 +10,16 @@ on:
       - '.github/workflows/publish.yml'
   workflow_dispatch:
     inputs:
-      publish:
-        description: 'Publish to npm'
-        required: false
-        type: boolean
-        default: false
+      package:
+        description: 'Package to publish'
+        required: true
+        type: choice
+        options:
+          - none
+          - core
+          - actions
+          - all
+        default: none
 
 permissions:
   contents: read
@@ -41,16 +46,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build packages
+      - name: Build core
+        if: inputs.package == 'core' || inputs.package == 'all'
         run: pnpm build
         working-directory: packages/core
 
       - name: Build actions
+        if: inputs.package == 'actions' || inputs.package == 'all'
         run: pnpm build
         working-directory: packages/actions
 
       - name: Publish core
-        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        if: inputs.package == 'core' || inputs.package == 'all'
         run: |
           npm config set provenance true
           echo "Publishing @pipeit/core..."
@@ -60,7 +67,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish actions
-        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        if: inputs.package == 'actions' || inputs.package == 'all'
         run: |
           npm config set provenance true
           echo "Publishing @pipeit/actions..."
