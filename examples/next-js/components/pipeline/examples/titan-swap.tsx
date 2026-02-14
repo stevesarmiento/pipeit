@@ -4,7 +4,6 @@ import { useMemo } from 'react';
 import { executePlan, createFlow, type FlowConfig, type TransactionPlanResult } from '@pipeit/core';
 import { VisualPipeline } from '@/lib/visual-pipeline';
 import { getTitanSwapPlan } from '@pipeit/actions/titan';
-import { getSignatureFromTransaction } from '@solana/kit';
 
 // Token addresses
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
@@ -76,7 +75,6 @@ export function useTitanSwapPipeline() {
 
 export const titanSwapCode = `import { getTitanSwapPlan, TITAN_DEMO_BASE_URLS } from '@pipeit/actions/titan'
 import { executePlan } from '@pipeit/core'
-import { getSignatureFromTransaction } from '@solana/kit'
 
 // Token addresses
 const SOL = 'So11111111111111111111111111111111111111112'
@@ -111,8 +109,8 @@ console.log(\`Swapping for ~\${quote.outputAmount} USDC via \${providerId}\`)
 
 function getSignaturesFromTransactionPlanResult(result) {
   if (result.kind === 'single') {
-    return result.status.kind === 'successful'
-      ? [getSignatureFromTransaction(result.status.transaction)]
+    return result.status === 'successful'
+      ? [result.context.signature]
       : []
   }
   return result.plans.flatMap(getSignaturesFromTransactionPlanResult)
@@ -133,8 +131,8 @@ console.log('Swap executed:', signatures[signatures.length - 1])`;
 
 function getSignaturesFromTransactionPlanResult(result: TransactionPlanResult): string[] {
     if (result.kind === 'single') {
-        if (result.status.kind !== 'successful') return [];
-        return [getSignatureFromTransaction(result.status.transaction)];
+        if (result.status !== 'successful') return [];
+        return [result.context.signature];
     }
 
     return result.plans.flatMap(getSignaturesFromTransactionPlanResult);
