@@ -30,7 +30,7 @@ import {
     sendAndConfirmTransactionFactory,
     fetchAddressesForLookupTables,
 } from '@solana/kit';
-import type { BaseTransactionMessage, TransactionMessageWithFeePayer } from '@solana/transaction-messages';
+import type { TransactionMessage, TransactionMessageWithFeePayer } from '@solana/transaction-messages';
 import { addSignersToTransactionMessage, type TransactionSigner } from '@solana/signers';
 import {
     fillProvisorySetComputeUnitLimitInstruction,
@@ -232,7 +232,7 @@ export async function executePlan(plan: InstructionPlan, config: ExecutePlanConf
         // Apply ALT compression during planning so size checks account for compressed size.
         // This allows the planner to pack more instructions per transaction when ALTs are used.
         ...(lookupTableData && {
-            onTransactionMessageUpdated: <TMessage extends BaseTransactionMessage & TransactionMessageWithFeePayer>(
+            onTransactionMessageUpdated: <TMessage extends TransactionMessage & TransactionMessageWithFeePayer>(
                 message: TMessage,
             ): TMessage => compressTransactionMessage(message, lookupTableData),
         }),
@@ -250,7 +250,7 @@ export async function executePlan(plan: InstructionPlan, config: ExecutePlanConf
 
     // Create transaction executor with CU estimation and ALT compression
     const executor = createTransactionPlanExecutor({
-        executeTransactionMessage: async message => {
+        executeTransactionMessage: async (_context, message) => {
             // Apply ALT compression before CU estimation (if lookup tables provided)
             const compressedMessage = lookupTableData ? compressTransactionMessage(message, lookupTableData) : message;
 
@@ -267,10 +267,7 @@ export async function executePlan(plan: InstructionPlan, config: ExecutePlanConf
 
             // Send and confirm - cast to expected type since we know it has blockhash lifetime
             await sendAndConfirm(signedTransaction as Parameters<typeof sendAndConfirm>[0], { commitment });
-
-            return {
-                transaction: signedTransaction,
-            };
+            return signedTransaction;
         },
     });
 

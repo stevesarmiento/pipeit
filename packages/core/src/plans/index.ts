@@ -36,7 +36,7 @@ export {
     parallelTransactionPlan,
     sequentialTransactionPlan,
     nonDivisibleSequentialTransactionPlan,
-    getAllSingleTransactionPlans,
+    flattenTransactionPlan,
 
     // Transaction planner
     type TransactionPlanner,
