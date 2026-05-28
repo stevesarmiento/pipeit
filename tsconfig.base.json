@@ -1,6 +1,7 @@
 {
     "compilerOptions": {
         "strict": true,
+        "ignoreDeprecations": "6.0",
         "exactOptionalPropertyTypes": true,
         "moduleDetection": "force",
         "composite": true,

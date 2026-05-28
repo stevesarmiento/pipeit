@@ -6,11 +6,11 @@ Interactive example application showcasing Pipeit's transaction building capabil
 
 ```bash
 # From repo root
-pnpm install
+bun install
 
 # Run the example
 cd examples/next-js
-pnpm dev
+bun run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to see the landing page and playground.
@@ -122,10 +122,10 @@ SOLANA_WS_URL=wss://api.mainnet-beta.solana.com
 ## Commands
 
 ```bash
-pnpm dev        # Start dev server
-pnpm build      # Production build
-pnpm lint       # Run linter
-pnpm benchmark  # Run strategy benchmarks
+bun run dev        # Start dev server
+bun run build      # Production build
+bun run lint       # Run linter
+bun run benchmark  # Run strategy benchmarks
 ```
 
 ## Learn More

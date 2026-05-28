@@ -11,7 +11,7 @@ This package provides Kit-compatible `InstructionPlan` factories that can be:
 ## Installation
 
 ```bash
-pnpm install @pipeit/actions @pipeit/core @solana/kit
+bun add @pipeit/actions @pipeit/core @solana/kit
 ```
 
 ## Quick Start

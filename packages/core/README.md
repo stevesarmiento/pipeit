@@ -5,7 +5,7 @@ Type-safe transaction builder for Solana with smart defaults, multi-step flows, 
 ## Installation
 
 ```bash
-pnpm install @pipeit/core @solana/kit
+bun add @pipeit/core @solana/kit
 ```
 
 ## Quick Start

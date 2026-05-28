@@ -11,11 +11,11 @@ const nextConfig: NextConfig = {
     transpilePackages: ['@pipeit/core', '@pipeit/actions'],
 
     /**
-     * Monorepo + pnpm note:
+     * Monorepo + Bun workspace note:
      * - Vercel/Next server output uses file tracing to decide which files get shipped into the Lambda.
      * - `@pipeit/fastlane` is intentionally external (native addon), and it's also dynamically imported.
-     * - With pnpm, the real package files often live under the repo root `node_modules/.pnpm/...`,
-     *   which is outside the Next.js project directory (`examples/next-js`).
+     * - With workspace installs, `node_modules/@pipeit/fastlane` can be a symlink to
+     *   `packages/fastlane`, outside the Next.js project directory (`examples/next-js`).
      *
      * Extend tracing to the monorepo root and force-include fastlane for the TPU route.
      */
@@ -24,10 +24,12 @@ const nextConfig: NextConfig = {
               outputFileTracingRoot: path.join(__dirname, '../../'),
               outputFileTracingIncludes: {
                   '/api/tpu': [
-                      // npm/yarn or fully hoisted installs
+                      // App-local install, if present
                       'node_modules/@pipeit/fastlane/**',
-                      // pnpm store (actual package contents typically live here)
-                      '../../node_modules/.pnpm/**/node_modules/@pipeit/fastlane/**',
+                      // Hoisted workspace install, if used
+                      '../../node_modules/@pipeit/fastlane/**',
+                      // Bun workspace package source
+                      '../../packages/fastlane/**',
                   ],
               },
           }

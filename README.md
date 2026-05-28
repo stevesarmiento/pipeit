@@ -80,13 +80,13 @@ pipeit/
 
 ```bash
 # Transaction builder (recommended starting point)
-pnpm install @pipeit/core @solana/kit
+bun add @pipeit/core @solana/kit
 
 # DeFi operations (swaps via Titan/Metis)
-pnpm install @pipeit/actions @pipeit/core @solana/kit
+bun add @pipeit/actions @pipeit/core @solana/kit
 
 # TPU direct submission (server-side only)
-pnpm install @pipeit/fastlane
+bun add @pipeit/fastlane
 ```
 
 ## Usage Examples
@@ -238,8 +238,8 @@ export { tpuHandler as POST } from '@pipeit/core/server';
 
 ### Prerequisites
 
-- Node.js 20+
-- pnpm 10+
+- Node.js 22.13+
+- Bun 1.3+
 - Rust (for @pipeit/fastlane development)
 
 ### Setup
@@ -247,16 +247,16 @@ export { tpuHandler as POST } from '@pipeit/core/server';
 ```bash
 git clone https://github.com/stevesarmiento/pipeit.git
 cd pipeit
-pnpm install
+bun install
 ```
 
 ### Commands
 
 ```bash
-pnpm build       # Build all packages
-pnpm test        # Run all tests
-pnpm typecheck   # Type checking
-pnpm lint        # Lint code
+bun run build       # Build all packages
+bun run test        # Run all tests
+bun run typecheck   # Type checking
+bun run lint        # Lint code
 ```
 
 ## Contributing
