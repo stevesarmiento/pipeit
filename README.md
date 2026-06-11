@@ -23,7 +23,7 @@ Built on modern Solana libraries (@solana/kit) with a focus on type safety, deve
 | Package                                 | Description                                                              | Docs                                   |
 | --------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------- |
 | [@pipeit/core](./packages/core)         | Transaction builder with smart defaults, flows, and execution strategies | [README](./packages/core/README.md)    |
-| [@pipeit/actions](./packages/actions)   | InstructionPlan factories for DeFi (Titan, Metis)                        | [README](./packages/actions/README.md) |
+| [@pipeit/actions](./packages/actions)   | InstructionPlan factories for DeFi (Titan, Metis, Phoenix, Flash)        | [README](./packages/actions/README.md) |
 | [@pipeit/fastlane](./packages/fastlane) | Native Rust QUIC client for direct TPU submission                        | [Package](./packages/fastlane)         |
 
 ## Package Overview
@@ -42,8 +42,9 @@ The foundation package for transaction building:
 
 Composable InstructionPlan factories for DeFi:
 
-- Kit-compatible InstructionPlans for swap operations
+- Kit-compatible InstructionPlans for swaps and perps workflows
 - Titan and Metis aggregator integration
+- Phoenix and Flash Trade perps integrations
 - Address lookup table support
 - Composable with Kit's plan combinators
 
@@ -73,7 +74,7 @@ pipeit/
 **Choosing a Package:**
 
 - Building transactions? → `@pipeit/core`
-- DeFi operations (swaps)? → `@pipeit/actions` + `@pipeit/core`
+- DeFi operations (swaps/perps)? → `@pipeit/actions` + `@pipeit/core`
 - Ultra-fast submission? → `@pipeit/fastlane` + `@pipeit/core`
 
 ## Installation
@@ -82,7 +83,7 @@ pipeit/
 # Transaction builder (recommended starting point)
 bun add @pipeit/core @solana/kit
 
-# DeFi operations (swaps via Titan/Metis)
+# DeFi operations (swaps via Titan/Metis, perps via Phoenix/Flash)
 bun add @pipeit/actions @pipeit/core @solana/kit
 
 # TPU direct submission (server-side only)

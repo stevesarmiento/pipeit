@@ -22,6 +22,16 @@
             "types": "./dist/metis/index.d.ts",
             "import": "./dist/metis/index.js",
             "require": "./dist/metis/index.cjs"
+        },
+        "./phoenix": {
+            "types": "./dist/phoenix/index.d.ts",
+            "import": "./dist/phoenix/index.js",
+            "require": "./dist/phoenix/index.cjs"
+        },
+        "./flash": {
+            "types": "./dist/flash/index.d.ts",
+            "import": "./dist/flash/index.js",
+            "require": "./dist/flash/index.cjs"
         }
     },
     "files": [
@@ -42,6 +52,11 @@
         "titan",
         "jupiter",
         "metis",
+        "phoenix",
+        "flash",
+        "flash-trade",
+        "perps",
+        "perpetuals",
         "instruction-plans",
         "transaction"
     ],
@@ -63,7 +78,11 @@
         "@solana/transactions": "^6.9.0"
     },
     "dependencies": {
-        "@msgpack/msgpack": "^3.1.3"
+        "@coral-xyz/anchor": "^0.32.1",
+        "@ellipsis-labs/rise": "^0.4.17",
+        "@msgpack/msgpack": "^3.1.3",
+        "@solana/web3.js": "1.98.2",
+        "flash-sdk": "^15.16.14"
     },
     "devDependencies": {
         "@pipeit/core": "workspace:*",

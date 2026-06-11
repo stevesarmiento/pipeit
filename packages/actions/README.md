@@ -1,12 +1,21 @@
 # @pipeit/actions
 
-Composable InstructionPlan factories for Solana DeFi, starting with Titan integration.
+Composable InstructionPlan factories for Solana DeFi protocols.
 
 This package provides Kit-compatible `InstructionPlan` factories that can be:
 
 - Executed directly with `@pipeit/core`'s `executePlan`
 - Composed with other InstructionPlans using Kit's plan combinators
 - Used by anyone in the Kit ecosystem
+
+## Supported Integrations
+
+| Protocol          | Import Path               | Actions                                                      |
+| ----------------- | ------------------------- | ------------------------------------------------------------ |
+| Titan             | `@pipeit/actions/titan`   | Swap quote and swap plan builders                            |
+| Jupiter Metis     | `@pipeit/actions/metis`   | Swap quote and swap instruction plan builders                |
+| Phoenix Perps     | `@pipeit/actions/phoenix` | Open/close position and cancel-order plan builders           |
+| Flash Trade Perps | `@pipeit/actions/flash`   | Open/close position, TP/SL, and trigger-cancel plan builders |
 
 ## Installation
 
@@ -124,6 +133,104 @@ const plan = getTitanSwapInstructionPlanFromRoute(route);
 // Extract ALT addresses
 const lookupTableAddresses = route.addressLookupTables.map(titanPubkeyToAddress);
 ```
+
+## Phoenix Perps API
+
+Phoenix actions are exposed only through the Phoenix subpath:
+
+```typescript
+import { getPhoenixOpenPositionPlan } from '@pipeit/actions/phoenix';
+import { executePlan } from '@pipeit/core';
+
+const { plan, lookupTableAddresses } = await getPhoenixOpenPositionPlan({
+    trader: {
+        authority: signer.address,
+        traderPdaIndex: 0,
+        traderSubaccountIndex: 0,
+    },
+    symbol: 'SOL-PERP',
+    side: 'long',
+    size: { baseUnits: '0.25' },
+    entry: {
+        type: 'limit',
+        priceUsd: '150.50',
+        postOnly: true,
+    },
+    risk: {
+        takeProfit: {
+            type: 'limit',
+            triggerPriceUsd: '165.00',
+            executionPriceUsd: '164.75',
+        },
+        stopLoss: {
+            type: 'market',
+            triggerPriceUsd: '142.00',
+            slippageBps: 1000,
+        },
+    },
+});
+
+await executePlan(plan, {
+    rpc,
+    rpcSubscriptions,
+    signer,
+    lookupTableAddresses,
+});
+```
+
+Phoenix is private beta software and requires Phoenix access. Phoenix states it is not available in the U.S. or sanctioned jurisdictions. These actions only build instructions; callers remain responsible for eligibility, trader account funding, signing, and trading outcomes.
+
+## Flash Trade Perps API
+
+Flash actions are exposed only through the Flash subpath:
+
+```typescript
+import { AnchorProvider } from '@coral-xyz/anchor';
+import { getFlashOpenPositionPlan, getFlashClosePositionPlan } from '@pipeit/actions/flash';
+import { executePlan } from '@pipeit/core';
+
+const provider = new AnchorProvider(connection, wallet, {
+    commitment: 'processed',
+    preflightCommitment: 'processed',
+});
+
+const openResult = await getFlashOpenPositionPlan({
+    clientConfig: { provider },
+    trader: { owner: signer.address },
+    symbol: 'SOL',
+    side: 'long',
+    collateral: {
+        amount: '1.0',
+        symbol: 'SOL',
+    },
+    leverage: '2',
+    entry: {
+        type: 'market',
+        slippageBps: 800,
+    },
+    risk: {
+        takeProfit: { triggerPriceUsd: '180.00' },
+        stopLoss: { triggerPriceUsd: '145.00' },
+    },
+});
+
+await executePlan(openResult.plan, {
+    rpc,
+    rpcSubscriptions,
+    signer,
+    lookupTableAddresses: openResult.lookupTableAddresses,
+});
+
+const closeResult = await getFlashClosePositionPlan({
+    clientConfig: { provider },
+    trader: { owner: signer.address },
+    symbol: 'SOL',
+    side: 'long',
+    size: { percent: 100 },
+});
+```
+
+Flash docs describe the REST API as the primary integration path and the SDK as secondary. This package uses SDK instruction builders because Pipeit composes `InstructionPlan`s instead of opaque ready-to-sign transactions. Flash actions build instructions only; callers remain responsible for funding, signing, eligibility, and trading outcomes.
 
 ## Composing Plans
 
