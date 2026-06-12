@@ -17,19 +17,34 @@ const nextConfig: NextConfig = {
      * - With workspace installs, `node_modules/@pipeit/fastlane` can be a symlink to
      *   `packages/fastlane`, outside the Next.js project directory (`examples/next-js`).
      *
-     * Extend tracing to the monorepo root and force-include fastlane for the TPU route.
+     * Extend tracing to the monorepo root and force-include only fastlane runtime files
+     * for the TPU route. Do not include the whole workspace package: that pulls in
+     * Cargo build output and package-manager symlinks that Vercel cannot package as a
+     * Serverless Function.
      */
     ...(isVercelBuild
         ? {
               outputFileTracingRoot: path.join(__dirname, '../../'),
               outputFileTracingIncludes: {
                   '/api/tpu': [
-                      // App-local install, if present
-                      'node_modules/@pipeit/fastlane/**',
-                      // Hoisted workspace install, if used
-                      '../../node_modules/@pipeit/fastlane/**',
-                      // Bun workspace package source
-                      '../../packages/fastlane/**',
+                      '../../node_modules/@pipeit/fastlane/package.json',
+                      '../../node_modules/@pipeit/fastlane/index.js',
+                      '../../node_modules/@pipeit/fastlane/*.node',
+                      '../../packages/fastlane/package.json',
+                      '../../packages/fastlane/index.js',
+                      '../../packages/fastlane/*.node',
+                  ],
+              },
+              outputFileTracingExcludes: {
+                  '/api/tpu': [
+                      '../../node_modules/@pipeit/fastlane/node_modules/**',
+                      '../../node_modules/@pipeit/fastlane/target/**',
+                      '../../node_modules/@pipeit/fastlane/src/**',
+                      '../../node_modules/@pipeit/fastlane/vendor/**',
+                      '../../packages/fastlane/node_modules/**',
+                      '../../packages/fastlane/target/**',
+                      '../../packages/fastlane/src/**',
+                      '../../packages/fastlane/vendor/**',
                   ],
               },
           }
