@@ -76,6 +76,17 @@ interface ExecutePlanConfigBase {
      * Optional abort signal to cancel execution.
      */
     abortSignal?: AbortSignal;
+
+    /**
+     * Maximum number of top-level instructions the planner may pack into a
+     * single transaction message. Defaults to Kit's planner default (16 as of
+     * Kit v7, which assumes ~3 inner instructions per top-level instruction
+     * against Solana's hard limit of 64 total instructions).
+     *
+     * Set to 64 to restore the pre-Kit-v7 behavior of packing up to the hard
+     * transaction limit.
+     */
+    maxInstructionsPerTransaction?: number;
 }
 
 /**
@@ -208,7 +219,7 @@ export type ExecutePlanConfig =
  * ```
  */
 export async function executePlan(plan: InstructionPlan, config: ExecutePlanConfig): Promise<TransactionPlanResult> {
-    const { rpc, rpcSubscriptions, signer, commitment = 'confirmed', abortSignal } = config;
+    const { rpc, rpcSubscriptions, signer, commitment = 'confirmed', abortSignal, maxInstructionsPerTransaction } = config;
 
     // Resolve lookup table data once (prefetched or fetched from addresses)
     const lookupTableData = await resolveLookupTableData(config);
@@ -229,6 +240,8 @@ export async function executePlan(plan: InstructionPlan, config: ExecutePlanConf
                 tx => addSignersToTransactionMessage([signer], tx),
             );
         },
+        // Pass through the instruction-count ceiling when provided (Kit v7 defaults to 16).
+        ...(maxInstructionsPerTransaction !== undefined && { maxInstructionsPerTransaction }),
         // Apply ALT compression during planning so size checks account for compressed size.
         // This allows the planner to pack more instructions per transaction when ALTs are used.
         ...(lookupTableData && {
