@@ -2,107 +2,102 @@
  * Tests for Phoenix close-position plans.
  */
 
-import { Side } from '@ellipsis-labs/rise';
-import { describe, expect, it, vi } from 'vitest';
+import { OrderFlags, Side } from '@ellipsis-labs/rise';
+import { describe, expect, it } from 'vitest';
 import { getPhoenixClosePositionPlan } from '../plan-close-position.js';
-import { InvalidPhoenixPositionSideError, UnsupportedPhoenixOrderConfigError } from '../types.js';
+import { UnsupportedPhoenixOrderConfigError } from '../types.js';
+import { createFakePhoenixClient } from './helpers.js';
 
-const PROGRAM_ADDRESS = '11111111111111111111111111111111';
-
-function createInstruction(data: number[]) {
-    return {
-        programAddress: PROGRAM_ADDRESS,
-        accounts: [],
-        data: new Uint8Array(data),
-    };
-}
-
-function createClient() {
-    const packet = { packet: 'market' };
-
-    return {
-        packet,
-        orderPackets: {
-            buildMarketOrderPacket: vi.fn(async () => packet),
-        },
-        ixs: {
-            placeMarketOrder: vi.fn(async () => createInstruction([1])),
-        },
-    };
-}
+const BASE_OPTIONS = {
+    trader: { authority: 'authority' },
+    symbol: 'SOL',
+    side: 'long',
+    size: { baseUnits: '1.5' },
+} as const;
 
 describe('getPhoenixClosePositionPlan', () => {
-    it('closes long positions with Side.Ask', async () => {
-        const client = createClient();
+    it('closes longs with Side.Ask and shorts with Side.Bid', async () => {
+        for (const [side, expected] of [
+            ['long', Side.Ask],
+            ['short', Side.Bid],
+        ] as const) {
+            const { client, asClient } = createFakePhoenixClient();
+            await getPhoenixClosePositionPlan({ ...BASE_OPTIONS, client: asClient, side });
+            const packet = client.ixs.placeMarketOrder.mock.calls[0][0].orderPacket;
+            expect(packet.side).toBe(expected);
+        }
+    });
+
+    it('sets OrderFlags.ReduceOnly by default so a close can never flip the position', async () => {
+        const { client, asClient } = createFakePhoenixClient();
+
+        const result = await getPhoenixClosePositionPlan({ ...BASE_OPTIONS, client: asClient });
+
+        const packet = client.ixs.placeMarketOrder.mock.calls[0][0].orderPacket;
+        expect(packet.orderFlags & OrderFlags.ReduceOnly).toBe(OrderFlags.ReduceOnly);
+        expect(result.order.reduceOnly).toBe(true);
+    });
+
+    it('allows opting out with reduceOnly: false', async () => {
+        const { client, asClient } = createFakePhoenixClient();
+
+        const result = await getPhoenixClosePositionPlan({ ...BASE_OPTIONS, client: asClient, reduceOnly: false });
+
+        const packet = client.ixs.placeMarketOrder.mock.calls[0][0].orderPacket;
+        expect(packet.orderFlags & OrderFlags.ReduceOnly).toBe(0);
+        expect(result.order.reduceOnly).toBe(false);
+    });
+
+    it('merges caller order flags with the reduce-only flag', async () => {
+        const { client, asClient } = createFakePhoenixClient();
 
         await getPhoenixClosePositionPlan({
-            client: client as never,
-            trader: { authority: 'authority' },
-            symbol: 'SOL-PERP',
-            side: 'long',
-            size: { baseUnits: '0.25' },
+            ...BASE_OPTIONS,
+            client: asClient,
+            orderFlags: OrderFlags.IsConditionalOrder,
         });
 
-        expect(client.orderPackets.buildMarketOrderPacket).toHaveBeenCalledWith(
-            expect.objectContaining({ side: Side.Ask, baseUnits: '0.25' }),
-        );
+        const packet = client.ixs.placeMarketOrder.mock.calls[0][0].orderPacket;
+        expect(packet.orderFlags & OrderFlags.ReduceOnly).toBe(OrderFlags.ReduceOnly);
+        expect(packet.orderFlags & OrderFlags.IsConditionalOrder).toBe(OrderFlags.IsConditionalOrder);
     });
 
-    it('closes short positions with Side.Bid', async () => {
-        const client = createClient();
+    it('converts size and price limit through the real market math', async () => {
+        const { client, asClient } = createFakePhoenixClient({ tickSize: 100, baseLotsDecimals: 3 });
 
-        await getPhoenixClosePositionPlan({
-            client: client as never,
-            trader: { authority: 'authority' },
-            symbol: 'SOL-PERP',
-            side: 'short',
-            size: { baseUnits: 1n },
-        });
+        await getPhoenixClosePositionPlan({ ...BASE_OPTIONS, client: asClient, priceLimitUsd: '60' });
 
-        expect(client.orderPackets.buildMarketOrderPacket).toHaveBeenCalledWith(
-            expect.objectContaining({ side: Side.Bid, baseUnits: 1n }),
-        );
+        const packet = client.ixs.placeMarketOrder.mock.calls[0][0].orderPacket;
+        expect(packet.numBaseLots).toBe(1500n);
+        expect(packet.priceInTicks).toBe(600n);
     });
 
-    it('calls placeMarketOrder with the generated packet', async () => {
-        const client = createClient();
+    it('rejects sizes that round down to zero base lots', async () => {
+        const { asClient } = createFakePhoenixClient({ baseLotsDecimals: 3 });
 
-        const result = await getPhoenixClosePositionPlan({
-            client: client as never,
-            trader: { authority: 'authority' },
-            symbol: 'SOL-PERP',
-            side: 'long',
-            size: { baseUnits: '0.25' },
-        });
-
-        expect(client.ixs.placeMarketOrder).toHaveBeenCalledWith(
-            expect.objectContaining({ orderPacket: client.packet }),
-        );
-        expect(result.plan.kind).toBe('single');
-        expect(result.phoenix.orderPacket).toBe(client.packet);
-    });
-
-    it('rejects invalid side', async () => {
         await expect(
-            getPhoenixClosePositionPlan({
-                client: createClient() as never,
-                trader: { authority: 'authority' },
-                symbol: 'SOL-PERP',
-                side: 'flat' as never,
-                size: { baseUnits: 1n },
-            }),
-        ).rejects.toThrow(InvalidPhoenixPositionSideError);
-    });
-
-    it('rejects zero or negative bigint base size', async () => {
-        await expect(
-            getPhoenixClosePositionPlan({
-                client: createClient() as never,
-                trader: { authority: 'authority' },
-                symbol: 'SOL-PERP',
-                side: 'long',
-                size: { baseUnits: 0n },
-            }),
+            getPhoenixClosePositionPlan({ ...BASE_OPTIONS, client: asClient, size: { baseUnits: '0.0001' } }),
         ).rejects.toThrow(UnsupportedPhoenixOrderConfigError);
+    });
+
+    it('rejects invalid string sizes', async () => {
+        for (const baseUnits of ['0', '-2', '2e3'] as const) {
+            await expect(
+                getPhoenixClosePositionPlan({
+                    ...BASE_OPTIONS,
+                    client: createFakePhoenixClient().asClient,
+                    size: { baseUnits },
+                }),
+            ).rejects.toThrow(UnsupportedPhoenixOrderConfigError);
+        }
+    });
+
+    it('returns a single-instruction plan and does not dispose injected clients', async () => {
+        const { client, asClient } = createFakePhoenixClient();
+
+        const result = await getPhoenixClosePositionPlan({ ...BASE_OPTIONS, client: asClient });
+
+        expect(result.plan.kind).toBe('single');
+        expect(client.dispose).not.toHaveBeenCalled();
     });
 });

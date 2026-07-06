@@ -136,46 +136,94 @@ const lookupTableAddresses = route.addressLookupTables.map(titanPubkeyToAddress)
 
 ## Phoenix Perps API
 
-Phoenix actions are exposed only through the Phoenix subpath:
+Phoenix actions are exposed only through the Phoenix subpath. Create one
+client, reuse it across calls, and dispose it when done — it holds HTTP,
+exchange-metadata cache, and RPC resources (plan builders create and dispose
+a throwaway client per call when none is passed, re-fetching exchange
+metadata every time):
 
 ```typescript
-import { getPhoenixOpenPositionPlan } from '@pipeit/actions/phoenix';
+import { createPhoenixActionsClient, getPhoenixOpenPositionPlan } from '@pipeit/actions/phoenix';
 import { executePlan } from '@pipeit/core';
 
-const { plan, lookupTableAddresses } = await getPhoenixOpenPositionPlan({
-    trader: {
-        authority: signer.address,
-        traderPdaIndex: 0,
-        traderSubaccountIndex: 0,
-    },
-    symbol: 'SOL-PERP',
-    side: 'long',
-    size: { baseUnits: '0.25' },
-    entry: {
-        type: 'limit',
-        priceUsd: '150.50',
-        postOnly: true,
-    },
-    risk: {
-        takeProfit: {
+const client = createPhoenixActionsClient();
+try {
+    const { plan, lookupTableAddresses } = await getPhoenixOpenPositionPlan({
+        client,
+        trader: {
+            authority: signer.address,
+            traderPdaIndex: 0,
+            traderSubaccountIndex: 0,
+        },
+        symbol: 'SOL-PERP',
+        side: 'long',
+        size: { baseUnits: '0.25' },
+        entry: {
             type: 'limit',
-            triggerPriceUsd: '165.00',
-            executionPriceUsd: '164.75',
+            priceUsd: '150.50',
+            postOnly: true,
         },
-        stopLoss: {
-            type: 'market',
-            triggerPriceUsd: '142.00',
-            slippageBps: 1000,
+        risk: {
+            takeProfit: {
+                type: 'limit',
+                triggerPriceUsd: '165.00',
+                executionPriceUsd: '164.75',
+            },
+            stopLoss: {
+                type: 'market',
+                triggerPriceUsd: '142.00',
+                slippageBps: 1000,
+            },
         },
-    },
-});
+    });
 
-await executePlan(plan, {
-    rpc,
-    rpcSubscriptions,
-    signer,
-    lookupTableAddresses,
-});
+    await executePlan(plan, {
+        rpc,
+        rpcSubscriptions,
+        signer,
+        lookupTableAddresses,
+    });
+} finally {
+    client.dispose();
+}
+```
+
+Behavior worth knowing:
+
+- **Risk legs on limit entries are attached conditionals** — they only
+  activate once the entry order fills (`risk.mode === 'attached'` in the
+  result). Market entries use position-level conditionals sized at 100% of
+  the live position (`risk.mode === 'position'`), and the entry +
+  conditional instructions are combined in a non-divisible plan so the entry
+  can never land without its stop.
+- **Closes are reduce-only by default** — `getPhoenixClosePositionPlan` sets
+  `OrderFlags.ReduceOnly`, so an oversized or stale size can never flip you
+  into the opposite position. Opt out with `reduceOnly: false`. Pass
+  `priceLimitUsd` unless you really want an unbounded market close.
+- **Cancel by `priceInTicks`** where possible; the float `price` path is
+  deprecated upstream and can silently miss orders due to floor rounding.
+- **`lookupTableAddresses` is always empty for Phoenix** — the Rise SDK does
+  not publish address lookup tables through its client API. The field exists
+  for interface parity with the swap actions.
+
+### Trader onboarding prerequisites
+
+These actions only build order instructions. The trader must already be
+registered on Phoenix perps with collateral deposited (and a
+conditional-orders account for TP/SL); otherwise transactions fail on-chain.
+The Rise SDK provides `buildRegisterTrader`, deposit builders, and
+`buildCreateConditionalOrdersAccount` for onboarding.
+
+### Phoenix errors
+
+```typescript
+import {
+    PhoenixPlanError, // base class
+    UnknownPhoenixMarketError, // exposes .symbol and .availableSymbols
+    InvalidPhoenixRiskConfigError,
+    UnsupportedPhoenixOrderConfigError,
+    InvalidPhoenixInstructionError,
+} from '@pipeit/actions/phoenix';
 ```
 
 Phoenix is private beta software and requires Phoenix access. Phoenix states it is not available in the U.S. or sanctioned jurisdictions. These actions only build instructions; callers remain responsible for eligibility, trader account funding, signing, and trading outcomes.
@@ -189,28 +237,35 @@ import { AnchorProvider } from '@coral-xyz/anchor';
 import { getFlashOpenPositionPlan, getFlashClosePositionPlan } from '@pipeit/actions/flash';
 import { executePlan } from '@pipeit/core';
 
+// The provider must point at a LIVE RPC endpoint: flash-sdk simulates a
+// sizing quote and checks token accounts through provider.connection while
+// the plan is being built. The provider wallet is the trader.
 const provider = new AnchorProvider(connection, wallet, {
     commitment: 'processed',
     preflightCommitment: 'processed',
 });
 
+// A SOL short collateralized with USDC. On the default Crypto.1 pool,
+// shorts collateralize with USDC while longs collateralize with the target
+// token itself (native SOL is unsupported in V1 — see below; SOL longs can
+// use JitoSOL).
 const openResult = await getFlashOpenPositionPlan({
     clientConfig: { provider },
-    trader: { owner: signer.address },
+    trader: { owner: provider.wallet.publicKey.toBase58() },
     symbol: 'SOL',
-    side: 'long',
+    side: 'short',
     collateral: {
-        amount: '1.0',
-        symbol: 'SOL',
+        amount: '25',
+        symbol: 'USDC',
     },
     leverage: '2',
     entry: {
         type: 'market',
-        slippageBps: 800,
+        slippageBps: 80, // 0.8% — also the default
     },
     risk: {
-        takeProfit: { triggerPriceUsd: '180.00' },
-        stopLoss: { triggerPriceUsd: '145.00' },
+        takeProfit: { triggerPriceUsd: '145.00' },
+        stopLoss: { triggerPriceUsd: '180.00' },
     },
 });
 
@@ -223,11 +278,48 @@ await executePlan(openResult.plan, {
 
 const closeResult = await getFlashClosePositionPlan({
     clientConfig: { provider },
-    trader: { owner: signer.address },
+    trader: { owner: provider.wallet.publicKey.toBase58() },
     symbol: 'SOL',
-    side: 'long',
+    collateralSymbol: 'USDC',
+    side: 'short',
     size: { percent: 100 },
 });
+```
+
+Behavior worth knowing:
+
+- **Plan building is not offline.** flash-sdk simulates the sizing quote via
+  `provider.connection` and may check ATA existence; a dead RPC endpoint
+  fails plan building, not just execution.
+- **`trader.owner` must equal the provider wallet.** flash-sdk builds every
+  instruction for `provider.wallet.publicKey`; a mismatch throws
+  `FlashTraderMismatchError` instead of producing a plan for the wrong
+  wallet.
+- **Native SOL collateral is rejected in V1** (`UnsupportedFlashCollateralError`):
+  flash-sdk would create an ephemeral wSOL keypair signer that `executePlan`
+  cannot sign. Use USDC or a wrapped/liquid token (WSOL, JitoSOL).
+- **Closes receive the collateral token.** `receiveSymbol` must equal
+  `collateralSymbol` (the collateral drives the position PDA derivation);
+  receiving another token needs flash-sdk's `closeAndSwap`, not wrapped yet.
+- **Prices come from Pyth Hermes by default** via each pool token's
+  `pythPriceId` (`createFlashPythPriceSource`). Inject your own
+  `priceSource` (and/or a custom `fetch`) to override.
+- **Default slippage is 80 bps (0.8%).** flash-sdk interprets slippage with
+  `BPS_DECIMALS = 4`.
+
+### Flash errors
+
+```typescript
+import {
+    FlashPlanError, // base class
+    FlashTraderMismatchError, // exposes .traderOwner and .providerWallet
+    FlashPriceSourceError, // exposes .statusCode and .responseBody
+    UnsupportedFlashCollateralError,
+    UnsupportedFlashOrderConfigError,
+    InvalidFlashAmountError,
+    InvalidFlashRiskConfigError,
+    FlashMarketConfigError,
+} from '@pipeit/actions/flash';
 ```
 
 Flash docs describe the REST API as the primary integration path and the SDK as secondary. This package uses SDK instruction builders because Pipeit composes `InstructionPlan`s instead of opaque ready-to-sign transactions. Flash actions build instructions only; callers remain responsible for funding, signing, eligibility, and trading outcomes.

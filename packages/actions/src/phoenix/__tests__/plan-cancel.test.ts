@@ -2,84 +2,73 @@
  * Tests for Phoenix cancel-order plans.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { getPhoenixCancelAllOrdersPlan, getPhoenixCancelOrdersByIdPlan } from '../plan-cancel.js';
+import { createFakePhoenixClient } from './helpers.js';
 
-const PROGRAM_ADDRESS = '11111111111111111111111111111111';
-
-function createInstruction(data: number[]) {
-    return {
-        programAddress: PROGRAM_ADDRESS,
-        accounts: [],
-        data: new Uint8Array(data),
-    };
-}
-
-function createClient() {
-    return {
-        ixs: {
-            buildCancelAll: vi.fn(async () => createInstruction([1])),
-            buildCancelOrdersById: vi.fn(async () => createInstruction([2])),
-        },
-    };
-}
+const TRADER = { authority: 'authority' } as const;
 
 describe('getPhoenixCancelAllOrdersPlan', () => {
-    it('calls buildCancelAll with authority, symbol, and default indexes', async () => {
-        const client = createClient();
+    it('builds a cancel-all instruction for the trader and market', async () => {
+        const { client, asClient } = createFakePhoenixClient();
 
-        const result = await getPhoenixCancelAllOrdersPlan({
-            client: client as never,
-            trader: { authority: 'authority' },
-            symbol: 'SOL-PERP',
-        });
-
-        expect(client.ixs.buildCancelAll).toHaveBeenCalledWith({
-            authority: 'authority',
-            symbol: 'SOL-PERP',
-            traderPdaIndex: 0,
-            traderSubaccountIndex: 0,
-        });
-        expect(result.plan.kind).toBe('single');
-        expect(result.lookupTableAddresses).toEqual([]);
-    });
-
-    it('uses supplied positionAuthority', async () => {
-        const client = createClient();
-
-        await getPhoenixCancelAllOrdersPlan({
-            client: client as never,
-            trader: { authority: 'authority', positionAuthority: 'position-authority' },
-            symbol: 'SOL-PERP',
-        });
+        const result = await getPhoenixCancelAllOrdersPlan({ client: asClient, trader: TRADER, symbol: 'SOL' });
 
         expect(client.ixs.buildCancelAll).toHaveBeenCalledWith(
-            expect.objectContaining({ positionAuthority: 'position-authority' }),
+            expect.objectContaining({ authority: 'authority', symbol: 'SOL', traderPdaIndex: 0 }),
         );
+        expect(result.order.cancelAll).toBe(true);
+        expect(result.order.orderCount).toBeNull();
+        expect(result.plan.kind).toBe('single');
+    });
+
+    it('does not dispose injected clients', async () => {
+        const { client, asClient } = createFakePhoenixClient();
+
+        await getPhoenixCancelAllOrdersPlan({ client: asClient, trader: TRADER, symbol: 'SOL' });
+
+        expect(client.dispose).not.toHaveBeenCalled();
     });
 });
 
 describe('getPhoenixCancelOrdersByIdPlan', () => {
-    it('passes order ids unchanged', async () => {
-        const client = createClient();
-        const orders = [{ price: 150n, orderSequenceNumber: '42' }];
+    it('forwards exact priceInTicks order refs (preferred over the deprecated float price)', async () => {
+        const { client, asClient } = createFakePhoenixClient();
 
         const result = await getPhoenixCancelOrdersByIdPlan({
-            client: client as never,
-            trader: { authority: 'authority', traderPdaIndex: 2, traderSubaccountIndex: 3 },
-            symbol: 'SOL-PERP',
-            orders,
+            client: asClient,
+            trader: TRADER,
+            symbol: 'SOL',
+            orders: [
+                { priceInTicks: 650n, orderSequenceNumber: '42' },
+                { priceInTicks: '700', orderSequenceNumber: 43n },
+            ],
         });
 
-        expect(client.ixs.buildCancelOrdersById).toHaveBeenCalledWith({
-            authority: 'authority',
-            symbol: 'SOL-PERP',
-            traderPdaIndex: 2,
-            traderSubaccountIndex: 3,
-            orders,
+        expect(client.ixs.buildCancelOrdersById).toHaveBeenCalledWith(
+            expect.objectContaining({
+                orders: [
+                    { priceInTicks: 650n, orderSequenceNumber: '42' },
+                    { priceInTicks: '700', orderSequenceNumber: 43n },
+                ],
+            }),
+        );
+        expect(result.order.cancelAll).toBe(false);
+        expect(result.order.orderCount).toBe(2);
+    });
+
+    it('still supports the deprecated float price path', async () => {
+        const { client, asClient } = createFakePhoenixClient();
+
+        await getPhoenixCancelOrdersByIdPlan({
+            client: asClient,
+            trader: TRADER,
+            symbol: 'SOL',
+            orders: [{ price: 65.13, orderSequenceNumber: 7 }],
         });
-        expect(result.plan.kind).toBe('single');
-        expect(result.order.orderCount).toBe(1);
-        expect(result.lookupTableAddresses).toEqual([]);
+
+        expect(client.ixs.buildCancelOrdersById).toHaveBeenCalledWith(
+            expect.objectContaining({ orders: [{ price: 65.13, orderSequenceNumber: 7 }] }),
+        );
     });
 });

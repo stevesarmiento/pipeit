@@ -30,4 +30,14 @@ export {
     type PhoenixCancelOrdersPlanResult,
 } from './plan-cancel.js';
 
+export {
+    InvalidPhoenixInstructionError,
+    InvalidPhoenixPositionSideError,
+    InvalidPhoenixRiskConfigError,
+    PhoenixClientRequiredError,
+    PhoenixPlanError,
+    UnknownPhoenixMarketError,
+    UnsupportedPhoenixOrderConfigError,
+} from './types.js';
+
 export type * from './types.js';

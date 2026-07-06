@@ -1,6 +1,6 @@
 {
     "name": "@pipeit/actions",
-    "version": "0.1.2",
+    "version": "0.2.0",
     "description": "Composable DeFi InstructionPlan factories for Solana",
     "type": "module",
     "main": "./dist/index.cjs",

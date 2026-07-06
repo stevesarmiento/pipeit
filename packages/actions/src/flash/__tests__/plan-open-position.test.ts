@@ -1,259 +1,296 @@
 /**
  * Tests for Flash open-position plans.
+ *
+ * Uses the REAL bundled Crypto.1 PoolConfig for token/custody/market
+ * resolution, and asserts exact BN values instead of expect.anything().
  */
 
 import { BN } from '@coral-xyz/anchor';
-import { PublicKey, TransactionInstruction } from '@solana/web3.js';
-import { OraclePrice, Side } from 'flash-sdk';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { getFlashOpenPositionPlan } from '../plan-open-position.js';
-import { InvalidFlashRiskConfigError, UnsupportedFlashAdditionalSignersError } from '../types.js';
+import {
+    FlashMarketConfigError,
+    FlashTraderMismatchError,
+    InvalidFlashAmountError,
+    InvalidFlashRiskConfigError,
+    UnsupportedFlashCollateralError,
+} from '../types.js';
+import { OWNER, PRICE_WITH_SLIPPAGE, createFakeFlashClient, createStubPriceSource } from './helpers.js';
 
-const PROGRAM_ID = new PublicKey('11111111111111111111111111111111');
-const OWNER = new PublicKey('SysvarRent111111111111111111111111111111111');
+// Crypto.1 shorts collateralize with USDC (longs use the target token,
+// which is native SOL for SOL longs — unsupported in V1).
+const BASE_OPTIONS = {
+    trader: { owner: OWNER },
+    symbol: 'SOL',
+    side: 'short',
+    collateral: { amount: '25', symbol: 'USDC' },
+    leverage: 5,
+} as const;
 
-function instruction(data: number[]) {
-    return new TransactionInstruction({ programId: PROGRAM_ID, keys: [], data: Buffer.from(data) });
-}
-
-function price() {
-    return new OraclePrice({
-        price: new BN('15000000000'),
-        exponent: new BN(-8),
-        confidence: new BN(0),
-        timestamp: new BN(1),
-    });
-}
-
-function priceSource() {
-    return vi.fn(async (symbols: string[]) => new Map(symbols.map(symbol => [symbol, price()])));
-}
-
-function createContext() {
-    const targetCustody = { symbol: 'SOL', custodyAccount: new PublicKey('11111111111111111111111111111111') };
-    const collateralCustody = {
-        symbol: 'USDC',
-        custodyAccount: new PublicKey('SysvarC1ock11111111111111111111111111111111'),
-    };
-    const poolConfig = {
-        poolName: 'Crypto.1',
-        custodies: [targetCustody, collateralCustody],
-        getTokenFromSymbol: vi.fn((symbol: string) => ({ symbol, decimals: symbol === 'SOL' ? 9 : 6 })),
-        getMarketConfig: vi.fn(() => ({ marketAccount: new PublicKey('SysvarRent111111111111111111111111111111111') })),
-    };
-    const quote = { sizeAmount: new BN(1000) };
-
-    return {
-        quote,
-        cluster: 'mainnet-beta',
-        poolName: 'Crypto.1',
-        poolConfig,
-        client: {
-            getOrLoadAddressLookupTable: vi.fn(async () => ({ addressLookupTables: [] })),
-            getOpenPositionQuote: vi.fn(async () => quote),
-            getPriceAfterSlippage: vi.fn(() => ({ price: new BN(150), exponent: -2 })),
-            openPosition: vi.fn(async () => ({ instructions: [instruction([1])], additionalSigners: [] })),
-            placeLimitOrder: vi.fn(async () => ({ instructions: [instruction([2])], additionalSigners: [] })),
-            placeTriggerOrder: vi.fn(async () => ({ instructions: [instruction([3])], additionalSigners: [] })),
-        },
-    };
+function setup() {
+    const { client, context } = createFakeFlashClient();
+    const { priceSource, calls } = createStubPriceSource();
+    return { client, context, priceSource, priceSourceCalls: calls };
 }
 
 describe('getFlashOpenPositionPlan', () => {
-    it('opens a market long with Side.Long', async () => {
-        const context = createContext();
-
-        const result = await getFlashOpenPositionPlan({
-            context: context as never,
-            priceSource: priceSource(),
-            trader: { owner: OWNER.toBase58() },
-            symbol: 'SOL',
-            side: 'long',
-            collateral: { amount: '1', symbol: 'USDC' },
-            leverage: '2',
-            entry: { type: 'market' },
-        });
-
-        expect(context.client.getOpenPositionQuote).toHaveBeenCalledWith(
-            expect.any(BN),
-            expect.any(BN),
-            expect.anything(),
-            context.poolConfig,
-            expect.anything(),
-            expect.objectContaining({ symbol: 'USDC' }),
-            undefined,
-            null,
-            null,
-            OWNER,
-            null,
-            null,
-        );
-        expect(context.client.getPriceAfterSlippage).toHaveBeenCalledWith(
-            true,
-            expect.any(BN),
-            expect.anything(),
-            Side.Long,
-        );
-        expect(context.client.openPosition).toHaveBeenCalledWith(
-            'SOL',
-            'USDC',
-            expect.anything(),
-            expect.any(BN),
-            context.quote.sizeAmount,
-            Side.Long,
-            context.poolConfig,
-            expect.anything(),
-            undefined,
-            undefined,
-            undefined,
-        );
-        expect(result.plan.kind).toBe('single');
-    });
-
-    it('opens a market short with Side.Short', async () => {
-        const context = createContext();
+    it('quotes with exact native collateral and BPS-scaled leverage', async () => {
+        const { client, context, priceSource } = setup();
 
         await getFlashOpenPositionPlan({
-            context: context as never,
-            priceSource: priceSource(),
-            trader: { owner: OWNER.toBase58() },
-            symbol: 'SOL',
-            side: 'short',
-            collateral: { amount: '1', symbol: 'USDC' },
-            leverage: '2',
+            ...BASE_OPTIONS,
+            context,
+            priceSource,
             entry: { type: 'market' },
         });
 
-        expect(context.client.openPosition).toHaveBeenCalledWith(
-            expect.anything(),
-            expect.anything(),
-            expect.anything(),
-            expect.anything(),
-            expect.anything(),
-            Side.Short,
-            expect.anything(),
-            expect.anything(),
-            undefined,
-            undefined,
-            undefined,
-        );
+        const [collateralAmount, leverage] = client.getOpenPositionQuote.mock.calls[0];
+        expect((collateralAmount as BN).toString()).toBe('25000000'); // 25 USDC @ 6 decimals
+        expect((leverage as BN).toString()).toBe('50000'); // 5x @ BPS_POWER 10^4
     });
 
-    it('appends take-profit and stop-loss trigger orders for market entries', async () => {
-        const context = createContext();
+    it('defaults market slippage to 80 bps (0.8%), not 800', async () => {
+        const { client, context, priceSource } = setup();
 
         const result = await getFlashOpenPositionPlan({
-            context: context as never,
-            priceSource: priceSource(),
-            trader: { owner: OWNER.toBase58() },
-            symbol: 'SOL',
-            side: 'long',
-            collateral: { amount: '1', symbol: 'USDC' },
-            leverage: '2',
+            ...BASE_OPTIONS,
+            context,
+            priceSource,
+            entry: { type: 'market' },
+        });
+
+        const slippage = client.getPriceAfterSlippage.mock.calls[0][1] as BN;
+        expect(slippage.toString()).toBe('80');
+        expect(result.order.slippageBps).toBe(80);
+    });
+
+    it('passes explicit slippage through and hands the guarded price to openPosition', async () => {
+        const { client, context, priceSource } = setup();
+
+        await getFlashOpenPositionPlan({
+            ...BASE_OPTIONS,
+            context,
+            priceSource,
+            entry: { type: 'market', slippageBps: 25 },
+        });
+
+        expect((client.getPriceAfterSlippage.mock.calls[0][1] as BN).toString()).toBe('25');
+        const openArgs = client.openPosition.mock.calls[0];
+        expect(openArgs[0]).toBe('SOL');
+        expect(openArgs[1]).toBe('USDC');
+        expect(openArgs[2]).toBe(PRICE_WITH_SLIPPAGE);
+    });
+
+    it('fetches only the target symbol price (collateral price is unused)', async () => {
+        const { context, priceSource, priceSourceCalls } = setup();
+
+        await getFlashOpenPositionPlan({
+            ...BASE_OPTIONS,
+            context,
+            priceSource,
+            entry: { type: 'market' },
+        });
+
+        expect(priceSourceCalls).toEqual([['SOL']]);
+    });
+
+    it('encodes trigger prices as exact contract oracle prices', async () => {
+        const { client, context, priceSource } = setup();
+
+        await getFlashOpenPositionPlan({
+            ...BASE_OPTIONS,
+            context,
+            priceSource,
             entry: { type: 'market' },
             risk: {
-                takeProfit: { triggerPriceUsd: '165', sizePercent: 50 },
-                stopLoss: { triggerPriceUsd: '142' },
+                takeProfit: { triggerPriceUsd: '140.25' }, // short TP below entry
+                stopLoss: { triggerPriceUsd: '160.5' },
             },
         });
 
-        expect(context.client.placeTriggerOrder).toHaveBeenCalledTimes(2);
-        expect(context.client.placeTriggerOrder).toHaveBeenNthCalledWith(
-            1,
-            'SOL',
-            'USDC',
-            'USDC',
-            Side.Long,
-            expect.objectContaining({ price: expect.any(BN) }),
-            expect.any(BN),
-            false,
-            context.poolConfig,
-        );
-        expect(context.client.placeTriggerOrder).toHaveBeenNthCalledWith(
-            2,
-            'SOL',
-            'USDC',
-            'USDC',
-            Side.Long,
-            expect.objectContaining({ price: expect.any(BN) }),
-            expect.any(BN),
-            true,
-            context.poolConfig,
-        );
+        const tpArgs = client.placeTriggerOrder.mock.calls[0];
+        expect(tpArgs[4].price.toString()).toBe('14025');
+        expect(tpArgs[4].exponent).toBe(-2);
+        expect(tpArgs[6]).toBe(false); // isStopLoss
+
+        const slArgs = client.placeTriggerOrder.mock.calls[1];
+        expect(slArgs[4].price.toString()).toBe('1605');
+        expect(slArgs[4].exponent).toBe(-1);
+        expect(slArgs[6]).toBe(true);
+    });
+
+    it('applies sizePercent to trigger order sizes with exact math', async () => {
+        const { client, context, priceSource } = setup();
+
+        await getFlashOpenPositionPlan({
+            ...BASE_OPTIONS,
+            context,
+            priceSource,
+            entry: { type: 'market' },
+            risk: { takeProfit: { triggerPriceUsd: '140', sizePercent: 50 } },
+        });
+
+        // quote.sizeAmount is 1_000_000_000 in the fake client
+        expect(client.placeTriggerOrder.mock.calls[0][5].toString()).toBe('500000000');
+    });
+
+    it('combines entry and trigger instructions in a NON-DIVISIBLE plan', async () => {
+        const { context, priceSource } = setup();
+
+        const result = await getFlashOpenPositionPlan({
+            ...BASE_OPTIONS,
+            context,
+            priceSource,
+            entry: { type: 'market' },
+            risk: { stopLoss: { triggerPriceUsd: '160' } },
+        });
+
         expect(result.plan.kind).toBe('sequential');
+        expect((result.plan as { divisible?: boolean }).divisible).toBe(false);
+        expect(result.flash.instructions).toHaveLength(2);
     });
 
-    it('places a limit order and maps TP/SL prices', async () => {
-        const context = createContext();
+    it('embeds TP/SL prices in limit orders', async () => {
+        const { client, context, priceSource } = setup();
 
         await getFlashOpenPositionPlan({
-            context: context as never,
-            priceSource: priceSource(),
-            trader: { owner: OWNER.toBase58() },
-            symbol: 'SOL',
-            side: 'long',
-            collateral: { amount: '1', symbol: 'USDC' },
-            leverage: '2',
-            entry: { type: 'limit', priceUsd: '150.50', reserveSymbol: 'USDC', receiveSymbol: 'USDC' },
+            ...BASE_OPTIONS,
+            context,
+            priceSource,
+            entry: { type: 'limit', priceUsd: '155' },
             risk: {
-                takeProfit: { triggerPriceUsd: '165.25' },
-                stopLoss: { triggerPriceUsd: '142.75' },
+                takeProfit: { triggerPriceUsd: '140' },
+                stopLoss: { triggerPriceUsd: '160.5' },
             },
         });
 
-        expect(context.client.placeLimitOrder).toHaveBeenCalledWith(
-            'SOL',
-            'USDC',
-            'USDC',
-            'USDC',
-            Side.Long,
-            expect.objectContaining({ exponent: -2 }),
-            expect.any(BN),
-            context.quote.sizeAmount,
-            expect.objectContaining({ exponent: -2 }),
-            expect.objectContaining({ exponent: -2 }),
-            context.poolConfig,
-            undefined,
-        );
+        expect(client.placeTriggerOrder).not.toHaveBeenCalled();
+        const limitArgs = client.placeLimitOrder.mock.calls[0];
+        expect(limitArgs[5].price.toString()).toBe('155'); // limit price
+        expect(limitArgs[8].price.toString()).toBe('1605'); // stop-loss
+        expect(limitArgs[9].price.toString()).toBe('140'); // take-profit
     });
 
-    it('rejects non-empty additional signers', async () => {
-        const context = createContext();
-        context.client.openPosition.mockResolvedValueOnce({
-            instructions: [instruction([1])],
-            additionalSigners: [{ publicKey: OWNER }],
+    describe('validation', () => {
+        it('rejects trader owners that do not match the provider wallet', async () => {
+            const { context, priceSource } = setup();
+
+            await expect(
+                getFlashOpenPositionPlan({
+                    ...BASE_OPTIONS,
+                    trader: { owner: 'So11111111111111111111111111111111111111112' },
+                    context,
+                    priceSource,
+                    entry: { type: 'market' },
+                }),
+            ).rejects.toThrow(FlashTraderMismatchError);
         });
 
-        await expect(
-            getFlashOpenPositionPlan({
-                context: context as never,
-                priceSource: priceSource(),
-                trader: { owner: OWNER.toBase58() },
-                symbol: 'SOL',
-                side: 'long',
-                collateral: { amount: '1', symbol: 'USDC' },
-                leverage: '2',
-                entry: { type: 'market' },
-            }),
-        ).rejects.toThrow(UnsupportedFlashAdditionalSignersError);
-    });
+        it('rejects native SOL collateral with an actionable error', async () => {
+            const { context, priceSource } = setup();
 
-    it('rejects matching TP and SL trigger prices', async () => {
-        await expect(
-            getFlashOpenPositionPlan({
-                context: createContext() as never,
-                priceSource: priceSource(),
-                trader: { owner: OWNER.toBase58() },
-                symbol: 'SOL',
-                side: 'long',
-                collateral: { amount: '1', symbol: 'USDC' },
-                leverage: '2',
-                entry: { type: 'market' },
-                risk: {
-                    takeProfit: { triggerPriceUsd: '150' },
-                    stopLoss: { triggerPriceUsd: '150' },
-                },
-            }),
-        ).rejects.toThrow(InvalidFlashRiskConfigError);
+            await expect(
+                getFlashOpenPositionPlan({
+                    ...BASE_OPTIONS,
+                    context,
+                    priceSource,
+                    side: 'long',
+                    collateral: { amount: '1.0', symbol: 'SOL' },
+                    entry: { type: 'market' },
+                }),
+            ).rejects.toThrow(UnsupportedFlashCollateralError);
+        });
+
+        it('rejects market/collateral/side combos missing from the real pool', async () => {
+            const { context, priceSource } = setup();
+
+            // Crypto.1 has no SOL long with USDC collateral.
+            await expect(
+                getFlashOpenPositionPlan({
+                    ...BASE_OPTIONS,
+                    context,
+                    priceSource,
+                    side: 'long',
+                    entry: { type: 'market' },
+                }),
+            ).rejects.toThrow(FlashMarketConfigError);
+        });
+
+        it('rejects equal TP/SL triggers even with different formatting', async () => {
+            const { context, priceSource } = setup();
+
+            await expect(
+                getFlashOpenPositionPlan({
+                    ...BASE_OPTIONS,
+                    context,
+                    priceSource,
+                    entry: { type: 'market' },
+                    risk: {
+                        takeProfit: { triggerPriceUsd: '150' },
+                        stopLoss: { triggerPriceUsd: '150.0' },
+                    },
+                }),
+            ).rejects.toThrow(InvalidFlashRiskConfigError);
+        });
+
+        it('rejects short TP above SL', async () => {
+            const { context, priceSource } = setup();
+
+            await expect(
+                getFlashOpenPositionPlan({
+                    ...BASE_OPTIONS,
+                    context,
+                    priceSource,
+                    entry: { type: 'market' },
+                    risk: {
+                        takeProfit: { triggerPriceUsd: '160' },
+                        stopLoss: { triggerPriceUsd: '140' },
+                    },
+                }),
+            ).rejects.toThrow(InvalidFlashRiskConfigError);
+        });
+
+        it('rejects risk triggers on the wrong side of a limit entry', async () => {
+            const { context, priceSource } = setup();
+
+            await expect(
+                getFlashOpenPositionPlan({
+                    ...BASE_OPTIONS,
+                    context,
+                    priceSource,
+                    entry: { type: 'limit', priceUsd: '150' },
+                    risk: { takeProfit: { triggerPriceUsd: '155' } }, // short TP must be below entry
+                }),
+            ).rejects.toThrow(InvalidFlashRiskConfigError);
+        });
+
+        it('rejects sizePercent/receiveSymbol on limit-entry risk legs instead of ignoring them', async () => {
+            const { context, priceSource } = setup();
+
+            await expect(
+                getFlashOpenPositionPlan({
+                    ...BASE_OPTIONS,
+                    context,
+                    priceSource,
+                    entry: { type: 'limit', priceUsd: '155' },
+                    risk: { takeProfit: { triggerPriceUsd: '140', sizePercent: 50 } },
+                }),
+            ).rejects.toThrow(InvalidFlashRiskConfigError);
+        });
+
+        it('rejects zero, negative, and malformed amounts with typed errors', async () => {
+            for (const amount of ['0', '-5', '1e-3', 'abc', 0, -1] as const) {
+                const { context, priceSource } = setup();
+                await expect(
+                    getFlashOpenPositionPlan({
+                        ...BASE_OPTIONS,
+                        context,
+                        priceSource,
+                        collateral: { amount, symbol: 'USDC' },
+                        entry: { type: 'market' },
+                    }),
+                ).rejects.toThrow(InvalidFlashAmountError);
+            }
+        });
     });
 });

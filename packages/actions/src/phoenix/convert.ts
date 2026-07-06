@@ -4,19 +4,24 @@
  * @packageDocumentation
  */
 
-import { address, type Address } from '@solana/addresses';
+import { address } from '@solana/addresses';
 import type { AccountRole, Instruction } from '@solana/instructions';
+import type { RiseInstructionLike } from './types.js';
 import { InvalidPhoenixInstructionError } from './types.js';
 
-export interface RiseInstructionLike {
-    programAddress?: string | Address;
-    accounts?: readonly {
-        address?: string | Address;
-        role: AccountRole | number;
-    }[];
-    data?: ArrayLike<number>;
-}
+export type { RiseInstructionLike } from './types.js';
 
+/**
+ * Converts a Rise instruction (kit v4-typed) into this package's Kit
+ * {@link Instruction} shape. Account roles share the same 0-3 enum encoding;
+ * addresses are revalidated and instruction data is defensively copied.
+ *
+ * @example
+ * ```ts
+ * const ix = await client.ixs.buildCancelAll({ authority, symbol });
+ * const kitIx = riseInstructionToKit(ix);
+ * ```
+ */
 export function riseInstructionToKit(instruction: RiseInstructionLike): Instruction {
     if (!instruction.programAddress) {
         throw new InvalidPhoenixInstructionError('Phoenix instruction is missing a programAddress.');
@@ -38,6 +43,10 @@ export function riseInstructionToKit(instruction: RiseInstructionLike): Instruct
     };
 }
 
+/**
+ * Converts a list of Rise instructions to Kit instructions.
+ * See {@link riseInstructionToKit}.
+ */
 export function riseInstructionsToKit(instructions: RiseInstructionLike[]): Instruction[] {
     return instructions.map(riseInstructionToKit);
 }

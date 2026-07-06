@@ -18,26 +18,39 @@ import {
     type PoolConfig,
     type Token,
 } from 'flash-sdk';
-import { type InstructionPlan, sequentialInstructionPlan, singleInstructionPlan } from '@solana/instruction-plans';
+import {
+    type InstructionPlan,
+    nonDivisibleSequentialInstructionPlan,
+    singleInstructionPlan,
+} from '@solana/instruction-plans';
 import type { Address } from '@solana/addresses';
 import { createFlashActionsClient } from './client.js';
 import { web3InstructionToKit, web3LookupTableAddressesToKit } from './convert.js';
 import {
     FlashClientRequiredError,
     FlashMarketConfigError,
+    FlashTraderMismatchError,
+    InvalidFlashAmountError,
     InvalidFlashPositionSideError,
     UnsupportedFlashAdditionalSignersError,
+    UnsupportedFlashCollateralError,
     UnsupportedFlashOrderConfigError,
     type FlashActionsContext,
     type FlashActionsOptions,
     type FlashPositionSide,
     type FlashPriceSource,
     type FlashSdkInstructionResult,
+    type FlashTraderRef,
 } from './types.js';
 
 export const FLASH_DEFAULT_POOL_NAME = 'Crypto.1';
 export const FLASH_DEFAULT_CLUSTER = 'mainnet-beta';
-export const FLASH_DEFAULT_SLIPPAGE_BPS = 800;
+/**
+ * Default slippage tolerance: 0.8%. flash-sdk's `getPriceAfterSlippage` uses
+ * `BPS_DECIMALS = 4` (bps / 10^4), so 80 → 0.8%. The previous default of 800
+ * was an 8% tolerance — an 80% equity swing at 10x leverage.
+ */
+export const FLASH_DEFAULT_SLIPPAGE_BPS = 80;
 
 export function resolveFlashContext(options: FlashActionsOptions): FlashActionsContext {
     if (options.context) {
@@ -76,11 +89,18 @@ export function publicKey(value: Address | string): PublicKey {
 }
 
 export function getTokenConfig(poolConfig: PoolConfig, symbol: string): Token {
+    let token: Token | undefined;
     try {
-        return poolConfig.getTokenFromSymbol(symbol);
+        token = poolConfig.getTokenFromSymbol(symbol);
     } catch {
+        token = undefined;
+    }
+
+    if (!token) {
         throw new FlashMarketConfigError(`Flash pool ${poolConfig.poolName} does not contain token ${symbol}.`);
     }
+
+    return token;
 }
 
 export function getCustodyConfig(poolConfig: PoolConfig, symbol: string): CustodyConfig {
@@ -132,19 +152,58 @@ export function requiredPrice(prices: Map<string, OraclePrice>, symbol: string):
     return price;
 }
 
+const DECIMAL_STRING_PATTERN = /^\d+(\.\d+)?$/;
+
+/**
+ * Normalizes and validates a user-supplied numeric value as a plain
+ * non-negative decimal string. Rejects negatives, scientific notation
+ * (`String(1e-7) === '1e-7'` would otherwise crash BN construction), and
+ * non-numeric strings with a typed error instead of an opaque BN crash.
+ */
+export function toDecimalString(value: number | string | bigint, label: string): string {
+    if (typeof value === 'bigint') {
+        if (value < 0n) {
+            throw new InvalidFlashAmountError(`Flash ${label} must not be negative (got ${value.toString()}).`);
+        }
+        return value.toString();
+    }
+
+    if (typeof value === 'number' && !Number.isFinite(value)) {
+        throw new InvalidFlashAmountError(`Flash ${label} must be a finite number (got ${String(value)}).`);
+    }
+
+    const raw = String(value);
+    if (!DECIMAL_STRING_PATTERN.test(raw)) {
+        throw new InvalidFlashAmountError(
+            `Flash ${label} must be a plain non-negative decimal (got "${raw}"); pass a string for very small or very large values.`,
+        );
+    }
+
+    return raw;
+}
+
+/** Validates that a numeric input is a strictly positive plain decimal. */
+export function assertPositiveDecimal(value: number | string | bigint, label: string): void {
+    const raw = toDecimalString(value, label);
+    if (!/[1-9]/.test(raw)) {
+        throw new InvalidFlashAmountError(`Flash ${label} must be greater than zero.`);
+    }
+}
+
 export function amountToNative(amount: number | string | bigint, decimals: number): BN {
-    return uiDecimalsToNative(String(amount), decimals);
+    return uiDecimalsToNative(toDecimalString(amount, 'amount'), decimals);
 }
 
 export function decimalToScaledBn(value: number | string | bigint, decimals: number): BN {
     if (typeof value === 'bigint') {
+        toDecimalString(value, 'value');
         return new BN(value.toString()).mul(new BN(10).pow(new BN(decimals)));
     }
 
-    const raw = String(value);
+    const raw = toDecimalString(value, 'value');
     const [whole = '0', fraction = ''] = raw.split('.');
     const normalizedFraction = fraction.padEnd(decimals, '0').slice(0, decimals);
-    return new BN(`${whole}${normalizedFraction}`.replace(/^(-?)0+(?=\d)/, '$1'));
+    return new BN(`${whole}${normalizedFraction}`.replace(/^0+(?=\d)/, ''));
 }
 
 export function usdToNative(value: number | string | bigint): BN {
@@ -152,6 +211,8 @@ export function usdToNative(value: number | string | bigint): BN {
 }
 
 export function priceUsdToContractOraclePrice(value: number | string | bigint): ContractOraclePrice {
+    assertPositiveDecimal(value, 'price');
+
     if (typeof value === 'bigint') {
         return {
             price: new BN(value.toString()),
@@ -159,12 +220,23 @@ export function priceUsdToContractOraclePrice(value: number | string | bigint): 
         };
     }
 
-    const raw = String(value);
+    const raw = toDecimalString(value, 'price');
     const [whole = '0', fraction = ''] = raw.split('.');
     return {
-        price: new BN(`${whole}${fraction}`.replace(/^(-?)0+(?=\d)/, '$1')),
-        exponent: -fraction.length,
+        price: new BN(`${whole}${fraction}`.replace(/^0+(?=\d)/, '')),
+        // `0 - length` (not `-length`) so whole numbers yield +0, not -0.
+        exponent: 0 - fraction.length,
     };
+}
+
+/**
+ * Compares two USD decimal inputs at a fixed scale, so `'150'`, `'150.0'`,
+ * and `150` compare equal. Returns -1, 0, or 1.
+ */
+export function compareUsdValues(a: number | string | bigint, b: number | string | bigint): number {
+    const scaledA = decimalToScaledBn(a, 12);
+    const scaledB = decimalToScaledBn(b, 12);
+    return scaledA.cmp(scaledB);
 }
 
 export const ZERO_CONTRACT_ORACLE_PRICE: ContractOraclePrice = {
@@ -173,7 +245,7 @@ export const ZERO_CONTRACT_ORACLE_PRICE: ContractOraclePrice = {
 };
 
 export function sizeAmountForPercent(sizeAmount: BN, percent = 100): BN {
-    if (percent <= 0 || percent > 100) {
+    if (typeof percent !== 'number' || !Number.isFinite(percent) || percent <= 0 || percent > 100) {
         throw new UnsupportedFlashOrderConfigError('Flash risk sizePercent must be greater than 0 and at most 100.');
     }
 
@@ -188,12 +260,45 @@ export function assertNoAdditionalSigners(result: FlashSdkInstructionResult, lab
     }
 }
 
+/**
+ * Rejects native SOL early with an actionable error. flash-sdk handles SOL
+ * collateral by creating an ephemeral wSOL Keypair signer, which
+ * `executePlan` cannot sign in V1 — without this guard the failure surfaces
+ * as a generic additional-signers error at the end of plan building.
+ */
+export function assertSupportedCollateral(symbol: string, label: string): void {
+    if (symbol === 'SOL') {
+        throw new UnsupportedFlashCollateralError(
+            `Flash ${label} does not support native SOL in V1 (flash-sdk requires an ephemeral wSOL signer). ` +
+                'Use an SPL token such as USDC, or pre-wrapped WSOL.',
+        );
+    }
+}
+
+/**
+ * flash-sdk builds every instruction for `provider.wallet.publicKey`; a
+ * mismatching `trader.owner` would silently produce plans that fail
+ * signature verification or route funds to the wrong wallet's ATAs.
+ */
+export function assertTraderMatchesProvider(context: FlashActionsContext, trader: FlashTraderRef): void {
+    const providerWallet = context.client.provider.wallet.publicKey.toBase58();
+    const traderOwner = String(trader.owner);
+    if (traderOwner !== providerWallet) {
+        throw new FlashTraderMismatchError(traderOwner, providerWallet);
+    }
+}
+
+/**
+ * flash-sdk instruction groups (ATA create → open/close → wSOL teardown,
+ * entry → trigger orders) must land in a single transaction, so multi-
+ * instruction plans are non-divisible.
+ */
 export function buildInstructionPlan(instructions: ReturnType<typeof web3InstructionToKit>[]): InstructionPlan {
     if (instructions.length === 1) {
         return singleInstructionPlan(instructions[0]);
     }
 
-    return sequentialInstructionPlan(instructions.map(instruction => singleInstructionPlan(instruction)));
+    return nonDivisibleSequentialInstructionPlan(instructions);
 }
 
 export function flashPrivilegeNone() {

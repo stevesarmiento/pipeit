@@ -15,7 +15,13 @@ export {
     type Web3InstructionLike,
 } from './convert.js';
 
-export { createFlashApiPriceSource, flashApiPriceToOraclePrice, FLASH_DEFAULT_API_BASE_URL } from './price-source.js';
+export {
+    createFlashPythPriceSource,
+    pythPriceToOraclePrice,
+    FLASH_PYTH_HERMES_BASE_URL,
+    type FlashPythPriceSourceConfig,
+    type PythParsedPrice,
+} from './price-source.js';
 
 export {
     getFlashOpenPositionPlan,
@@ -36,5 +42,20 @@ export {
     type FlashCancelAllTriggerOrdersPlanOptions,
     type FlashCancelTriggerOrdersPlanResult,
 } from './plan-cancel.js';
+
+export {
+    FlashClientRequiredError,
+    FlashMarketConfigError,
+    FlashPlanError,
+    FlashPriceSourceError,
+    FlashTraderMismatchError,
+    InvalidFlashAmountError,
+    InvalidFlashInstructionError,
+    InvalidFlashPositionSideError,
+    InvalidFlashRiskConfigError,
+    UnsupportedFlashAdditionalSignersError,
+    UnsupportedFlashCollateralError,
+    UnsupportedFlashOrderConfigError,
+} from './types.js';
 
 export type * from './types.js';

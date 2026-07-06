@@ -2,73 +2,64 @@
  * Tests for Flash trigger-order cancel plans.
  */
 
-import { PublicKey, TransactionInstruction } from '@solana/web3.js';
-import { Side } from 'flash-sdk';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { getFlashCancelAllTriggerOrdersPlan, getFlashCancelTriggerOrderPlan } from '../plan-cancel.js';
+import { FlashTraderMismatchError } from '../types.js';
+import { OWNER, createFakeFlashClient } from './helpers.js';
 
-const PROGRAM_ID = new PublicKey('11111111111111111111111111111111');
+const BASE_OPTIONS = {
+    trader: { owner: OWNER },
+    symbol: 'SOL',
+    collateralSymbol: 'USDC',
+    side: 'short',
+} as const;
 
-function instruction(data: number[]) {
-    return new TransactionInstruction({ programId: PROGRAM_ID, keys: [], data: Buffer.from(data) });
-}
-
-function createContext() {
-    return {
-        cluster: 'mainnet-beta',
-        poolName: 'Crypto.1',
-        poolConfig: { poolName: 'Crypto.1' },
-        client: {
-            getOrLoadAddressLookupTable: vi.fn(async () => ({ addressLookupTables: [] })),
-            cancelTriggerOrder: vi.fn(async () => ({ instructions: [instruction([1])], additionalSigners: [] })),
-            cancelAllTriggerOrders: vi.fn(async () => ({ instructions: [instruction([2])], additionalSigners: [] })),
-        },
-    };
-}
-
-describe('Flash trigger cancel plans', () => {
-    it('cancels one trigger order', async () => {
-        const context = createContext();
+describe('getFlashCancelTriggerOrderPlan', () => {
+    it('cancels a single trigger order by id', async () => {
+        const { client, context } = createFakeFlashClient();
 
         const result = await getFlashCancelTriggerOrderPlan({
-            context: context as never,
-            trader: { owner: 'owner' },
-            symbol: 'SOL',
-            side: 'long',
-            orderId: 4,
+            ...BASE_OPTIONS,
+            context,
+            orderId: 3,
             isStopLoss: true,
         });
 
-        expect(context.client.cancelTriggerOrder).toHaveBeenCalledWith(
-            'SOL',
-            'SOL',
-            Side.Long,
-            4,
-            true,
-            context.poolConfig,
-        );
+        const args = client.cancelTriggerOrder.mock.calls[0];
+        expect(args[0]).toBe('SOL');
+        expect(args[1]).toBe('USDC');
+        expect(args[3]).toBe(3);
+        expect(args[4]).toBe(true);
+        expect(result.order.cancelAll).toBe(false);
+        expect(result.order.orderId).toBe(3);
         expect(result.plan.kind).toBe('single');
-        expect(result.order.orderId).toBe(4);
     });
 
-    it('cancels all trigger orders', async () => {
-        const context = createContext();
+    it('rejects mismatching traders', async () => {
+        const { context } = createFakeFlashClient();
 
-        const result = await getFlashCancelAllTriggerOrdersPlan({
-            context: context as never,
-            trader: { owner: 'owner' },
-            symbol: 'SOL',
-            collateralSymbol: 'USDC',
-            side: 'short',
-        });
+        await expect(
+            getFlashCancelTriggerOrderPlan({
+                ...BASE_OPTIONS,
+                trader: { owner: 'So11111111111111111111111111111111111111112' },
+                context,
+                orderId: 3,
+                isStopLoss: true,
+            }),
+        ).rejects.toThrow(FlashTraderMismatchError);
+    });
+});
 
-        expect(context.client.cancelAllTriggerOrders).toHaveBeenCalledWith(
-            'SOL',
-            'USDC',
-            Side.Short,
-            context.poolConfig,
-        );
-        expect(result.plan.kind).toBe('single');
+describe('getFlashCancelAllTriggerOrdersPlan', () => {
+    it('cancels all trigger orders for the position', async () => {
+        const { client, context } = createFakeFlashClient();
+
+        const result = await getFlashCancelAllTriggerOrdersPlan({ ...BASE_OPTIONS, context });
+
+        const args = client.cancelAllTriggerOrders.mock.calls[0];
+        expect(args[0]).toBe('SOL');
+        expect(args[1]).toBe('USDC');
         expect(result.order.cancelAll).toBe(true);
+        expect(result.order.orderId).toBeNull();
     });
 });

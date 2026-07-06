@@ -4,106 +4,85 @@
  * @packageDocumentation
  */
 
-import { Side, type Authority, type Symbol as RiseSymbol } from '@ellipsis-labs/rise';
+import { OrderFlags } from '@ellipsis-labs/rise';
 import { singleInstructionPlan } from '@solana/instruction-plans';
-import type { Address } from '@solana/addresses';
-import { createPhoenixActionsClient } from './client.js';
 import { riseInstructionToKit } from './convert.js';
-import type {
-    PhoenixBaseSize,
-    PhoenixClosePositionPlanOptions,
-    PhoenixClosePositionPlanResult,
-    PhoenixOrderSide,
-    PhoenixPositionSide,
-    PhoenixTraderAccountRef,
-} from './types.js';
-import { InvalidPhoenixPositionSideError, UnsupportedPhoenixOrderConfigError } from './types.js';
+import { accountParams, asSymbol, assertNonZeroBaseLots, assertPositiveSize, closeSideFor, resolvePhoenixClient } from './shared.js';
+import type { PhoenixClosePositionPlanOptions, PhoenixClosePositionPlanResult } from './types.js';
 
 export type { PhoenixClosePositionPlanOptions, PhoenixClosePositionPlanResult } from './types.js';
 
-function asAuthority(value: Address | string): Authority {
-    return String(value) as Authority;
-}
-
-function asSymbol(value: string): RiseSymbol {
-    return value as RiseSymbol;
-}
-
-function accountParams(trader: PhoenixTraderAccountRef) {
-    const params: {
-        authority: Authority;
-        positionAuthority?: Authority;
-        traderPdaIndex: number;
-        traderSubaccountIndex: number;
-    } = {
-        authority: asAuthority(trader.authority),
-        traderPdaIndex: trader.traderPdaIndex ?? 0,
-        traderSubaccountIndex: trader.traderSubaccountIndex ?? 0,
-    };
-
-    if (trader.positionAuthority !== undefined) {
-        params.positionAuthority = asAuthority(trader.positionAuthority);
-    }
-
-    return params;
-}
-
-function closeSideFor(positionSide: PhoenixPositionSide): { riseSide: Side; orderSide: PhoenixOrderSide } {
-    if (positionSide === 'long') {
-        return { riseSide: Side.Ask, orderSide: 'ask' };
-    }
-    if (positionSide === 'short') {
-        return { riseSide: Side.Bid, orderSide: 'bid' };
-    }
-
-    throw new InvalidPhoenixPositionSideError(`Unsupported Phoenix position side: ${String(positionSide)}`);
-}
-
-function assertPositiveSize(size: PhoenixBaseSize): void {
-    if (typeof size.baseUnits === 'bigint' && size.baseUnits <= 0n) {
-        throw new UnsupportedPhoenixOrderConfigError('Phoenix close size baseUnits must be greater than zero.');
-    }
-    if (typeof size.baseUnits === 'number' && size.baseUnits <= 0) {
-        throw new UnsupportedPhoenixOrderConfigError('Phoenix close size baseUnits must be greater than zero.');
-    }
-}
-
+/**
+ * Builds an InstructionPlan that closes (part of) a Phoenix perps position
+ * with an opposite-side IOC order.
+ *
+ * The order carries `OrderFlags.ReduceOnly` by default, so it can only
+ * reduce the existing position — an oversized or stale `size` can never flip
+ * you into the opposite side. Pass `reduceOnly: false` to opt out.
+ *
+ * `priceLimitUsd` is strongly recommended: without it, the close is an
+ * unbounded market order with no slippage protection.
+ *
+ * @example
+ * ```ts
+ * const { plan } = await getPhoenixClosePositionPlan({
+ *     client,
+ *     trader: { authority: wallet.address },
+ *     symbol: 'SOL',
+ *     side: 'long',
+ *     size: { baseUnits: '1.5' },
+ *     priceLimitUsd: '148',
+ * });
+ * ```
+ */
 export async function getPhoenixClosePositionPlan(
     options: PhoenixClosePositionPlanOptions,
 ): Promise<PhoenixClosePositionPlanResult> {
-    assertPositiveSize(options.size);
+    assertPositiveSize(options.size, 'close');
 
-    const client = options.client ?? createPhoenixActionsClient(options.clientConfig);
-    const trader = accountParams(options.trader);
-    const closeSide = closeSideFor(options.side);
-    const orderPacket = await client.orderPackets.buildMarketOrderPacket({
-        symbol: asSymbol(options.symbol),
-        side: closeSide.riseSide,
-        baseUnits: options.size.baseUnits,
-        ...(options.priceLimitUsd !== undefined && { priceLimitUsd: options.priceLimitUsd }),
-        ...(options.cancelExisting !== undefined && { cancelExisting: options.cancelExisting }),
-    });
-    const instruction = await client.ixs.placeMarketOrder({
-        ...trader,
-        symbol: asSymbol(options.symbol),
-        orderPacket,
-    });
+    const { client, shouldDispose } = resolvePhoenixClient(options);
 
-    return {
-        plan: singleInstructionPlan(riseInstructionToKit(instruction)),
-        lookupTableAddresses: [],
-        order: {
-            symbol: options.symbol,
-            side: options.side,
-            orderSide: closeSide.orderSide,
-            tradeSide: closeSide.orderSide,
-            traderPdaIndex: trader.traderPdaIndex,
-            traderSubaccountIndex: trader.traderSubaccountIndex,
-            entryType: 'market',
-        },
-        phoenix: {
-            instructions: [instruction],
+    try {
+        const trader = accountParams(options.trader);
+        const closeSide = closeSideFor(options.side);
+        const reduceOnly = options.reduceOnly !== false;
+        const orderFlags = ((options.orderFlags ?? 0) | (reduceOnly ? OrderFlags.ReduceOnly : 0)) as OrderFlags;
+        const orderPacket = await client.orderPackets.buildMarketOrderPacket({
+            symbol: asSymbol(options.symbol),
+            side: closeSide.riseSide,
+            baseUnits: options.size.baseUnits,
+            orderFlags,
+            ...(options.priceLimitUsd !== undefined && { priceLimitUsd: options.priceLimitUsd }),
+            ...(options.cancelExisting !== undefined && { cancelExisting: options.cancelExisting }),
+        });
+        assertNonZeroBaseLots(orderPacket.numBaseLots, 'close');
+        const instruction = await client.ixs.placeMarketOrder({
+            ...trader,
+            symbol: asSymbol(options.symbol),
             orderPacket,
-        },
-    };
+        });
+
+        return {
+            plan: singleInstructionPlan(riseInstructionToKit(instruction)),
+            lookupTableAddresses: [],
+            order: {
+                symbol: options.symbol,
+                side: options.side,
+                orderSide: closeSide.orderSide,
+                tradeSide: closeSide.orderSide,
+                traderPdaIndex: trader.traderPdaIndex,
+                traderSubaccountIndex: trader.traderSubaccountIndex,
+                entryType: 'market',
+                reduceOnly,
+            },
+            phoenix: {
+                instructions: [instruction],
+                orderPacket,
+            },
+        };
+    } finally {
+        if (shouldDispose) {
+            client.dispose();
+        }
+    }
 }
