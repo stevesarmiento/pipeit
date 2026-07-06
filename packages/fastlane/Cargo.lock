@@ -244,7 +244,7 @@ dependencies = [
  "pin-project-lite",
  "serde_core",
  "sync_wrapper",
- "tower 0.5.3",
+ "tower",
  "tower-layer",
  "tower-service",
 ]
@@ -2776,7 +2776,7 @@ dependencies = [
  "sync_wrapper",
  "tokio",
  "tokio-rustls",
- "tower 0.5.3",
+ "tower",
  "tower-http",
  "tower-service",
  "url",
@@ -5578,7 +5578,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-stream",
- "tower 0.5.3",
+ "tower",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -5639,21 +5639,6 @@ dependencies = [
 
 [[package]]
 name = "tower"
-version = "0.4.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8fa9be0de6cf49e536ce1851f987bd21a43b771b09473c3549a6c853db37c1c"
-dependencies = [
- "futures-core",
- "futures-util",
- "pin-project",
- "pin-project-lite",
- "tower-layer",
- "tower-service",
- "tracing",
-]
-
-[[package]]
-name = "tower"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebe5ef63511595f1344e2d5cfa636d973292adc0eec1f0ad45fae9f0851ab1d4"
@@ -5688,7 +5673,7 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-util",
- "tower 0.5.3",
+ "tower",
  "tower-layer",
  "tower-service",
  "url",
@@ -6469,21 +6454,15 @@ dependencies = [
 
 [[package]]
 name = "yellowstone-grpc-client"
-version = "13.1.0"
+version = "12.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a66894f04139a5c4a2c1108fed68fc3e7efdf4120464ad86e14013c7e2cbeec5"
+checksum = "5a31478dd10ad437b6b39cb463706915ca9668201a6889957f740ed1b3cd8ec8"
 dependencies = [
- "arc-swap",
  "bytes",
  "futures",
- "hyper-util",
- "log",
- "pin-project",
  "thiserror 2.0.18",
- "tokio",
  "tonic",
  "tonic-health",
- "tower 0.4.13",
  "yellowstone-grpc-proto",
 ]
 

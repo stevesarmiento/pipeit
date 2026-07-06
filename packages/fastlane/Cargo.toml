@@ -26,7 +26,9 @@ solana-sdk = "4.0"
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 futures-util = "0.3"
-yellowstone-grpc-client = { version = "13.1.0" }
+# Pinned to 12.1.0: 12.2.0+ unconditionally imports tokio::net::UnixStream,
+# which breaks Windows builds (upstream fix pending: rpcpool/yellowstone-grpc#742)
+yellowstone-grpc-client = { version = "=12.1.0" }
 yellowstone-grpc-proto = { version = "12.4.0" }
 
 # Data structures
