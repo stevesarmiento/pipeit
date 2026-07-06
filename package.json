@@ -20,13 +20,13 @@
     "devDependencies": {
         "@eslint/js": "^10.0.1",
         "@solana/prettier-config-solana": "^0.0.6",
-        "@types/node": "^25.9.1",
-        "eslint": "^10.4.0",
-        "prettier": "^3.8.3",
-        "turbo": "^2.9.15",
-        "typescript-eslint": "^8.60.0",
+        "@types/node": "^25.9.4",
+        "eslint": "^10.6.0",
+        "prettier": "^3.9.4",
+        "turbo": "^2.10.3",
+        "typescript-eslint": "^8.62.1",
         "typescript": "^6.0.3",
-        "vitest": "^4.1.7"
+        "vitest": "^4.1.9"
     },
     "engines": {
         "node": ">=22.13.0",

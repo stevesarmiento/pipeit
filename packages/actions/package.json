@@ -79,25 +79,25 @@
     },
     "dependencies": {
         "@coral-xyz/anchor": "^0.32.1",
-        "@ellipsis-labs/rise": "^0.4.17",
+        "@ellipsis-labs/rise": "^0.4.62",
         "@msgpack/msgpack": "^3.1.3",
-        "@solana/web3.js": "1.98.2",
-        "flash-sdk": "^15.16.14"
+        "@solana/web3.js": "1.98.4",
+        "flash-sdk": "^15.17.2"
     },
     "devDependencies": {
         "@pipeit/core": "workspace:*",
-        "@solana/addresses": "^6.9.0",
-        "@solana/instruction-plans": "^6.9.0",
-        "@solana/instructions": "^6.9.0",
-        "@solana/kit": "^6.9.0",
-        "@solana/rpc": "^6.9.0",
-        "@solana/rpc-subscriptions": "^6.9.0",
-        "@solana/signers": "^6.9.0",
-        "@solana/transactions": "^6.9.0",
-        "@types/node": "^25.9.1",
-        "eslint": "^10.4.0",
+        "@solana/addresses": "^6.10.0",
+        "@solana/instruction-plans": "^6.10.0",
+        "@solana/instructions": "^6.10.0",
+        "@solana/kit": "^6.10.0",
+        "@solana/rpc": "^6.10.0",
+        "@solana/rpc-subscriptions": "^6.10.0",
+        "@solana/signers": "^6.10.0",
+        "@solana/transactions": "^6.10.0",
+        "@types/node": "^25.9.4",
+        "eslint": "^10.6.0",
         "tsup": "^8.5.1",
         "typescript": "^6.0.3",
-        "vitest": "^4.1.7"
+        "vitest": "^4.1.9"
     }
 }
