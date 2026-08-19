@@ -62,18 +62,18 @@ describe('ExecutePlanConfig requirements', () => {
 });
 
 describe('CU estimation integration', () => {
-    it('should document the provisory CU pattern', () => {
-        // This test documents the CU estimation pattern used in executePlan:
-        // 1. fillProvisorySetComputeUnitLimitInstruction adds a placeholder in planner
-        // 2. estimateAndUpdateProvisoryComputeUnitLimitFactory updates it in executor
+    it('should document the provisory resource-limits pattern', () => {
+        // This test documents the resource-limit estimation pattern used in executePlan:
+        // 1. fillTransactionMessageProvisoryResourceLimits adds a placeholder in planner
+        // 2. estimateAndSetResourceLimitsFactory replaces it in executor
         const cuPattern = {
-            planner: 'fillProvisorySetComputeUnitLimitInstruction',
-            executor: 'estimateAndUpdateProvisoryComputeUnitLimitFactory',
-            source: '@solana-program/compute-budget',
+            planner: 'fillTransactionMessageProvisoryResourceLimits',
+            executor: 'estimateAndSetResourceLimitsFactory',
+            source: '@solana/kit',
         };
 
-        expect(cuPattern.planner).toBe('fillProvisorySetComputeUnitLimitInstruction');
-        expect(cuPattern.executor).toBe('estimateAndUpdateProvisoryComputeUnitLimitFactory');
+        expect(cuPattern.planner).toBe('fillTransactionMessageProvisoryResourceLimits');
+        expect(cuPattern.executor).toBe('estimateAndSetResourceLimitsFactory');
     });
 });
 
@@ -86,14 +86,14 @@ describe('ALT compression integration', () => {
         const altFlow = {
             step1: 'resolveLookupTableData (prefetched or fetch via lookupTableAddresses)',
             step2: 'compressTransactionMessage (before CU estimation)',
-            step3: 'estimateAndSetCULimit (on compressed message)',
+            step3: 'estimateAndSetResourceLimits (on compressed message)',
             step4: 'signTransactionMessageWithSigners',
             step5: 'sendAndConfirm',
         };
 
         expect(altFlow.step1).toContain('resolveLookupTableData');
         expect(altFlow.step2).toContain('compressTransactionMessage');
-        expect(altFlow.step3).toContain('estimateAndSetCULimit');
+        expect(altFlow.step3).toContain('estimateAndSetResourceLimits');
     });
 
     it('should document planner-time ALT compression for optimal packing', () => {

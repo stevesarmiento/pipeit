@@ -60,14 +60,14 @@ To build locally:
 
 ```bash
 cd packages/fastlane
-pnpm install
-pnpm build
+bun install
+bun run build
 ```
 
 To test locally:
 
 ```bash
-pnpm test
+bun run test
 ```
 
 ### Troubleshooting

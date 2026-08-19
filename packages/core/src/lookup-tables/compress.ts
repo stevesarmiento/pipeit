@@ -35,13 +35,15 @@ export function compressTransactionMessage<TMessage extends TransactionMessage>(
     transactionMessage: TMessage,
     addressesByLookupTableAddress: AddressesByLookupTableAddress,
 ): TMessage {
-    // Address lookup tables only apply to v0 (versioned) transactions.
-    if (transactionMessage.version === 'legacy') return transactionMessage;
+    // Address lookup tables only apply to v0 transactions. Legacy predates
+    // them and v1 (Alpenglow) does not support them, so anything that isn't
+    // exactly v0 passes through unchanged.
+    if (transactionMessage.version !== 0) return transactionMessage;
 
     // Delegate to Kit's implementation (re-exported from `@solana/kit`).
-    // We keep this wrapper to preserve Pipeit's legacy-safe signature.
+    // We keep this wrapper to preserve Pipeit's version-safe signature.
     return compressTransactionMessageUsingAddressLookupTables(
-        transactionMessage as Exclude<TransactionMessage, { version: 'legacy' }>,
+        transactionMessage as Extract<TransactionMessage, { version: 0 }>,
         addressesByLookupTableAddress,
     ) as TMessage;
 }
@@ -70,7 +72,8 @@ export function calculateLookupTableSavings(
     /** Number of unique lookup tables needed */
     lookupTablesUsed: number;
 } {
-    if (transactionMessage.version === 'legacy') {
+    // Only v0 transactions can use lookup tables (legacy predates them, v1 dropped them).
+    if (transactionMessage.version !== 0) {
         return { accountsConvertible: 0, bytesSaved: 0, lookupTablesUsed: 0 };
     }
 

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+coverage/
+.turbo/
+.bun/
+bun.lock
+
+examples/next-js/.next/
+examples/next-js/next-env.d.ts
+examples/next-js/out/
+
+packages/fastlane/target/
+packages/fastlane/*.node
+packages/fastlane/index.d.ts
+packages/fastlane/index.js

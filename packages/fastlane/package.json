@@ -1,6 +1,6 @@
 {
     "name": "@pipeit/fastlane",
-    "version": "0.1.6",
+    "version": "0.1.7",
     "description": "Native QUIC client for direct Solana TPU transaction submission",
     "main": "index.js",
     "types": "index.d.ts",
@@ -13,15 +13,12 @@
     },
     "browser": "./browser.js",
     "napi": {
-        "name": "fastlane",
-        "triples": {
-            "defaults": false,
-            "additional": [
-                "aarch64-apple-darwin",
-                "x86_64-unknown-linux-gnu",
-                "x86_64-pc-windows-msvc"
-            ]
-        }
+        "binaryName": "fastlane",
+        "targets": [
+            "aarch64-apple-darwin",
+            "x86_64-unknown-linux-gnu",
+            "x86_64-pc-windows-msvc"
+        ]
     },
     "license": "MIT",
     "repository": {
@@ -45,7 +42,7 @@
         "version": "napi version"
     },
     "devDependencies": {
-        "@napi-rs/cli": "^2.18.0"
+        "@napi-rs/cli": "^3.7.2"
     },
     "engines": {
         "node": ">= 18"

@@ -29,14 +29,12 @@ import {
     signTransactionMessageWithSigners,
     sendAndConfirmTransactionFactory,
     fetchAddressesForLookupTables,
+    fillTransactionMessageProvisoryResourceLimits,
+    estimateResourceLimitsFactory,
+    estimateAndSetResourceLimitsFactory,
 } from '@solana/kit';
 import type { TransactionMessage, TransactionMessageWithFeePayer } from '@solana/transaction-messages';
 import { addSignersToTransactionMessage, type TransactionSigner } from '@solana/signers';
-import {
-    fillProvisorySetComputeUnitLimitInstruction,
-    estimateComputeUnitLimitFactory,
-    estimateAndUpdateProvisoryComputeUnitLimitFactory,
-} from '@solana-program/compute-budget';
 import { type AddressesByLookupTableAddress, compressTransactionMessage } from '../lookup-tables/index.js';
 
 /**
@@ -76,6 +74,17 @@ interface ExecutePlanConfigBase {
      * Optional abort signal to cancel execution.
      */
     abortSignal?: AbortSignal;
+
+    /**
+     * Maximum number of top-level instructions the planner may pack into a
+     * single transaction message. Defaults to Kit's planner default (16 as of
+     * Kit v7, which assumes ~3 inner instructions per top-level instruction
+     * against Solana's hard limit of 64 total instructions).
+     *
+     * Set to 64 to restore the pre-Kit-v7 behavior of packing up to the hard
+     * transaction limit.
+     */
+    maxInstructionsPerTransaction?: number;
 }
 
 /**
@@ -208,7 +217,7 @@ export type ExecutePlanConfig =
  * ```
  */
 export async function executePlan(plan: InstructionPlan, config: ExecutePlanConfig): Promise<TransactionPlanResult> {
-    const { rpc, rpcSubscriptions, signer, commitment = 'confirmed', abortSignal } = config;
+    const { rpc, rpcSubscriptions, signer, commitment = 'confirmed', abortSignal, maxInstructionsPerTransaction } = config;
 
     // Resolve lookup table data once (prefetched or fetched from addresses)
     const lookupTableData = await resolveLookupTableData(config);
@@ -219,16 +228,20 @@ export async function executePlan(plan: InstructionPlan, config: ExecutePlanConf
             // Fetch latest blockhash
             const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
 
-            // Create transaction message with fee payer, blockhash, and provisory CU instruction
+            // Create transaction message with fee payer, blockhash, and provisory resource limits
+            // NOTE: widen via SupportedTransactionVersion when v1 construction lands in Kit
+            // (kit 7.0.0's createTransactionMessage excludes version 1).
             return pipe(
                 createTransactionMessage({ version: 0 }),
                 tx => setTransactionMessageFeePayer(signer.address, tx),
                 tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
-                tx => fillProvisorySetComputeUnitLimitInstruction(tx),
+                tx => fillTransactionMessageProvisoryResourceLimits(tx),
                 // Attach signer so CU simulation + signing works (Kit requires this metadata)
                 tx => addSignersToTransactionMessage([signer], tx),
             );
         },
+        // Pass through the instruction-count ceiling when provided (Kit v7 defaults to 16).
+        ...(maxInstructionsPerTransaction !== undefined && { maxInstructionsPerTransaction }),
         // Apply ALT compression during planning so size checks account for compressed size.
         // This allows the planner to pack more instructions per transaction when ALTs are used.
         ...(lookupTableData && {
@@ -244,11 +257,13 @@ export async function executePlan(plan: InstructionPlan, config: ExecutePlanConf
     // Create send and confirm factory
     const sendAndConfirm = sendAndConfirmTransactionFactory({ rpc, rpcSubscriptions });
 
-    // Create CU estimation helpers
-    const estimateCULimit = estimateComputeUnitLimitFactory({ rpc });
-    const estimateAndSetCULimit = estimateAndUpdateProvisoryComputeUnitLimitFactory(estimateCULimit);
+    // Create resource-limit estimation helpers (compute units; loaded-accounts-data-size
+    // estimation is v1-gated inside Kit, so v0 behavior is unchanged).
+    // Note: an explicit user SetComputeUnitLimit of exactly 1,400,000 is treated as
+    // non-explicit and re-estimated - identical to Kit's previous estimator behavior.
+    const estimateAndSetResourceLimits = estimateAndSetResourceLimitsFactory(estimateResourceLimitsFactory({ rpc }));
 
-    // Create transaction executor with CU estimation and ALT compression
+    // Create transaction executor with resource-limit estimation and ALT compression
     const executor = createTransactionPlanExecutor({
         executeTransactionMessage: async (_context, message) => {
             // Apply ALT compression before CU estimation (if lookup tables provided)
@@ -257,8 +272,8 @@ export async function executePlan(plan: InstructionPlan, config: ExecutePlanConf
             // Ensure signer is attached for CU simulation (and any later signing)
             const messageWithSigners = addSignersToTransactionMessage([signer], compressedMessage);
 
-            // Estimate and update the provisory CU instruction with actual value
-            const estimatedMessage = await estimateAndSetCULimit(messageWithSigners);
+            // Estimate resource limits via simulation, replacing the provisory values
+            const estimatedMessage = await estimateAndSetResourceLimits(messageWithSigners);
 
             // Sign the transaction
             const signedTransaction = await signTransactionMessageWithSigners(

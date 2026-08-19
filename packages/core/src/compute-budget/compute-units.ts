@@ -5,7 +5,7 @@
  */
 
 import type { Instruction } from '@solana/instructions';
-import { COMPUTE_BUDGET_PROGRAM } from './priority-fees.js';
+import { getSetComputeUnitLimitInstruction } from '@solana-program/compute-budget';
 import type { ComputeUnitConfig, ComputeUnitEstimate } from './types.js';
 
 /**
@@ -24,6 +24,14 @@ export const MAX_COMPUTE_UNIT_LIMIT = 1_400_000;
 export const DEFAULT_COMPUTE_BUFFER = 1.1;
 
 /**
+ * Maximum loaded accounts data size limit per transaction (64 MiB).
+ *
+ * Mirrors the runtime ceiling Kit uses when simulating; Kit does not export
+ * this constant publicly.
+ */
+export const MAX_LOADED_ACCOUNTS_DATA_SIZE_LIMIT = 64 * 1024 * 1024;
+
+/**
  * Create SetComputeUnitLimit instruction.
  * Sets the maximum compute units a transaction can consume.
  *
@@ -35,20 +43,20 @@ export const DEFAULT_COMPUTE_BUFFER = 1.1;
  * const ix = createSetComputeUnitLimitInstruction(300_000);
  * // Sets max CU to 300,000
  * ```
+ *
+ * @deprecated Use `setTransactionMessageComputeUnitLimit` from `@solana/kit`
+ * (version-agnostic: instruction on legacy/v0, message config on v1) or
+ * `getSetComputeUnitLimitInstruction` from `@solana-program/compute-budget`.
  */
 export function createSetComputeUnitLimitInstruction(units: number): Instruction {
     // Clamp to maximum
     const clampedUnits = Math.min(units, MAX_COMPUTE_UNIT_LIMIT);
 
-    // Instruction data: [2, units as u32 LE]
-    const data = new Uint8Array(5);
-    data[0] = 2; // SetComputeUnitLimit discriminator
-    new DataView(data.buffer).setUint32(1, clampedUnits, true);
-
+    // Delegate to the generated builder; restore the empty accounts array the
+    // generated instruction omits to preserve this function's historical shape.
     return {
-        programAddress: COMPUTE_BUDGET_PROGRAM,
+        ...getSetComputeUnitLimitInstruction({ units: clampedUnits }),
         accounts: [],
-        data,
     };
 }
 

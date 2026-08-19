@@ -202,6 +202,7 @@ export function useRunningAnimation(
         motionValues.shakeY,
         motionValues.borderOpacity,
         motionValues.glowIntensity,
+        prefersReducedMotion,
     ]);
 }
 
