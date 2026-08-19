@@ -111,6 +111,7 @@ interface TransactionBuilderConfig {
     logLevel?: 'silent' | 'minimal' | 'verbose';
     priorityFee?: PriorityFeeLevel | PriorityFeeConfig;
     computeUnits?: 'auto' | number | ComputeUnitConfig;
+    loadedAccountsDataSizeLimit?: number;
     lookupTableAddresses?: Address[];
     addressesByLookupTable?: AddressesByLookupTableAddress;
 }
@@ -267,11 +268,47 @@ new TransactionBuilder({
 });
 ```
 
-The `'simulate'` strategy uses Kit's `@solana-program/compute-budget` helpers to:
+The `'simulate'` strategy uses Kit's resource-limit estimators to:
 
-1. Add a provisory compute unit limit instruction during message building
+1. Add provisory resource limits during message building
+   (`fillTransactionMessageProvisoryResourceLimits`)
 2. Simulate the transaction to get accurate CU consumption
-3. Update the instruction with the estimated value before signing and sending
+3. Apply the configured `buffer` (default `1.1`, i.e. 10% headroom) and set the
+   estimated limits before signing and sending
+
+The buffer matters because simulation reflects chain state at simulation time.
+If state changes before your transaction lands, the real execution can take a
+different, more expensive path than the one you simulated.
+
+```typescript
+// Simulate with a custom buffer
+new TransactionBuilder({
+    computeUnits: {
+        strategy: 'simulate',
+        buffer: 1.2, // 20% headroom
+    },
+});
+```
+
+### Loaded Accounts Data Size
+
+Caps the total size of account data a transaction may load. Omitted by default:
+on legacy/v0 transactions this costs a whole compute budget instruction of
+transaction space for a limit that is rarely binding, so Pipeit only emits it
+when you ask for it.
+
+```typescript
+new TransactionBuilder({ loadedAccountsDataSizeLimit: 65_536 });
+```
+
+**Do not set this to an exact simulated value.** Loading an account that already
+exists costs more than loading one that does not, so if anyone funds or touches
+an account between your simulation and your transaction landing, an exact limit
+fails at runtime. Leave headroom. The `'simulate'` compute unit strategy pads
+this limit by the same buffer it applies to compute units.
+
+This limit becomes a practical constraint for v1 (Alpenglow) transactions, where
+resource limits move into required message config rather than instructions.
 
 ### Address Lookup Tables
 

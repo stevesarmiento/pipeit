@@ -28,13 +28,24 @@ export type RequiredState = {
 };
 
 /**
+ * Transaction versions Pipeit can construct today.
+ *
+ * Mirrors Kit 7.0.0's constructor gate (`SupportedTransactionVersion =
+ * Exclude<TransactionVersion, 1>`): the v1 (Alpenglow) format exists in Kit's
+ * type system and wire codecs, but `createTransactionMessage` cannot produce
+ * it yet. This alias is the single widening point once v1 construction lands
+ * upstream.
+ */
+export type SupportedTransactionVersion = 0 | 'legacy';
+
+/**
  * Configuration for transaction builder.
  */
 export interface BuilderConfig {
     /**
      * Transaction version (0 for versioned transactions, 'legacy' for legacy).
      */
-    version?: 0 | 'legacy';
+    version?: SupportedTransactionVersion;
     /**
      * RPC client for auto-fetching blockhash when not explicitly provided.
      */

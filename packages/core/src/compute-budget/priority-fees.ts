@@ -8,6 +8,7 @@ import type { Address } from '@solana/addresses';
 import type { Instruction } from '@solana/instructions';
 import type { Rpc } from '@solana/rpc';
 import { address } from '@solana/addresses';
+import { getSetComputeUnitPriceInstruction } from '@solana-program/compute-budget';
 import type { PriorityFeeConfig, PriorityFeeEstimate, PrioritizationFeeEntry } from './types.js';
 
 /**
@@ -50,17 +51,18 @@ interface GetRecentPrioritizationFeesApi {
  * const ix = createSetComputeUnitPriceInstruction(10_000);
  * // Sets priority fee to 0.01 lamports per CU
  * ```
+ *
+ * @deprecated Use `setTransactionMessageComputeUnitPrice` from `@solana/kit`
+ * (legacy/v0 only - v1 replaces the per-CU price with an absolute
+ * `priorityFeeLamports`) or `getSetComputeUnitPriceInstruction` from
+ * `@solana-program/compute-budget`.
  */
 export function createSetComputeUnitPriceInstruction(microLamports: number): Instruction {
-    // Instruction data: [3, microLamports as u64 LE]
-    const data = new Uint8Array(9);
-    data[0] = 3; // SetComputeUnitPrice discriminator
-    new DataView(data.buffer).setBigUint64(1, BigInt(microLamports), true);
-
+    // Delegate to the generated builder; restore the empty accounts array the
+    // generated instruction omits to preserve this function's historical shape.
     return {
-        programAddress: COMPUTE_BUDGET_PROGRAM,
+        ...getSetComputeUnitPriceInstruction({ microLamports }),
         accounts: [],
-        data,
     };
 }
 
