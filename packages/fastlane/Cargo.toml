@@ -1,6 +1,6 @@
 [package]
 name = "pipeit-fastlane"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 description = "Native QUIC client for direct Solana TPU transaction submission"
 license = "MIT"
@@ -21,7 +21,10 @@ rustls = { version = "0.23", default-features = false, features = ["ring"] }
 # Solana
 solana-tls-utils = "4.0"
 solana-client = "4.0"
-solana-sdk = "4.0"
+# Only the Signature type is needed; depending on the single crate keeps the
+# dependency tree small. Must stay version-aligned with solana-client's own
+# solana-signature so the types are identical.
+solana-signature = "3"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
