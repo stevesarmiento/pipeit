@@ -58,13 +58,14 @@ describe('TransactionBuilder CU configuration', () => {
 describe('TransactionBuilder CU simulation strategy', () => {
     it('should document the simulate strategy behavior', () => {
         // This test documents the expected behavior of the simulate strategy:
-        // 1. build() adds a provisory CU instruction via fillProvisorySetComputeUnitLimitInstruction
-        // 2. execute() estimates and updates the CU via estimateAndUpdateProvisoryComputeUnitLimitFactory
-        // 3. export() also estimates and updates the CU before signing
+        // 1. build() adds a provisory (0 CU) limit via fillTransactionMessageProvisoryResourceLimits
+        // 2. execute() estimates via simulation and replaces the provisory limits
+        //    (estimateAndSetResourceLimitsFactory), applying the configured buffer
+        // 3. export() also estimates and replaces the limits before signing
         const simulateStrategyBehavior = {
-            build: 'Adds provisory CU instruction using fillProvisorySetComputeUnitLimitInstruction',
-            execute: 'Estimates via simulation and updates provisory instruction before signing',
-            export: 'Estimates via simulation and updates provisory instruction before signing',
+            build: 'Adds provisory CU limit using fillTransactionMessageProvisoryResourceLimits',
+            execute: 'Estimates via simulation and replaces provisory limits before signing',
+            export: 'Estimates via simulation and replaces provisory limits before signing',
         };
 
         expect(simulateStrategyBehavior.build).toContain('provisory');
@@ -72,18 +73,18 @@ describe('TransactionBuilder CU simulation strategy', () => {
         expect(simulateStrategyBehavior.export).toContain('simulation');
     });
 
-    it('should use Kit compute-budget helpers', () => {
-        // Verify the compute-budget helpers are available
+    it('should use Kit resource-limit estimation helpers', () => {
+        // Verify the Kit v7 resource-limit helpers are available
         // The actual integration is tested via the re-exports
         const helpers = {
-            fillProvisory: 'fillProvisorySetComputeUnitLimitInstruction',
-            estimate: 'estimateComputeUnitLimitFactory',
-            estimateAndUpdate: 'estimateAndUpdateProvisoryComputeUnitLimitFactory',
+            fillProvisory: 'fillTransactionMessageProvisoryResourceLimits',
+            estimate: 'estimateResourceLimitsFactory',
+            estimateAndSet: 'estimateAndSetResourceLimitsFactory',
         };
 
         expect(helpers.fillProvisory).toBeDefined();
         expect(helpers.estimate).toBeDefined();
-        expect(helpers.estimateAndUpdate).toBeDefined();
+        expect(helpers.estimateAndSet).toBeDefined();
     });
 });
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useTransform } from 'motion/react';
+import { motion } from 'motion/react';
 import { useMemo } from 'react';
 import { TransactionStepNode } from './transaction-step-node';
 import { BatchGroup } from './batch-group';
@@ -89,28 +89,22 @@ export function PipelineVisualization({ visualPipeline, strategy = 'auto' }: Pip
         return items;
     }, [visualPipeline.steps, batchGroups]);
 
-    // Calculate progress
-    const progress = useMemo(() => {
-        const totalSteps = visualPipeline.steps.length;
-        const completedSteps = visualPipeline.steps.filter(step => {
-            const state = visualPipeline.getStepState(step.name);
-            return state.type === 'confirmed';
-        }).length;
-        return totalSteps > 0 ? completedSteps / totalSteps : 0;
-    }, [visualPipeline, pipelineState]);
+    const totalSteps = visualPipeline.steps.length;
+    const completedSteps = visualPipeline.steps.filter(step => {
+        const state = visualPipeline.getStepState(step.name);
+        return state.type === 'confirmed';
+    }).length;
+    const progress = totalSteps > 0 ? completedSteps / totalSteps : 0;
 
-    // Get signature from last completed step
-    const signature = useMemo(() => {
-        // Find the last completed step
-        for (let i = visualPipeline.steps.length - 1; i >= 0; i--) {
-            const step = visualPipeline.steps[i];
-            const state = visualPipeline.getStepState(step.name);
-            if (state.type === 'confirmed') {
-                return state.signature;
-            }
+    let signature: string | null = null;
+    for (let i = visualPipeline.steps.length - 1; i >= 0; i--) {
+        const step = visualPipeline.steps[i];
+        const state = visualPipeline.getStepState(step.name);
+        if (state.type === 'confirmed') {
+            signature = state.signature;
+            break;
         }
-        return null;
-    }, [visualPipeline, pipelineState]);
+    }
 
     return (
         <div className="w-full h-full flex flex-col items-center justify-center py-12">

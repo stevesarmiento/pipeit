@@ -15,7 +15,7 @@ Thank you for your interest in contributing to Pipeit! This document provides gu
 3. **Install dependencies**
 
     ```bash
-    pnpm install
+    bun install
     ```
 
 4. **Create a branch**
@@ -25,7 +25,7 @@ Thank you for your interest in contributing to Pipeit! This document provides gu
 
 ## 📦 Project Structure
 
-This is a monorepo managed with Turbo and pnpm workspaces:
+This is a monorepo managed with Turbo and Bun workspaces:
 
 - `packages/core/` - Main transaction builder with execution strategies, Flow API, and Kit integration
 - `packages/actions/` - InstructionPlan factories for DeFi (Titan, Metis)
@@ -36,8 +36,8 @@ This is a monorepo managed with Turbo and pnpm workspaces:
 
 ### Prerequisites
 
-- Node.js >= 20.18.0
-- pnpm >= 10
+- Node.js >= 22.13.0
+- Bun >= 1.3.6
 - Rust (for fastlane package development)
 
 ### Code Style
@@ -59,7 +59,7 @@ This is a monorepo managed with Turbo and pnpm workspaces:
 ### Testing
 
 - Add tests for new functionality
-- Ensure all tests pass: `pnpm test`
+- Ensure all tests pass: `bun run test`
 - Maintain or improve code coverage
 - Tests are located in `__tests__/` directories within each package
 
@@ -67,19 +67,19 @@ This is a monorepo managed with Turbo and pnpm workspaces:
 
 ```bash
 # Format code (if configured)
-pnpm run format
+bun run format
 
 # Lint code
-pnpm lint
+bun run lint
 
 # Type check
-pnpm typecheck
+bun run typecheck
 
 # Build all packages
-pnpm build
+bun run build
 
 # Run tests
-pnpm test
+bun run test
 ```
 
 ## 📝 Pull Request Guidelines
@@ -123,7 +123,7 @@ Include:
 - Clear description of the issue
 - Steps to reproduce
 - Expected vs actual behavior
-- Environment details (Node.js version, OS, pnpm version)
+- Environment details (Node.js version, OS, Bun version)
 - Relevant logs or error messages
 - Package version (`@pipeit/core`, `@pipeit/actions`, etc.)
 - Solana network (mainnet/devnet/testnet)
@@ -161,15 +161,15 @@ By contributing, you agree that your contributions will be licensed under the MI
 ```bash
 # Build a specific package
 cd packages/core
-pnpm build
+bun run build
 
 # Run tests for a specific package
 cd packages/core
-pnpm test
+bun run test
 
 # Watch mode for development
 cd packages/core
-pnpm dev
+bun run dev
 ```
 
 ### Testing Execution Strategies
@@ -187,10 +187,10 @@ When working on execution strategies (Jito, TPU, parallel), test with:
 cd packages/fastlane
 
 # Build native bindings
-pnpm build:native
+bun run build:native
 
 # Run tests
-pnpm test
+bun run test
 
 # Check Rust code
 cargo check

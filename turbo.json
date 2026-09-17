@@ -4,7 +4,7 @@
         "build": {
             "dependsOn": ["^build"],
             "outputs": ["dist/**", ".next/**"],
-            "inputs": ["src/**", "app/**", "tsconfig.json", "tsup.config.ts", "next.config.js"]
+            "inputs": ["$TURBO_DEFAULT$", "bunfig.toml", "next.config.*", "tsconfig.json", "tsup.config.ts"]
         },
         "dev": {
             "dependsOn": ["^build"],

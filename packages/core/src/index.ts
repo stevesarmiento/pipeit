@@ -53,6 +53,7 @@ export type {
     BuilderState,
     RequiredState,
     BuilderConfig,
+    SupportedTransactionVersion,
     LifetimeConstraint,
     SendingConfig,
     ExecuteConfig,

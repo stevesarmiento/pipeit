@@ -23,7 +23,7 @@ Built on modern Solana libraries (@solana/kit) with a focus on type safety, deve
 | Package                                 | Description                                                              | Docs                                   |
 | --------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------- |
 | [@pipeit/core](./packages/core)         | Transaction builder with smart defaults, flows, and execution strategies | [README](./packages/core/README.md)    |
-| [@pipeit/actions](./packages/actions)   | InstructionPlan factories for DeFi (Titan, Metis)                        | [README](./packages/actions/README.md) |
+| [@pipeit/actions](./packages/actions)   | InstructionPlan factories for DeFi (Titan, Metis, Phoenix, Flash)        | [README](./packages/actions/README.md) |
 | [@pipeit/fastlane](./packages/fastlane) | Native Rust QUIC client for direct TPU submission                        | [Package](./packages/fastlane)         |
 
 ## Package Overview
@@ -42,8 +42,9 @@ The foundation package for transaction building:
 
 Composable InstructionPlan factories for DeFi:
 
-- Kit-compatible InstructionPlans for swap operations
+- Kit-compatible InstructionPlans for swaps and perps workflows
 - Titan and Metis aggregator integration
+- Phoenix and Flash Trade perps integrations
 - Address lookup table support
 - Composable with Kit's plan combinators
 
@@ -73,20 +74,20 @@ pipeit/
 **Choosing a Package:**
 
 - Building transactions? → `@pipeit/core`
-- DeFi operations (swaps)? → `@pipeit/actions` + `@pipeit/core`
+- DeFi operations (swaps/perps)? → `@pipeit/actions` + `@pipeit/core`
 - Ultra-fast submission? → `@pipeit/fastlane` + `@pipeit/core`
 
 ## Installation
 
 ```bash
 # Transaction builder (recommended starting point)
-pnpm install @pipeit/core @solana/kit
+bun add @pipeit/core @solana/kit
 
-# DeFi operations (swaps via Titan/Metis)
-pnpm install @pipeit/actions @pipeit/core @solana/kit
+# DeFi operations (swaps via Titan/Metis, perps via Phoenix/Flash)
+bun add @pipeit/actions @pipeit/core @solana/kit
 
 # TPU direct submission (server-side only)
-pnpm install @pipeit/fastlane
+bun add @pipeit/fastlane
 ```
 
 ## Usage Examples
@@ -238,8 +239,8 @@ export { tpuHandler as POST } from '@pipeit/core/server';
 
 ### Prerequisites
 
-- Node.js 20+
-- pnpm 10+
+- Node.js 22.13+
+- Bun 1.3+
 - Rust (for @pipeit/fastlane development)
 
 ### Setup
@@ -247,16 +248,16 @@ export { tpuHandler as POST } from '@pipeit/core/server';
 ```bash
 git clone https://github.com/stevesarmiento/pipeit.git
 cd pipeit
-pnpm install
+bun install
 ```
 
 ### Commands
 
 ```bash
-pnpm build       # Build all packages
-pnpm test        # Run all tests
-pnpm typecheck   # Type checking
-pnpm lint        # Lint code
+bun run build       # Build all packages
+bun run test        # Run all tests
+bun run typecheck   # Type checking
+bun run lint        # Lint code
 ```
 
 ## Contributing

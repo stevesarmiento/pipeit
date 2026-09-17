@@ -415,7 +415,7 @@ async function executeRaceStrategy(
         abortController.abort();
 
         return result;
-    } catch (error) {
+    } catch {
         // Both failed
         abortController.abort();
 
@@ -570,12 +570,7 @@ async function submitToTpu(
     }
 
     // Server: use native client with continuous resubmission
-    // Dynamic import to avoid bundling native module in browser builds
     try {
-        // @ts-ignore - Optional dependency loaded at runtime
-        // webpackIgnore tells bundlers to skip resolving this import
-        const tpuNative = await import(/* webpackIgnore: true */ '@pipeit/fastlane');
-
         // Get or create singleton client
         const client = await getTpuClientSingleton(tpuConfig);
 

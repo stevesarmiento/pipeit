@@ -9,7 +9,7 @@ use anyhow::Context;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::signature::Signature;
+use solana_signature::Signature;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::oneshot;
