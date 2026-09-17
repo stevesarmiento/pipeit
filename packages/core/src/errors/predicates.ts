@@ -15,6 +15,8 @@ import {
     TransactionTooLargeError,
     SignatureRejectedError,
     AccountNotFoundError,
+    TransactionVersionUnsupportedError,
+    ResourceLimitEstimationError,
 } from './errors.js';
 import { isTpuRetryableError } from './tpu-errors.js';
 
@@ -26,8 +28,24 @@ export function isPipeitError(error: unknown): error is PipeitErrorType {
         error instanceof InsufficientFundsError ||
         error instanceof TransactionTooLargeError ||
         error instanceof SignatureRejectedError ||
-        error instanceof AccountNotFoundError
+        error instanceof AccountNotFoundError ||
+        error instanceof TransactionVersionUnsupportedError ||
+        error instanceof ResourceLimitEstimationError
     );
+}
+
+/**
+ * Check if error is TransactionVersionUnsupportedError.
+ */
+export function isTransactionVersionUnsupportedError(error: unknown): error is TransactionVersionUnsupportedError {
+    return error instanceof TransactionVersionUnsupportedError;
+}
+
+/**
+ * Check if error is ResourceLimitEstimationError.
+ */
+export function isResourceLimitEstimationError(error: unknown): error is ResourceLimitEstimationError {
+    return error instanceof ResourceLimitEstimationError;
 }
 
 /**

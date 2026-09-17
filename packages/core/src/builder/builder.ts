@@ -66,6 +66,9 @@ import {
     setTransactionMessageComputeUnitLimit,
     setTransactionMessageComputeUnitPrice,
     setTransactionMessageLoadedAccountsDataSizeLimit,
+    getTransactionMessageComputeUnitLimit,
+    getTransactionMessageLoadedAccountsDataSizeLimit,
+    setTransactionMessagePriorityFeeLamports,
 } from '@solana/transaction-messages';
 import {
     signTransactionMessageWithSigners,
@@ -77,14 +80,12 @@ import {
     getSignatureFromTransaction,
     fetchAddressesForLookupTables,
     fillTransactionMessageProvisoryResourceLimits,
-    estimateResourceLimitsFactory,
-    estimateAndSetResourceLimitsFactory,
 } from '@solana/kit';
 import {
     getBase64EncodedWireTransaction,
     getTransactionEncoder,
     getTransactionMessageSize,
-    TRANSACTION_SIZE_LIMIT,
+    getTransactionMessageSizeLimit,
     type Base64EncodedWireTransaction,
 } from '@solana/transactions';
 import { getBase58Decoder } from '@solana/codecs-strings';
@@ -97,6 +98,7 @@ import type {
     SupportedTransactionVersion,
 } from '../types.js';
 import { validateTransaction, validateTransactionSize } from '../validation/index.js';
+import { translateVersionError } from '../errors/version-errors.js';
 
 // Import new modules
 import {
@@ -106,7 +108,10 @@ import {
     PRIORITY_FEE_LEVELS,
     MAX_COMPUTE_UNIT_LIMIT,
     MAX_LOADED_ACCOUNTS_DATA_SIZE_LIMIT,
+    DEFAULT_COMPUTE_UNIT_LIMIT,
     DEFAULT_COMPUTE_BUFFER,
+    microLamportsToPriorityFeeLamports,
+    createBufferedResourceLimitsEstimator,
     type PriorityFeeLevel,
 } from '../compute-budget/index.js';
 import { fetchNonceValue, type DurableNonceConfig } from '../nonce/index.js';
@@ -159,13 +164,20 @@ export type ExportedTransaction =
  */
 export interface TransactionBuilderConfig {
     /**
-     * Transaction version (0 for versioned transactions, 'legacy' for legacy).
+     * Transaction version.
+     * - `0` (default): versioned format, 1232-byte limit, address lookup tables supported
+     * - `'legacy'`: original format, 1232-byte limit, no lookup tables
+     * - `1`: SIMD-0385 format, 4096-byte limit, no lookup tables. Resource
+     *   limits and the priority fee live in the message config; `build()`
+     *   always resolves them to concrete values (see `computeUnits`).
      */
     version?: SupportedTransactionVersion;
 
     /**
      * RPC client for auto-fetching blockhash when not explicitly provided.
      * If using lookupTableAddresses, the RPC must also support GetMultipleAccountsApi.
+     * On version 1 it is also used to simulate for resource-limit estimation
+     * (it must support SimulateTransactionApi).
      */
     rpc?: Rpc<GetLatestBlockhashApi & GetAccountInfoApi>;
 
@@ -186,20 +198,28 @@ export interface TransactionBuilderConfig {
      * Priority fee configuration.
      * - PriorityFeeLevel string: Use preset level ('none', 'low', 'medium', 'high', 'veryHigh')
      * - PriorityFeeConfig object: Use custom configuration with strategy
+     *
+     * Levels and `microLamports` are a price per compute unit. On legacy/v0
+     * they become a SetComputeUnitPrice instruction. On version 1 the fee is a
+     * total in lamports, so Pipeit converts using the final compute unit limit:
+     * `lamports = ceil(limit × microLamports / 1e6)`. Pass
+     * `{ strategy: 'fixed', lamports: 5_000n }` on v1 to set the total directly.
      */
     priorityFee?: PriorityFeeLevel | PriorityFeeConfig;
 
     /**
      * Compute unit configuration.
-     * - 'auto': Emits NO compute unit limit instruction; the runtime's implicit
-     *   default (200,000 CU per instruction) applies
+     * - 'auto': legacy/v0 emit NO compute unit limit instruction and the
+     *   runtime's implicit default (200,000 CU per instruction) applies.
+     *   Version 1 has no implicit default (an unset limit is 0 CU), so 'auto'
+     *   estimates the limit by simulation, exactly like 'simulate'.
      * - number: Use fixed compute unit limit
      * - ComputeUnitConfig object: Use custom configuration with strategy
      *
-     * Note on v1 (Alpenglow) transactions: v1 carries resource limits in
-     * required message config rather than instructions, so "emit nothing" is
-     * not representable there. When v1 construction lands in Kit and Pipeit,
-     * 'auto' will map to simulation-based estimation for v1 transactions.
+     * On version 1, `build()` never returns provisory limits: if the limits are
+     * not explicit it simulates through `rpc`, and without an `rpc` it falls
+     * back to `200,000 × instruction count` CU and the 64 MiB data size cap
+     * (and warns), so a message you build and sign yourself is still valid.
      */
     computeUnits?: 'auto' | number | ComputeUnitConfig;
 
@@ -207,31 +227,33 @@ export interface TransactionBuilderConfig {
      * Loaded accounts data size limit in bytes.
      *
      * Caps the total size of accounts the transaction may load, which can
-     * reduce fees and improve scheduling. When omitted (default), no
-     * instruction is emitted and the runtime default (64 MiB) applies.
+     * reduce fees and improve scheduling. When omitted (default) on legacy/v0,
+     * no instruction is emitted and the runtime default (64 MiB) applies.
+     *
+     * Version 1 has no default (an unset limit is 0 bytes and the transaction
+     * fails), so when omitted Pipeit estimates it by simulation alongside the
+     * compute unit limit, pads it by the configured buffer and rounds up to
+     * the next 32 KiB page.
      *
      * WARNING: do not set this to an exact simulated value. Loading an account
      * that already exists costs more than loading one that does not, so if
      * anyone touches (or funds) an account between your simulation and your
      * transaction landing, an exact limit will fail at runtime. Leave headroom,
-     * or use the 'simulate' compute unit strategy, which pads the estimated
-     * limit by the configured buffer.
-     *
-     * Note: this limit only becomes a practical constraint for v1 (Alpenglow)
-     * transactions. On legacy/v0 it costs a whole compute budget instruction of
-     * transaction space, so it is not set unless you ask for it.
+     * or let the 'simulate' compute unit strategy pad the estimated limit.
      */
     loadedAccountsDataSizeLimit?: number;
 
     /**
      * Address lookup table addresses to fetch and use for compression.
-     * Only works with version 0 transactions.
+     * Only works with version 0 transactions. Throws when combined with
+     * version 1, which does not support lookup tables.
      */
     lookupTableAddresses?: Address[];
 
     /**
      * Pre-fetched lookup table data.
      * Use this to avoid fetching if you already have the data.
+     * Version 0 only; throws when combined with version 1.
      */
     addressesByLookupTable?: AddressesByLookupTableAddress;
 }
@@ -293,6 +315,24 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
             ...(config.lookupTableAddresses && { lookupTableAddresses: config.lookupTableAddresses }),
             ...(config.addressesByLookupTable && { addressesByLookupTable: config.addressesByLookupTable }),
         };
+
+        if (this.config.version === 1 && (config.lookupTableAddresses?.length || config.addressesByLookupTable)) {
+            throw new Error(
+                'Address lookup tables are not supported by version 1 transactions. ' +
+                    'Use version: 0, or remove lookupTableAddresses / addressesByLookupTable.',
+            );
+        }
+
+        if (
+            this.config.version !== 1 &&
+            typeof this.config.priorityFee === 'object' &&
+            this.config.priorityFee.lamports !== undefined
+        ) {
+            throw new Error(
+                'priorityFee.lamports is only valid for version: 1 transactions. ' +
+                    'Legacy and version 0 transactions price the fee per compute unit; use microLamports instead.',
+            );
+        }
     }
 
     /**
@@ -481,11 +521,22 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
             message = addSignersToTransactionMessage([this.feePayerSigner], message);
         }
 
+        if (this.config.version === 1) {
+            // v1: resource limits and the priority fee live in the message config,
+            // and the compute unit limit + loaded accounts data size are mandatory.
+            message = await this.buildV1Body(message);
+
+            // Auto-validate before returning
+            validateTransaction(message);
+            validateTransactionSize(message);
+
+            return message;
+        }
+
         // SET COMPUTE BUDGET FIRST (if configured)
         // Kit's setters are version-agnostic: on legacy/v0 they append-or-replace
-        // compute budget instructions; on v1 they will write message config.
-        // Running them before user instructions preserves the wire order
-        // [limit, price, loaded-accounts-data-size, ...user instructions].
+        // compute budget instructions. Running them before user instructions
+        // preserves the wire order [limit, price, loaded-accounts-data-size, ...user instructions].
 
         // 1. Compute unit limit
         const computeUnits = await this.resolveComputeUnits();
@@ -530,6 +581,145 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         validateTransactionSize(message);
 
         return message;
+    }
+
+    /**
+     * Version 1 body: append the user's instructions, then resolve the
+     * compute unit limit, loaded accounts data size limit and priority fee into
+     * the message config. A v1 message that leaves either limit unset is
+     * budgeted zero and fails at execution, so this never returns provisory
+     * limits.
+     */
+    private async buildV1Body(message: any): Promise<any> {
+        // 1. User instructions first: config carries no ordering, and any
+        //    simulation below must see the complete message.
+        for (const instruction of this.instructions) {
+            message = appendTransactionMessageInstruction(instruction, message);
+        }
+
+        // 2. Explicit limits from config.
+        const computeUnits = await this.resolveComputeUnits();
+        if (computeUnits !== null && computeUnits !== TransactionBuilder.PROVISORY_CU_SENTINEL) {
+            message = setTransactionMessageComputeUnitLimit(Math.min(computeUnits, MAX_COMPUTE_UNIT_LIMIT), message);
+        }
+        if (this.config.loadedAccountsDataSizeLimit !== undefined) {
+            message = setTransactionMessageLoadedAccountsDataSizeLimit(
+                this.config.loadedAccountsDataSizeLimit,
+                message,
+            );
+        }
+
+        // 3. Whatever is still unset becomes provisory (0) so 'auto', 'simulate'
+        //    and a missing data-size limit all take the same estimation path.
+        message = fillTransactionMessageProvisoryResourceLimits(message);
+
+        try {
+            // 4. Replace provisory limits with estimates (or the no-RPC fallback).
+            message = await this.finalizeV1ResourceLimits(message);
+
+            // 5. Priority fee, computed against the final compute unit limit.
+            const computeUnitLimit = getTransactionMessageComputeUnitLimit(message) ?? 0;
+            const lamports = await this.resolveV1PriorityFeeLamports(computeUnitLimit);
+            if (lamports > 0n) {
+                message = setTransactionMessagePriorityFeeLamports(lamports, message);
+            }
+        } catch (error) {
+            throw translateVersionError(error, 1);
+        }
+
+        return message;
+    }
+
+    /**
+     * Ensure a version 1 message carries a non-zero compute unit limit and
+     * loaded accounts data size limit.
+     *
+     * - Both explicit: nothing to do.
+     * - RPC configured: simulate once and fill whatever is provisory. Kit only
+     *   replaces provisory values, so a fixed compute unit limit is preserved
+     *   and only the data size is estimated.
+     * - No RPC: fall back to `200,000 × instruction count` CU (the runtime's
+     *   legacy/v0 default) and the 64 MiB data size cap, and warn.
+     */
+    private async finalizeV1ResourceLimits(message: any): Promise<any> {
+        const computeUnitLimit = getTransactionMessageComputeUnitLimit(message) ?? 0;
+        const loadedAccountsDataSizeLimit = getTransactionMessageLoadedAccountsDataSizeLimit(message) ?? 0;
+
+        if (computeUnitLimit > 0 && loadedAccountsDataSizeLimit > 0) {
+            return message;
+        }
+
+        if (this.config.rpc) {
+            const { computeUnits } = this.config;
+            const buffer =
+                (typeof computeUnits === 'object' && computeUnits.strategy === 'simulate'
+                    ? computeUnits.buffer
+                    : undefined) ?? DEFAULT_COMPUTE_BUFFER;
+            const estimateAndSet = createBufferedResourceLimitsEstimator({
+                rpc: this.config.rpc as unknown as Rpc<SimulateTransactionApi>,
+                buffer,
+            });
+            const estimated = await estimateAndSet(message);
+            if (this.config.logLevel !== 'silent') {
+                console.log(
+                    `[Pipeit] v1 resource limits estimated via simulation: ` +
+                        `${getTransactionMessageComputeUnitLimit(estimated)} CU, ` +
+                        `${getTransactionMessageLoadedAccountsDataSizeLimit(estimated)} bytes loaded accounts data`,
+                );
+            }
+            return estimated;
+        }
+
+        let fallback = message;
+        if (computeUnitLimit === 0) {
+            fallback = setTransactionMessageComputeUnitLimit(
+                Math.min(DEFAULT_COMPUTE_UNIT_LIMIT * Math.max(this.instructions.length, 1), MAX_COMPUTE_UNIT_LIMIT),
+                fallback,
+            );
+        }
+        if (loadedAccountsDataSizeLimit === 0) {
+            fallback = setTransactionMessageLoadedAccountsDataSizeLimit(MAX_LOADED_ACCOUNTS_DATA_SIZE_LIMIT, fallback);
+        }
+        if (this.config.logLevel !== 'silent') {
+            console.warn(
+                '[Pipeit] Version 1 transaction built without an rpc: resource limits could not be estimated. ' +
+                    `Falling back to ${getTransactionMessageComputeUnitLimit(fallback)} CU and ` +
+                    `${getTransactionMessageLoadedAccountsDataSizeLimit(fallback)} bytes loaded accounts data. ` +
+                    'Pass rpc to the constructor, or set computeUnits and loadedAccountsDataSizeLimit explicitly.',
+            );
+        }
+        return fallback;
+    }
+
+    /**
+     * Resolve the total priority fee (lamports) for a version 1 message.
+     * An explicit `priorityFee.lamports` wins; otherwise the per-CU price is
+     * converted using the final compute unit limit.
+     */
+    private async resolveV1PriorityFeeLamports(computeUnitLimit: number): Promise<bigint> {
+        const { priorityFee } = this.config;
+
+        if (typeof priorityFee === 'object') {
+            if (priorityFee.strategy === 'none') return 0n;
+            if (priorityFee.lamports !== undefined) {
+                if (this.config.logLevel !== 'silent') {
+                    console.log(
+                        `[Pipeit] Priority fee: ${priorityFee.lamports.toLocaleString()} lamports total (explicit)`,
+                    );
+                }
+                return priorityFee.lamports;
+            }
+        }
+
+        const microLamportsPerCU = await this.resolvePriorityFee();
+        const lamports = microLamportsToPriorityFeeLamports(microLamportsPerCU, computeUnitLimit);
+        if (this.config.logLevel !== 'silent') {
+            console.log(
+                `[Pipeit] Priority fee: ${lamports.toLocaleString()} lamports total ` +
+                    `(${microLamportsPerCU.toLocaleString()} micro-lamports/CU × ${computeUnitLimit.toLocaleString()} CU)`,
+            );
+        }
+        return lamports;
     }
 
     /**
@@ -583,45 +773,23 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
      * Estimate resource limits via simulation and set them on the message,
      * replacing the provisory (0 CU) limit added during build().
      *
-     * Applies the configured `buffer` multiplier (default 1.1) to both the
-     * estimated compute unit limit and the estimated loaded accounts data size
-     * limit, each capped at its respective maximum.
-     * For legacy/v0 transactions Kit only sets the compute unit limit here;
-     * loaded-accounts-data-size estimation is v1-gated inside Kit, so the
-     * padding above only takes effect once v1 messages can be constructed.
+     * Legacy/v0 only (v1 resolves its limits inside build()). Applies the
+     * configured `buffer` multiplier (default 1.1) when the 'simulate'
+     * strategy is in use; Kit only sets the compute unit limit here since
+     * loaded-accounts-data-size estimation is v1-gated inside Kit.
      */
     private async applyEstimatedResourceLimits(message: any): Promise<any> {
-        const rpcWithSim = this.config.rpc as unknown as Rpc<SimulateTransactionApi>;
-        const estimateResourceLimits = estimateResourceLimitsFactory({ rpc: rpcWithSim });
-
         const { computeUnits } = this.config;
         const buffer =
             typeof computeUnits === 'object' && computeUnits.strategy === 'simulate'
                 ? (computeUnits.buffer ?? DEFAULT_COMPUTE_BUFFER)
                 : 1;
 
-        const estimateWithBuffer: typeof estimateResourceLimits = async (msg, config) => {
-            const limits = await estimateResourceLimits(msg, config);
-            return {
-                ...limits,
-                computeUnitLimit: Math.min(Math.ceil(limits.computeUnitLimit * buffer), MAX_COMPUTE_UNIT_LIMIT),
-                // Pad the loaded accounts data size for the same reason we pad compute
-                // units: simulation reflects current chain state, and state can change
-                // before the transaction lands. An account that exists costs more to
-                // load than one that does not, so a stray lamport transfer to an account
-                // this transaction was going to create is enough to exceed an exact
-                // limit. Kit is unopinionated here and does not pad.
-                ...(limits.loadedAccountsDataSizeLimit !== undefined && {
-                    loadedAccountsDataSizeLimit: Math.min(
-                        Math.ceil(limits.loadedAccountsDataSizeLimit * buffer),
-                        MAX_LOADED_ACCOUNTS_DATA_SIZE_LIMIT,
-                    ),
-                }),
-            };
-        };
-
-        const estimateAndSetResourceLimits = estimateAndSetResourceLimitsFactory(estimateWithBuffer);
-        return await estimateAndSetResourceLimits(message);
+        const estimateAndSet = createBufferedResourceLimitsEstimator({
+            rpc: this.config.rpc as unknown as Rpc<SimulateTransactionApi>,
+            buffer,
+        });
+        return await estimateAndSet(message);
     }
 
     /**
@@ -741,8 +909,9 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         // Build message using the unified build method
         let message = await (this as any).build();
 
-        // If using simulate strategy, estimate and replace the provisory resource limits
-        if (this.isSimulateCUStrategy()) {
+        // If using simulate strategy on legacy/v0, estimate and replace the
+        // provisory resource limits (v1 already resolved them inside build()).
+        if (this.config.version !== 1 && this.isSimulateCUStrategy()) {
             message = await this.applyEstimatedResourceLimits(message);
         }
 
@@ -813,6 +982,19 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
             rpcSubscriptions: RpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi>;
         } & ExecuteConfig,
     ): Promise<string> {
+        try {
+            return await this.executeInternal(params);
+        } catch (error) {
+            // Surface "this endpoint cannot handle v1" failures with a clear message.
+            throw this.config.version === 1 ? translateVersionError(error, 1) : error;
+        }
+    }
+
+    private async executeInternal(
+        params: {
+            rpcSubscriptions: RpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi>;
+        } & ExecuteConfig,
+    ): Promise<string> {
         const {
             rpcSubscriptions,
             commitment = 'confirmed',
@@ -855,8 +1037,9 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         // Build message using the unified build method
         let message = await (builderToUse as any).build();
 
-        // If using simulate strategy, estimate and replace the provisory resource limits
-        if (builderToUse.isSimulateCUStrategy()) {
+        // If using simulate strategy on legacy/v0, estimate and replace the
+        // provisory resource limits (v1 already resolved them inside build()).
+        if (this.config.version !== 1 && builderToUse.isSimulateCUStrategy()) {
             message = await builderToUse.applyEstimatedResourceLimits(message);
 
             if (this.config.logLevel !== 'silent') {
@@ -1078,6 +1261,7 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
     /**
      * Get current transaction size information.
      * Useful before calling build() to check if more instructions can fit.
+     * The limit depends on the version: 1232 bytes for legacy/v0, 4096 for v1.
      *
      * Note: This builds the message to calculate accurate size.
      * Requires feePayer to be set and RPC in config for auto-blockhash.
@@ -1099,12 +1283,14 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         // Build message to get accurate size
         const message = await (this as any).build();
         const size = getTransactionMessageSize(message);
+        // Version-aware: 1232 bytes for legacy/v0, 4096 bytes for v1.
+        const limit = getTransactionMessageSizeLimit(message);
         return {
             size,
-            limit: TRANSACTION_SIZE_LIMIT,
-            remaining: TRANSACTION_SIZE_LIMIT - size,
-            percentUsed: (size / TRANSACTION_SIZE_LIMIT) * 100,
-            canFitMore: size < TRANSACTION_SIZE_LIMIT,
+            limit,
+            remaining: limit - size,
+            percentUsed: (size / limit) * 100,
+            canFitMore: size < limit,
         };
     }
 

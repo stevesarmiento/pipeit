@@ -73,7 +73,7 @@ export function FeaturesBento() {
                             <FeatureBox
                                 icon={<IconCharacterMagnify className="size-4.5 fill-sand-1000/50" />}
                                 title="Multi-Step Flows"
-                                description="Chain complex operations with automatic batching, atomic groups, and auto-splitting when transactions exceed size limits."
+                                description="Chain complex operations with automatic batching, atomic groups, and auto-splitting when transactions exceed size limits (1232 bytes on v0, 4096 on v1)."
                                 className="h-full min-h-[420px]"
                                 background={<DitheredBarsBackground />}
                             />
@@ -87,7 +87,7 @@ export function FeaturesBento() {
                             <FeatureBox
                                 icon={<IconHandRaisedFill className="size-4.5 fill-sand-1000/50" />}
                                 title="Execution Strategies"
-                                description="Standard, Fast, or Ultra presets. Race Jito bundles against TPU and parallel RPCs for maximum landing probability."
+                                description="Standard, Fast, or Ultra presets. Race Jito bundles against TPU and parallel RPCs for maximum landing probability. Pair with @pipeit/actions to execute swap and perps plans the same way."
                                 className="h-full min-h-[420px]"
                                 background={<PianoRollBackground />}
                             />
@@ -108,7 +108,7 @@ export function FeaturesBento() {
                                 <FeatureBox
                                     icon={<IconChartBarXaxisAscending className="size-4.5 fill-sand-1000/50" />}
                                     title="Smart Defaults"
-                                    description="Auto blockhash, compute units, priority fees, and ALT compression."
+                                    description="Auto blockhash, compute units, priority fees, and ALT compression. On transaction v1, resource limits and the lamports fee are resolved for you."
                                     className="h-full"
                                     background={<GeometricWaveGridBackground />}
                                 />

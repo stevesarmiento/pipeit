@@ -8,6 +8,9 @@ Type-safe transaction builder for Solana with smart defaults, multi-step flows, 
 bun add @pipeit/core @solana/kit
 ```
 
+Requires `@solana/kit` 8 or later (kit 8 is the first release that can build
+[transaction v1](#transaction-v1-larger-transactions)).
+
 ## Quick Start
 
 ### Single Transaction
@@ -105,7 +108,7 @@ const result = await executePlan(plan, {
 
 ```typescript
 interface TransactionBuilderConfig {
-    version?: 0 | 'legacy';
+    version?: 0 | 'legacy' | 1; // default 0; 1 = SIMD-0385 (4096 bytes, no lookup tables)
     rpc?: Rpc<GetLatestBlockhashApi & GetAccountInfoApi>;
     autoRetry?: boolean | { maxAttempts: number; backoff: 'linear' | 'exponential' };
     logLevel?: 'silent' | 'minimal' | 'verbose';
@@ -213,6 +216,58 @@ console.log(`Using ${info.percentUsed.toFixed(1)}% of transaction space`);
 console.log(`${info.remaining} bytes remaining`);
 ```
 
+`info.limit` is version-aware: 1232 bytes for legacy/v0 and 4096 bytes for v1.
+
+### Transaction v1 (larger transactions)
+
+[SIMD-0385](https://solana.com/upgrades/larger-transaction-sizes) transactions
+(`version: 1`) are active on mainnet, devnet and testnet. They allow up to
+**4096 bytes** per transaction (legacy/v0: 1232) and move the compute budget
+out of ComputeBudget instructions into a message config. v1 is opt-in; the
+default version stays `0`.
+
+```typescript
+const signature = await new TransactionBuilder({ rpc, version: 1 })
+    .setFeePayerSigner(signer)
+    .addInstructions(manyInstructions) // up to 4096 bytes
+    .execute({ rpcSubscriptions });
+```
+
+What changes on v1:
+
+- **No address lookup tables.** Passing `lookupTableAddresses` or
+  `addressesByLookupTable` with `version: 1` throws at construction.
+- **Resource limits are mandatory.** A v1 transaction with no compute unit
+  limit or no loaded accounts data size limit is budgeted zero and fails.
+  `build()` therefore never returns provisory limits: with `computeUnits: 'auto'`
+  (the default) or `'simulate'` it simulates once through `rpc` and sets both
+  limits, padded by the buffer (default 1.1) with the data size rounded up to
+  the next 32 KiB page. A fixed `computeUnits` keeps your limit and estimates
+  only the data size. An explicit `loadedAccountsDataSizeLimit` is used as-is.
+- **No `rpc` fallback.** Without an `rpc` and without explicit limits, `build()`
+  falls back to `200,000 × instruction count` CU and the 64 MiB data size cap
+  and logs a warning (unless `logLevel: 'silent'`).
+- **Priority fee is a total in lamports.** Levels and `microLamports` keep
+  their per-CU meaning and are converted with the final compute unit limit:
+  `lamports = ceil(limit × microLamports / 1e6)`. To set the total directly:
+
+    ```typescript
+    new TransactionBuilder({ rpc, version: 1, priorityFee: { strategy: 'fixed', lamports: 5_000n } });
+    ```
+
+    `lamports` is v1-only and throws on legacy/v0.
+
+- **Infrastructure.** Sending v1 needs an RPC node (and leaders) on Agave
+  4.2.2+; older nodes reject the transaction. Pipeit surfaces that as
+  `TransactionVersionUnsupportedError`, and an RPC that cannot simulate v1 as
+  `ResourceLimitEstimationError`. Reading v1 transactions back requires
+  `maxSupportedTransactionVersion: 1` on `getTransaction` / `getBlock`. Wallets
+  must advertise `supportedTransactionVersions` including `1` before you hand
+  them a v1 transaction. Jito bundles and third-party parallel endpoints must
+  also support v1; check with your provider.
+- `simulate()` on v1 with estimated limits simulates twice (once to estimate,
+  once for the result you asked for).
+
 ### Priority Fees
 
 Priority fees can be configured using preset levels or custom strategies:
@@ -241,6 +296,11 @@ new TransactionBuilder({
     },
 });
 ```
+
+On version 1 transactions the per-CU price is converted to a total in lamports
+using the final compute unit limit, or set directly with
+`{ strategy: 'fixed', lamports: 5_000n }`. See
+[Transaction v1](#transaction-v1-larger-transactions).
 
 ### Compute Units
 
@@ -290,6 +350,10 @@ new TransactionBuilder({
 });
 ```
 
+On version 1, `'auto'` behaves like `'simulate'` (v1 has no implicit default
+limit), the buffer also pads the loaded accounts data size, and that size is
+rounded up to the next 32 KiB page. Estimation happens inside `build()` on v1.
+
 ### Loaded Accounts Data Size
 
 Caps the total size of account data a transaction may load. Omitted by default:
@@ -307,12 +371,14 @@ an account between your simulation and your transaction landing, an exact limit
 fails at runtime. Leave headroom. The `'simulate'` compute unit strategy pads
 this limit by the same buffer it applies to compute units.
 
-This limit becomes a practical constraint for v1 (Alpenglow) transactions, where
-resource limits move into required message config rather than instructions.
+On version 1 this limit is mandatory (an unset limit is 0 bytes). When omitted,
+Pipeit estimates it by simulation together with the compute unit limit; when set,
+your value is used as-is.
 
 ### Address Lookup Tables
 
-Address lookup tables automatically compress transactions for version 0 transactions:
+Address lookup tables automatically compress transactions for version 0 transactions.
+Version 1 does not support lookup tables and throws if any are configured:
 
 ```typescript
 // Provide ALT addresses (will be fetched automatically)
@@ -324,9 +390,7 @@ new TransactionBuilder({
 // Or provide pre-fetched ALT data
 new TransactionBuilder({
     version: 0,
-    addressesByLookupTable: {
-        /* pre-fetched data */
-    },
+    addressesByLookupTable: {/* pre-fetched data */},
 });
 ```
 
@@ -346,6 +410,14 @@ const result = await createFlow({ rpc, rpcSubscriptions, signer })
         return instruction2(prev);
     })
     .execute();
+```
+
+`createFlow` also accepts `version`, `priorityFee` and `computeUnits`, which are
+applied to every transaction the flow builds (atomic groups default to a fixed
+400,000 CU unless `computeUnits` is set):
+
+```typescript
+createFlow({ rpc, rpcSubscriptions, signer, version: 1, priorityFee: 'high' });
 ```
 
 ### Step Types
@@ -441,8 +513,17 @@ const result = await executePlan(plan, {
     rpcSubscriptions,
     signer,
     commitment: 'confirmed',
+    version: 1, // optional; default 0. v1 packs up to 4096 bytes per transaction, no lookup tables
 });
+
+// Each successful single-transaction result carries its signature
+// (Kit 8 result context: `result.context.signature`)
 ```
+
+On version 1 the executor estimates both the compute unit limit and the loaded
+accounts data size before each send (padded and page-rounded). Combining
+`version: 1` with `lookupTableAddresses` / `addressesByLookupTable` is a type
+error and throws at runtime.
 
 All Kit instruction-plans types and functions are re-exported. See [@solana/instruction-plans](https://github.com/solana-labs/solana-web3.js/tree/master/packages/instruction-plans) for full documentation.
 
@@ -524,21 +605,28 @@ try {
 ### Validation
 
 - `validateTransaction(message)` - Validate transaction has required fields
-- `validateTransactionSize(message)` - Validate transaction size
-- `getTransactionSizeInfo(message)` - Get size information
-- `TRANSACTION_SIZE_LIMIT` - Maximum transaction size constant
+- `validateTransactionSize(message)` - Validate transaction size against its version's limit
+- `getTransactionSizeInfo(message)` - Get size information (includes `limit` and `version`)
+- `getTransactionMessageSizeLimit(message)` - Version-aware size limit (re-exported from Kit)
+- `LEGACY_TRANSACTION_SIZE_LIMIT` (1232), `V1_TRANSACTION_SIZE_LIMIT` (4096)
+- `TRANSACTION_SIZE_LIMIT` - Deprecated alias of the legacy limit
 
 ### Errors
 
-- `TransactionTooLargeError` - Transaction exceeds size limit
+- `TransactionTooLargeError` - Transaction exceeds the size limit for its version
 - `InsufficientFundsError` - Insufficient funds for transaction
+- `TransactionVersionUnsupportedError` - RPC node / cluster does not support the transaction version (v1 needs Agave 4.2.2+)
+- `ResourceLimitEstimationError` - RPC could not report `loadedAccountsDataSize` for a v1 estimate
+- `translateVersionError(error)` - Map Kit's v1-related error codes onto the two errors above
 - `isBlockhashExpiredError(error)` - Check if error is blockhash expiration
 - `isSimulationFailedError(error)` - Check if error is simulation failure
 - `isTransactionTooLargeError(error)` - Check if error is transaction too large
+- `isTransactionVersionUnsupportedError(error)`, `isResourceLimitEstimationError(error)`
 
 ### Kit Integration
 
-All types and functions from `@solana/instruction-plans` are re-exported:
+Requires `@solana/kit` ^8.0.0 (peer dependency). All types and functions from
+`@solana/instruction-plans` are re-exported:
 
 - `InstructionPlan`, `TransactionPlan`, `TransactionPlanResult`
 - `sequentialInstructionPlan`, `parallelInstructionPlan`, `nonDivisibleSequentialInstructionPlan`

@@ -16,6 +16,8 @@ import type {
 } from '@solana/rpc';
 import type { RpcSubscriptions, SignatureNotificationsApi, SlotNotificationsApi } from '@solana/rpc-subscriptions';
 import type { ExecutionConfig } from '../execution/types.js';
+import type { PriorityFeeConfig, ComputeUnitConfig, PriorityFeeLevel } from '../compute-budget/index.js';
+import type { SupportedTransactionVersion } from '../types.js';
 
 // =============================================================================
 // Shared RPC Types (used by both core and actions)
@@ -172,4 +174,23 @@ export interface FlowConfig extends BaseContext {
      * Supports Jito bundles, parallel RPC, and direct TPU submission.
      */
     execution?: ExecutionConfig;
+
+    /**
+     * Transaction version for every transaction the flow builds. Defaults to 0.
+     * Use 1 for SIMD-0385 transactions (up to 4096 bytes; no lookup tables).
+     */
+    version?: SupportedTransactionVersion;
+
+    /**
+     * Priority fee applied to every transaction the flow builds.
+     * See {@link TransactionBuilderConfig.priorityFee}. Defaults to 'medium'.
+     */
+    priorityFee?: PriorityFeeLevel | PriorityFeeConfig;
+
+    /**
+     * Compute unit configuration applied to batched and sequential steps.
+     * See {@link TransactionBuilderConfig.computeUnits}. Atomic groups default
+     * to a fixed 400,000 CU unless this is set.
+     */
+    computeUnits?: 'auto' | number | ComputeUnitConfig;
 }

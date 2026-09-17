@@ -24,6 +24,7 @@ Demonstrates the value proposition of Pipeit with:
 - Hero section with key messaging
 - Benefits overview
 - Side-by-side code comparison (@solana/kit vs @pipeit/core)
+- Transaction v1 (SIMD-0385) transfer demo with a wallet capability check
 - Feature highlights (bento grid)
 - Playground CTA
 
@@ -104,7 +105,7 @@ Multi-step examples demonstrate:
 - `@pipeit/core` - Transaction builder
 - `@pipeit/actions` - DeFi actions (Titan, Metis swaps)
 - `@pipeit/fastlane` - TPU direct submission
-- `@solana/kit` - Solana primitives
+- `@solana/kit` (8.x) - Solana primitives
 - `@solana/connector` - Wallet connection
 - `next` - React framework
 - `shadcn/ui` - UI components

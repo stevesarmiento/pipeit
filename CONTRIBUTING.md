@@ -37,7 +37,7 @@ This is a monorepo managed with Turbo and Bun workspaces:
 ### Prerequisites
 
 - Node.js >= 22.13.0
-- Bun >= 1.3.6
+- Bun >= 1.4.0
 - Rust (for fastlane package development)
 
 ### Code Style
