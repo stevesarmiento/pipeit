@@ -41,7 +41,12 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Latest LTS bundles npm >=11.5.1, which supports npm trusted
+          # publishing (OIDC) so publishes work without NPM_TOKEN once the
+          # packages have a Trusted Publisher configured on npmjs.com.
+          # Token auth keeps working as before. Do not upgrade to npm@12:
+          # it has a packaging bug that breaks provenance publishes.
+          node-version: 'lts/*'
           registry-url: https://registry.npmjs.org/
 
       - name: Install dependencies
