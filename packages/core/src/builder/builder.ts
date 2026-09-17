@@ -68,6 +68,7 @@ import {
     setTransactionMessageLoadedAccountsDataSizeLimit,
     getTransactionMessageComputeUnitLimit,
     getTransactionMessageLoadedAccountsDataSizeLimit,
+    setTransactionMessageHeapSize,
     setTransactionMessagePriorityFeeLamports,
 } from '@solana/transaction-messages';
 import {
@@ -114,6 +115,7 @@ import {
     createBufferedResourceLimitsEstimator,
     type PriorityFeeLevel,
 } from '../compute-budget/index.js';
+import { extractComputeBudgetValues, type CallerComputeBudgetValues } from '../compute-budget/normalize.js';
 import { fetchNonceValue, type DurableNonceConfig } from '../nonce/index.js';
 import { type AddressesByLookupTableAddress, compressTransactionMessage } from '../lookup-tables/index.js';
 
@@ -204,6 +206,10 @@ export interface TransactionBuilderConfig {
      * total in lamports, so Pipeit converts using the final compute unit limit:
      * `lamports = ceil(limit × microLamports / 1e6)`. Pass
      * `{ strategy: 'fixed', lamports: 5_000n }` on v1 to set the total directly.
+     *
+     * A SetComputeUnitPrice instruction among the added instructions is
+     * stripped and its price used only when this field is not set. Setting it
+     * (including `'none'`) always wins.
      */
     priorityFee?: PriorityFeeLevel | PriorityFeeConfig;
 
@@ -220,6 +226,10 @@ export interface TransactionBuilderConfig {
      * not explicit it simulates through `rpc`, and without an `rpc` it falls
      * back to `200,000 × instruction count` CU and the 64 MiB data size cap
      * (and warns), so a message you build and sign yourself is still valid.
+     *
+     * A SetComputeUnitLimit instruction among the added instructions is
+     * stripped and its limit used only when this field is not set. Setting it
+     * (including `'auto'`) always wins.
      */
     computeUnits?: 'auto' | number | ComputeUnitConfig;
 
@@ -301,7 +311,18 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         addressesByLookupTable?: AddressesByLookupTableAddress;
     };
 
+    /**
+     * Which budget fields the caller set explicitly (as opposed to the
+     * constructor defaults). Explicit config beats compute budget instructions
+     * found in the instruction list; defaults yield to them.
+     */
+    private explicitConfig: { priorityFee: boolean; computeUnits: boolean };
+
     constructor(config: TransactionBuilderConfig = {}) {
+        this.explicitConfig = {
+            priorityFee: config.priorityFee !== undefined,
+            computeUnits: config.computeUnits !== undefined,
+        };
         this.config = {
             version: config.version ?? 0,
             rpc: config.rpc,
@@ -438,6 +459,13 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
 
     /**
      * Add a single instruction to the transaction.
+     *
+     * ComputeBudget instructions (RequestHeapFrame, SetComputeUnitLimit,
+     * SetComputeUnitPrice, SetLoadedAccountsDataSizeLimit) are not emitted
+     * as-is: `build()` strips them and folds their values into the builder's
+     * compute budget. Explicit builder config wins; otherwise the instruction's
+     * value is used. Version 1 messages end up with the budget in the config
+     * block only.
      */
     addInstruction(instruction: Instruction): TransactionBuilder<TState> {
         const builder = this.clone();
@@ -447,6 +475,9 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
 
     /**
      * Add multiple instructions to the transaction.
+     *
+     * ComputeBudget instructions are normalized as described in
+     * {@link TransactionBuilder.addInstruction}.
      */
     addInstructions(instructions: readonly Instruction[]): TransactionBuilder<TState> {
         const builder = this.clone();
@@ -521,10 +552,15 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
             message = addSignersToTransactionMessage([this.feePayerSigner], message);
         }
 
+        // Caller-supplied ComputeBudget instructions are folded into the
+        // builder's budget so no kind is ever emitted twice (the runtime
+        // rejects duplicates) and v1 keeps its budget in the config only.
+        const { instructions, callerValues } = extractComputeBudgetValues(this.instructions);
+
         if (this.config.version === 1) {
             // v1: resource limits and the priority fee live in the message config,
             // and the compute unit limit + loaded accounts data size are mandatory.
-            message = await this.buildV1Body(message);
+            message = await this.buildV1Body(message, instructions, callerValues);
 
             // Auto-validate before returning
             validateTransaction(message);
@@ -536,10 +572,12 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         // SET COMPUTE BUDGET FIRST (if configured)
         // Kit's setters are version-agnostic: on legacy/v0 they append-or-replace
         // compute budget instructions. Running them before user instructions
-        // preserves the wire order [limit, price, loaded-accounts-data-size, ...user instructions].
+        // preserves the wire order [limit, price, loaded-accounts-data-size, heap, ...user instructions].
+        // Caller-supplied values were stripped above and apply only where the
+        // builder has no explicit config for the field.
 
         // 1. Compute unit limit
-        const computeUnits = await this.resolveComputeUnits();
+        const computeUnits = await this.resolveComputeUnits(callerValues);
         if (computeUnits === TransactionBuilder.PROVISORY_CU_SENTINEL) {
             // Provisory (0 CU) limit - will be estimated via simulation during execute()
             message = fillTransactionMessageProvisoryResourceLimits(message);
@@ -548,26 +586,30 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         }
 
         // 2. Priority fee / compute unit price
-        const priorityFee = await this.resolvePriorityFee();
+        const priorityFee = await this.resolvePriorityFee(callerValues);
         if (this.config.logLevel !== 'silent') {
             console.log(
-                `[Pipeit] Priority fee: ${priorityFee.toLocaleString()} micro-lamports/CU (${(priorityFee / 1_000_000).toFixed(3)} lamports/CU)`,
+                `[Pipeit] Priority fee: ${priorityFee.toLocaleString()} micro-lamports/CU (${(Number(priorityFee) / 1_000_000).toFixed(3)} lamports/CU)`,
             );
         }
-        if (priorityFee > 0) {
-            message = setTransactionMessageComputeUnitPrice(BigInt(priorityFee), message);
+        if (priorityFee > 0n) {
+            message = setTransactionMessageComputeUnitPrice(priorityFee, message);
         }
 
-        // 3. Loaded accounts data size limit (only when explicitly configured)
-        if (this.config.loadedAccountsDataSizeLimit !== undefined) {
-            message = setTransactionMessageLoadedAccountsDataSizeLimit(
-                this.config.loadedAccountsDataSizeLimit,
-                message,
-            );
+        // 3. Loaded accounts data size limit (only when configured or caller-supplied)
+        const loadedAccountsDataSizeLimit =
+            this.config.loadedAccountsDataSizeLimit ?? callerValues.loadedAccountsDataSizeLimit;
+        if (loadedAccountsDataSizeLimit !== undefined) {
+            message = setTransactionMessageLoadedAccountsDataSizeLimit(loadedAccountsDataSizeLimit, message);
+        }
+
+        // 4. Heap frame (caller-supplied only; the builder has no heap config)
+        if (callerValues.heapSize !== undefined) {
+            message = setTransactionMessageHeapSize(callerValues.heapSize, message);
         }
 
         // Add user's instructions after compute budget instructions
-        for (const instruction of this.instructions) {
+        for (const instruction of instructions) {
             message = appendTransactionMessageInstruction(instruction, message);
         }
 
@@ -590,23 +632,30 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
      * budgeted zero and fails at execution, so this never returns provisory
      * limits.
      */
-    private async buildV1Body(message: any): Promise<any> {
+    private async buildV1Body(
+        message: any,
+        instructions: readonly Instruction[],
+        callerValues: CallerComputeBudgetValues,
+    ): Promise<any> {
         // 1. User instructions first: config carries no ordering, and any
         //    simulation below must see the complete message.
-        for (const instruction of this.instructions) {
+        for (const instruction of instructions) {
             message = appendTransactionMessageInstruction(instruction, message);
         }
 
-        // 2. Explicit limits from config.
-        const computeUnits = await this.resolveComputeUnits();
+        // 2. Explicit limits from config (or the caller's instructions where
+        //    the builder has none).
+        const computeUnits = await this.resolveComputeUnits(callerValues);
         if (computeUnits !== null && computeUnits !== TransactionBuilder.PROVISORY_CU_SENTINEL) {
             message = setTransactionMessageComputeUnitLimit(Math.min(computeUnits, MAX_COMPUTE_UNIT_LIMIT), message);
         }
-        if (this.config.loadedAccountsDataSizeLimit !== undefined) {
-            message = setTransactionMessageLoadedAccountsDataSizeLimit(
-                this.config.loadedAccountsDataSizeLimit,
-                message,
-            );
+        const loadedAccountsDataSizeLimit =
+            this.config.loadedAccountsDataSizeLimit ?? callerValues.loadedAccountsDataSizeLimit;
+        if (loadedAccountsDataSizeLimit !== undefined) {
+            message = setTransactionMessageLoadedAccountsDataSizeLimit(loadedAccountsDataSizeLimit, message);
+        }
+        if (callerValues.heapSize !== undefined) {
+            message = setTransactionMessageHeapSize(callerValues.heapSize, message);
         }
 
         // 3. Whatever is still unset becomes provisory (0) so 'auto', 'simulate'
@@ -615,11 +664,11 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
 
         try {
             // 4. Replace provisory limits with estimates (or the no-RPC fallback).
-            message = await this.finalizeV1ResourceLimits(message);
+            message = await this.finalizeV1ResourceLimits(message, instructions.length);
 
             // 5. Priority fee, computed against the final compute unit limit.
             const computeUnitLimit = getTransactionMessageComputeUnitLimit(message) ?? 0;
-            const lamports = await this.resolveV1PriorityFeeLamports(computeUnitLimit);
+            const lamports = await this.resolveV1PriorityFeeLamports(computeUnitLimit, callerValues);
             if (lamports > 0n) {
                 message = setTransactionMessagePriorityFeeLamports(lamports, message);
             }
@@ -641,7 +690,7 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
      * - No RPC: fall back to `200,000 × instruction count` CU (the runtime's
      *   legacy/v0 default) and the 64 MiB data size cap, and warn.
      */
-    private async finalizeV1ResourceLimits(message: any): Promise<any> {
+    private async finalizeV1ResourceLimits(message: any, instructionCount: number): Promise<any> {
         const computeUnitLimit = getTransactionMessageComputeUnitLimit(message) ?? 0;
         const loadedAccountsDataSizeLimit = getTransactionMessageLoadedAccountsDataSizeLimit(message) ?? 0;
 
@@ -673,7 +722,7 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         let fallback = message;
         if (computeUnitLimit === 0) {
             fallback = setTransactionMessageComputeUnitLimit(
-                Math.min(DEFAULT_COMPUTE_UNIT_LIMIT * Math.max(this.instructions.length, 1), MAX_COMPUTE_UNIT_LIMIT),
+                Math.min(DEFAULT_COMPUTE_UNIT_LIMIT * Math.max(instructionCount, 1), MAX_COMPUTE_UNIT_LIMIT),
                 fallback,
             );
         }
@@ -696,8 +745,25 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
      * An explicit `priorityFee.lamports` wins; otherwise the per-CU price is
      * converted using the final compute unit limit.
      */
-    private async resolveV1PriorityFeeLamports(computeUnitLimit: number): Promise<bigint> {
+    private async resolveV1PriorityFeeLamports(
+        computeUnitLimit: number,
+        callerValues: CallerComputeBudgetValues,
+    ): Promise<bigint> {
         const { priorityFee } = this.config;
+
+        if (!this.explicitConfig.priorityFee && callerValues.computeUnitPriceMicroLamports !== undefined) {
+            const lamports = microLamportsToPriorityFeeLamports(
+                callerValues.computeUnitPriceMicroLamports,
+                computeUnitLimit,
+            );
+            if (this.config.logLevel !== 'silent') {
+                console.log(
+                    `[Pipeit] Priority fee: ${lamports.toLocaleString()} lamports total ` +
+                        `(${callerValues.computeUnitPriceMicroLamports.toLocaleString()} micro-lamports/CU from instruction × ${computeUnitLimit.toLocaleString()} CU)`,
+                );
+            }
+            return lamports;
+        }
 
         if (typeof priorityFee === 'object') {
             if (priorityFee.strategy === 'none') return 0n;
@@ -711,7 +777,7 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
             }
         }
 
-        const microLamportsPerCU = await this.resolvePriorityFee();
+        const microLamportsPerCU = await this.resolveConfiguredPriorityFee();
         const lamports = microLamportsToPriorityFeeLamports(microLamportsPerCU, computeUnitLimit);
         if (this.config.logLevel !== 'silent') {
             console.log(
@@ -723,9 +789,22 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
     }
 
     /**
-     * Resolve priority fee based on configuration.
+     * Resolve the per-CU priority fee (micro-lamports) based on configuration.
+     * A caller-supplied SetComputeUnitPrice is used only when `priorityFee`
+     * was not configured explicitly.
      */
-    private async resolvePriorityFee(): Promise<number> {
+    private async resolvePriorityFee(callerValues?: CallerComputeBudgetValues): Promise<bigint> {
+        if (!this.explicitConfig.priorityFee && callerValues?.computeUnitPriceMicroLamports !== undefined) {
+            return callerValues.computeUnitPriceMicroLamports;
+        }
+        return BigInt(await this.resolveConfiguredPriorityFee());
+    }
+
+    /**
+     * Resolve the configured per-CU priority fee (micro-lamports), ignoring
+     * caller-supplied instructions.
+     */
+    private async resolveConfiguredPriorityFee(): Promise<number> {
         const { priorityFee } = this.config;
 
         // String level (preset)
@@ -798,8 +877,13 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
      * Returns PROVISORY_CU_SENTINEL if a provisory instruction should be added
      * (will be updated via simulation during execute()).
      */
-    private async resolveComputeUnits(): Promise<number | null> {
+    private async resolveComputeUnits(callerValues?: CallerComputeBudgetValues): Promise<number | null> {
         const { computeUnits } = this.config;
+
+        // A caller-supplied limit applies only when computeUnits was not configured
+        if (!this.explicitConfig.computeUnits && callerValues?.computeUnitLimit !== undefined) {
+            return callerValues.computeUnitLimit;
+        }
 
         // 'auto' = no explicit instruction
         if (computeUnits === 'auto') {
@@ -1402,6 +1486,8 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
             ...(this.config.lookupTableAddresses && { lookupTableAddresses: this.config.lookupTableAddresses }),
             ...(this.config.addressesByLookupTable && { addressesByLookupTable: this.config.addressesByLookupTable }),
         });
+        // The constructor above saw resolved defaults; restore what was explicit.
+        builder.explicitConfig = { ...this.explicitConfig };
         if (this.feePayer !== undefined) {
             builder.feePayer = this.feePayer;
         }
