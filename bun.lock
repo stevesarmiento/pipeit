@@ -74,7 +74,7 @@
     },
     "packages/actions": {
       "name": "@pipeit/actions",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "dependencies": {
         "@coral-xyz/anchor": "^0.32.1",
         "@ellipsis-labs/rise": "^0.4.62",
@@ -99,7 +99,7 @@
         "vitest": "^4.1.9",
       },
       "peerDependencies": {
-        "@pipeit/core": "^0.3.0",
+        "@pipeit/core": "^0.3.1",
         "@solana/addresses": "^8.0.0",
         "@solana/instruction-plans": "^8.0.0",
         "@solana/instructions": "^8.0.0",
@@ -112,7 +112,7 @@
     },
     "packages/core": {
       "name": "@pipeit/core",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "devDependencies": {
         "@solana-program/compute-budget": "^0.18.1",
         "@solana/addresses": "^8.0.0",
