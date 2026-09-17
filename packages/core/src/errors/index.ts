@@ -8,6 +8,7 @@
 export * from './errors.js';
 export * from './predicates.js';
 export * from './messages.js';
+export * from './version-errors.js';
 
 // TPU-specific errors
 export * from './tpu-errors.js';

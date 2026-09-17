@@ -14,7 +14,7 @@ import {
     createTransactionMessage,
     setTransactionMessageFeePayer,
     appendTransactionMessageInstruction,
-    type TransactionMessage,
+    type TransactionVersion,
 } from '@solana/transaction-messages';
 import { compressTransactionMessage, calculateLookupTableSavings } from '../compress.js';
 import type { AddressesByLookupTableAddress } from '../types.js';
@@ -29,7 +29,7 @@ const LOOKUP_TABLES: AddressesByLookupTableAddress = {
     [LOOKUP_TABLE]: [ACCOUNT_A, ACCOUNT_B],
 };
 
-function createMessage(version: 0 | 'legacy') {
+function createMessage(version: TransactionVersion) {
     return pipe(
         createTransactionMessage({ version }),
         tx => setTransactionMessageFeePayer(FEE_PAYER, tx),
@@ -46,12 +46,6 @@ function createMessage(version: 0 | 'legacy') {
                 tx,
             ),
     );
-}
-
-/** v1 messages cannot be created via Kit 7.0.0's public API; shape one by hand. */
-function createV1ShapedMessage(): TransactionMessage {
-    const v0 = createMessage(0);
-    return { ...v0, version: 1 } as unknown as TransactionMessage;
 }
 
 describe('compressTransactionMessage', () => {
@@ -72,7 +66,7 @@ describe('compressTransactionMessage', () => {
     });
 
     it('returns v1 messages unchanged by reference (v1 has no ALT support)', () => {
-        const message = createV1ShapedMessage();
+        const message = createMessage(1);
         expect(compressTransactionMessage(message, LOOKUP_TABLES)).toBe(message);
     });
 });
@@ -87,7 +81,7 @@ describe('calculateLookupTableSavings', () => {
     });
 
     it('reports zero savings for v1 messages', () => {
-        expect(calculateLookupTableSavings(createV1ShapedMessage(), LOOKUP_TABLES)).toEqual({
+        expect(calculateLookupTableSavings(createMessage(1), LOOKUP_TABLES)).toEqual({
             accountsConvertible: 0,
             bytesSaved: 0,
             lookupTablesUsed: 0,

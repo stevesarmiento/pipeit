@@ -25,6 +25,13 @@ export const pipelinesManifest: Array<PipelineExampleMeta> = [
         description: 'Instruction and transaction steps - shows when batching breaks',
         section: 'basics',
     },
+    {
+        id: 'large-v1-transaction',
+        name: 'Large Transaction (v1)',
+        description:
+            'Nine instructions in one ~1.4 KB transaction - only possible with transaction v1 (4096-byte limit)',
+        section: 'basics',
+    },
     // Advanced
     {
         id: 'jito-bundle',

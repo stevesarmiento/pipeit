@@ -79,6 +79,11 @@ pipeit/
 
 ## Installation
 
+Pipeit 0.3+ requires `@solana/kit` 8 or later, which is also the minimum for
+transaction v1 (SIMD-0385, up to 4096 bytes). Pass `version: 1` to
+`TransactionBuilder`, `executePlan` or `createFlow` to opt in; the default stays
+version 0. See the [@pipeit/core README](packages/core/README.md#transaction-v1-larger-transactions).
+
 ```bash
 # Transaction builder (recommended starting point)
 bun add @pipeit/core @solana/kit

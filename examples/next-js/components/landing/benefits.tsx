@@ -3,6 +3,8 @@
 import {
     IconArrowDownAppDashedTrianglebadgeExclamationmark,
     IconArrowtriangleRightAndLineVerticalAndArrowtriangleLeftFill,
+    IconArrowUpLeftAndArrowDownRightSquareFill,
+    IconArrowLeftAndRightSquareFill,
     IconCharacterMagnify,
     IconCursorarrowClick2,
     IconDigitalcrownHorizontalArrowClockwiseFill,
@@ -32,6 +34,18 @@ const benefits = [
         name: 'Address Lookup Tables',
         description: 'Automatic ALT compression for v0 transactions reduces size and cost.',
         icon: IconCharacterMagnify,
+    },
+    {
+        name: 'Transaction v1 Ready',
+        description:
+            'Pass version: 1 for 4096-byte transactions. Compute budget and lamports fee land in the message config automatically.',
+        icon: IconArrowUpLeftAndArrowDownRightSquareFill,
+    },
+    {
+        name: 'DeFi Actions',
+        description:
+            '@pipeit/actions ships InstructionPlan builders for Titan and Jupiter swaps and Phoenix and Flash perps that drop straight into executePlan.',
+        icon: IconArrowLeftAndRightSquareFill,
     },
     {
         name: 'Durable Nonce Support',

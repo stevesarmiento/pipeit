@@ -10,6 +10,8 @@ import {
     TransactionTooLargeError,
     SignatureRejectedError,
     AccountNotFoundError,
+    TransactionVersionUnsupportedError,
+    ResourceLimitEstimationError,
 } from './errors.js';
 
 /**
@@ -30,6 +32,10 @@ export function getErrorMessage(error: PipeitErrorType | Error): string {
 
     if (error instanceof AccountNotFoundError) {
         return `Account not found: ${error.account}`;
+    }
+
+    if (error instanceof TransactionVersionUnsupportedError || error instanceof ResourceLimitEstimationError) {
+        return error.message;
     }
 
     if (error instanceof Error) {

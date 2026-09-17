@@ -1,16 +1,15 @@
 /**
- * Tests for priority fee instruction creation and estimation.
+ * Tests for priority fee estimation and conversion.
  */
 
 import { describe, it, expect } from 'vitest';
 import type { Rpc } from '@solana/rpc';
 import {
-    COMPUTE_BUDGET_PROGRAM,
     PRIORITY_FEE_LEVELS,
-    createSetComputeUnitPriceInstruction,
     estimatePriorityFee,
     getPriorityFeeFromLevel,
     calculatePriorityFeeCost,
+    microLamportsToPriorityFeeLamports,
 } from '../priority-fees.js';
 import type { PrioritizationFeeEntry } from '../types.js';
 
@@ -25,39 +24,6 @@ function stubRpc(entries: PrioritizationFeeEntry[]): Rpc<any> {
 function feeEntry(prioritizationFee: number): PrioritizationFeeEntry {
     return { slot: 1n, prioritizationFee: BigInt(prioritizationFee) };
 }
-
-describe('createSetComputeUnitPriceInstruction', () => {
-    it('produces the historical byte layout: [3, u64 LE micro-lamports]', () => {
-        const ix = createSetComputeUnitPriceInstruction(10_000);
-
-        expect(ix.programAddress).toBe(COMPUTE_BUDGET_PROGRAM);
-        expect(ix.accounts).toHaveLength(0);
-
-        const data = ix.data as Uint8Array;
-        expect(data).toHaveLength(9);
-        expect(data[0]).toBe(3); // SetComputeUnitPrice discriminator
-        const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-        expect(view.getBigUint64(1, true)).toBe(10_000n);
-    });
-
-    it('encodes zero and large values correctly', () => {
-        const zero = createSetComputeUnitPriceInstruction(0);
-        const zeroView = new DataView(
-            (zero.data as Uint8Array).buffer,
-            (zero.data as Uint8Array).byteOffset,
-            (zero.data as Uint8Array).byteLength,
-        );
-        expect(zeroView.getBigUint64(1, true)).toBe(0n);
-
-        const large = createSetComputeUnitPriceInstruction(5_000_000);
-        const largeView = new DataView(
-            (large.data as Uint8Array).buffer,
-            (large.data as Uint8Array).byteOffset,
-            (large.data as Uint8Array).byteLength,
-        );
-        expect(largeView.getBigUint64(1, true)).toBe(5_000_000n);
-    });
-});
 
 describe('PRIORITY_FEE_LEVELS', () => {
     it('defines the documented preset values in micro-lamports/CU', () => {
@@ -117,5 +83,33 @@ describe('calculatePriorityFeeCost', () => {
     it('converts micro-lamports/CU x CU into lamports', () => {
         expect(calculatePriorityFeeCost(10_000, 200_000)).toBe(2_000);
         expect(calculatePriorityFeeCost(0, 200_000)).toBe(0);
+    });
+});
+
+describe('microLamportsToPriorityFeeLamports (v1 total fee)', () => {
+    it('returns 0n for a zero price or zero limit', () => {
+        expect(microLamportsToPriorityFeeLamports(0, 200_000)).toBe(0n);
+        expect(microLamportsToPriorityFeeLamports(10_000, 0)).toBe(0n);
+    });
+
+    it('matches the exact per-CU × CU product when it divides evenly', () => {
+        // 20,000 CU × 250,000 µL/CU = 5,000 lamports (the SIMD-0385 worked example)
+        expect(microLamportsToPriorityFeeLamports(250_000, 20_000)).toBe(5_000n);
+        expect(microLamportsToPriorityFeeLamports(10_000, 200_000)).toBe(2_000n);
+    });
+
+    it('rounds up to whole lamports like the runtime', () => {
+        // 333,333 × 10,000 = 3,333,330,000 µL = 3,333.33 lamports → 3,334
+        expect(microLamportsToPriorityFeeLamports(10_000, 333_333)).toBe(3_334n);
+        expect(microLamportsToPriorityFeeLamports(1, 1)).toBe(1n);
+    });
+
+    it('stays exact for large values via BigInt', () => {
+        expect(microLamportsToPriorityFeeLamports(100_000_000, 1_400_000)).toBe(140_000_000n);
+    });
+
+    it('treats non-finite input as no fee', () => {
+        expect(microLamportsToPriorityFeeLamports(Number.NaN, 1)).toBe(0n);
+        expect(microLamportsToPriorityFeeLamports(1, Number.POSITIVE_INFINITY)).toBe(0n);
     });
 });
