@@ -160,11 +160,22 @@ export function calculatePriorityFeeCost(microLamportsPerCU: number, computeUnit
  * ```ts
  * microLamportsToPriorityFeeLamports(10_000, 200_000); // 2_000n lamports
  * microLamportsToPriorityFeeLamports(10_000, 333_333); // 3_334n (rounded up)
+ * microLamportsToPriorityFeeLamports(10_000n, 200_000); // bigint prices (e.g. decoded u64) are accepted
  * ```
  */
-export function microLamportsToPriorityFeeLamports(microLamportsPerCU: number, computeUnitLimit: number): bigint {
-    if (!Number.isFinite(microLamportsPerCU) || !Number.isFinite(computeUnitLimit)) return 0n;
-    if (microLamportsPerCU <= 0 || computeUnitLimit <= 0) return 0n;
-    const microLamports = BigInt(Math.round(microLamportsPerCU)) * BigInt(Math.round(computeUnitLimit));
+export function microLamportsToPriorityFeeLamports(
+    microLamportsPerCU: number | bigint,
+    computeUnitLimit: number,
+): bigint {
+    if (!Number.isFinite(computeUnitLimit) || computeUnitLimit <= 0) return 0n;
+    let pricePerCU: bigint;
+    if (typeof microLamportsPerCU === 'bigint') {
+        pricePerCU = microLamportsPerCU;
+    } else {
+        if (!Number.isFinite(microLamportsPerCU)) return 0n;
+        pricePerCU = BigInt(Math.round(microLamportsPerCU));
+    }
+    if (pricePerCU <= 0n) return 0n;
+    const microLamports = pricePerCU * BigInt(Math.round(computeUnitLimit));
     return (microLamports + 999_999n) / 1_000_000n;
 }

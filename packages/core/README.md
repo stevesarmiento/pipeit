@@ -247,6 +247,10 @@ What changes on v1:
 - **No `rpc` fallback.** Without an `rpc` and without explicit limits, `build()`
   falls back to `200,000 × instruction count` CU and the 64 MiB data size cap
   and logs a warning (unless `logLevel: 'silent'`).
+- **No ComputeBudget instructions.** Any ComputeBudget instructions you add
+  (for example the `RequestHeapFrame` a Titan route ships with) are stripped
+  and folded into the config block — see
+  [Caller-supplied ComputeBudget instructions](#caller-supplied-computebudget-instructions).
 - **Priority fee is a total in lamports.** Levels and `microLamports` keep
   their per-CU meaning and are converted with the final compute unit limit:
   `lamports = ceil(limit × microLamports / 1e6)`. To set the total directly:
@@ -326,6 +330,38 @@ new TransactionBuilder({
         strategy: 'simulate',
     },
 });
+```
+
+### Caller-supplied ComputeBudget instructions
+
+Instructions you add may already carry a compute budget — DEX routes commonly
+include `RequestHeapFrame`, and sometimes `SetComputeUnitLimit` /
+`SetComputeUnitPrice`. The builder never emits these as-is, because the runtime
+rejects a transaction with two ComputeBudget instructions of the same kind.
+Instead `build()` strips them and folds their values in:
+
+- **Explicit builder config wins.** If you passed `computeUnits`,
+  `priorityFee` or `loadedAccountsDataSizeLimit` to the constructor, that
+  value is used and the instruction's value is dropped — including
+  `computeUnits: 'auto'` and `priorityFee: 'none'`.
+- **Otherwise the instruction's value is used.** With the constructor defaults
+  untouched, a caller-supplied limit, price or data size limit is applied as
+  if you had configured it. A heap frame is always used (the builder has no
+  heap config).
+- **One instruction per kind on legacy/v0**, in the prefix before your
+  instructions; **config only on v1**, where a per-CU price is converted to a
+  lamport total against the final compute unit limit.
+
+```typescript
+// Titan route includes RequestHeapFrame(262144) and SetComputeUnitPrice(5_000)
+const message = await new TransactionBuilder({ version: 1 })
+    .setFeePayer(feePayer)
+    .setBlockhashLifetime(blockhash, lastValidBlockHeight)
+    .addInstructions(titanRouteInstructions)
+    .build();
+
+message.instructions; // no ComputeBudget instructions
+message.config; // { computeUnitLimit, loadedAccountsDataSizeLimit, heapSize: 262144, priorityFeeLamports }
 ```
 
 The `'simulate'` strategy uses Kit's resource-limit estimators to:
