@@ -7,41 +7,14 @@ import {
     DEFAULT_COMPUTE_UNIT_LIMIT,
     MAX_COMPUTE_UNIT_LIMIT,
     DEFAULT_COMPUTE_BUFFER,
-    createSetComputeUnitLimitInstruction,
+    MAX_LOADED_ACCOUNTS_DATA_SIZE_LIMIT,
+    LOADED_ACCOUNTS_DATA_SIZE_PAGE,
+    roundUpToLoadedAccountsDataSizePage,
+    applyBuffer,
     estimateComputeUnits,
     shouldAddComputeUnitInstruction,
     getComputeUnitLimit,
 } from '../compute-units.js';
-import { COMPUTE_BUDGET_PROGRAM } from '../priority-fees.js';
-
-describe('createSetComputeUnitLimitInstruction', () => {
-    it('should create instruction with specified units', () => {
-        const instruction = createSetComputeUnitLimitInstruction(300_000);
-
-        expect(instruction.programAddress).toBe(COMPUTE_BUDGET_PROGRAM);
-        expect(instruction.accounts).toHaveLength(0);
-        expect(instruction.data[0]).toBe(2); // SetComputeUnitLimit discriminator
-    });
-
-    it('should clamp units to MAX_COMPUTE_UNIT_LIMIT', () => {
-        const instruction = createSetComputeUnitLimitInstruction(2_000_000);
-
-        // Read the u32 from bytes 1-4
-        const dataView = new DataView(instruction.data.buffer);
-        const units = dataView.getUint32(1, true);
-
-        expect(units).toBe(MAX_COMPUTE_UNIT_LIMIT);
-    });
-
-    it('should encode units as little-endian u32', () => {
-        const instruction = createSetComputeUnitLimitInstruction(400_000);
-
-        const dataView = new DataView(instruction.data.buffer);
-        const units = dataView.getUint32(1, true);
-
-        expect(units).toBe(400_000);
-    });
-});
 
 describe('estimateComputeUnits', () => {
     it('should return fixed units when strategy is fixed', () => {
@@ -142,10 +115,43 @@ describe('getComputeUnitLimit', () => {
     });
 });
 
+describe('applyBuffer', () => {
+    it('is exact where naive float multiplication is not', () => {
+        expect(100_000 * 1.1).not.toBe(110_000); // the IEEE artifact this guards against
+        expect(applyBuffer(100_000, 1.1)).toBe(110_000);
+        expect(applyBuffer(200_000, 1.1)).toBe(220_000);
+    });
+
+    it('rounds up fractional results', () => {
+        expect(applyBuffer(3, 1.1)).toBe(4);
+        expect(applyBuffer(100_000, 1)).toBe(100_000);
+    });
+});
+
+describe('roundUpToLoadedAccountsDataSizePage', () => {
+    it('never returns less than one 32 KiB page', () => {
+        expect(roundUpToLoadedAccountsDataSizePage(0)).toBe(LOADED_ACCOUNTS_DATA_SIZE_PAGE);
+        expect(roundUpToLoadedAccountsDataSizePage(1)).toBe(32_768);
+    });
+
+    it('keeps exact page multiples and rounds everything else up', () => {
+        expect(roundUpToLoadedAccountsDataSizePage(32_768)).toBe(32_768);
+        expect(roundUpToLoadedAccountsDataSizePage(32_769)).toBe(65_536);
+        expect(roundUpToLoadedAccountsDataSizePage(44_000)).toBe(65_536);
+    });
+
+    it('caps at the 64 MiB runtime maximum', () => {
+        expect(roundUpToLoadedAccountsDataSizePage(MAX_LOADED_ACCOUNTS_DATA_SIZE_LIMIT + 1)).toBe(
+            MAX_LOADED_ACCOUNTS_DATA_SIZE_LIMIT,
+        );
+    });
+});
+
 describe('constants', () => {
     it('should have correct default values', () => {
         expect(DEFAULT_COMPUTE_UNIT_LIMIT).toBe(200_000);
         expect(MAX_COMPUTE_UNIT_LIMIT).toBe(1_400_000);
         expect(DEFAULT_COMPUTE_BUFFER).toBe(1.1);
+        expect(LOADED_ACCOUNTS_DATA_SIZE_PAGE).toBe(32 * 1024);
     });
 });

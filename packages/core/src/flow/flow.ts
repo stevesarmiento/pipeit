@@ -5,7 +5,7 @@
  */
 
 import type { Instruction } from '@solana/instructions';
-import { TransactionBuilder } from '../builder/builder.js';
+import { TransactionBuilder, type TransactionBuilderConfig } from '../builder/builder.js';
 import { isTransactionTooLargeError } from '../errors/predicates.js';
 import type {
     FlowConfig,
@@ -49,6 +49,9 @@ interface ResolvedFlowConfig {
     strategy: NonNullable<FlowConfig['strategy']>;
     commitment: NonNullable<FlowConfig['commitment']>;
     execution?: FlowConfig['execution'];
+    version?: FlowConfig['version'];
+    priorityFee?: FlowConfig['priorityFee'];
+    computeUnits?: FlowConfig['computeUnits'];
 }
 
 export class TransactionFlow {
@@ -67,6 +70,26 @@ export class TransactionFlow {
         if (config.execution !== undefined) {
             this.config.execution = config.execution;
         }
+        if (config.version !== undefined) {
+            this.config.version = config.version;
+        }
+        if (config.priorityFee !== undefined) {
+            this.config.priorityFee = config.priorityFee;
+        }
+        if (config.computeUnits !== undefined) {
+            this.config.computeUnits = config.computeUnits;
+        }
+    }
+
+    /**
+     * Builder options shared by every transaction the flow builds
+     * (version and priority fee). Spread-safe under exactOptionalPropertyTypes.
+     */
+    private builderOptions(): Pick<TransactionBuilderConfig, 'version' | 'priorityFee'> {
+        return {
+            ...(this.config.version !== undefined && { version: this.config.version }),
+            ...(this.config.priorityFee !== undefined && { priorityFee: this.config.priorityFee }),
+        };
     }
 
     /**
@@ -251,8 +274,9 @@ export class TransactionFlow {
                     const signature = await new TransactionBuilder({
                         rpc: this.config.rpc,
                         logLevel: 'verbose',
+                        ...this.builderOptions(),
                         // Set higher compute budget for atomic groups (DeFi swaps can need 300k+ CU)
-                        computeUnits: 400_000,
+                        computeUnits: this.config.computeUnits ?? 400_000,
                     })
                         .setFeePayerSigner(this.config.signer)
                         .addInstructions(instructions)
@@ -292,6 +316,8 @@ export class TransactionFlow {
             const signature = await new TransactionBuilder({
                 rpc: this.config.rpc,
                 logLevel: 'verbose',
+                ...this.builderOptions(),
+                ...(this.config.computeUnits !== undefined && { computeUnits: this.config.computeUnits }),
             })
                 .setFeePayerSigner(this.config.signer)
                 .addInstructions(instructions)
@@ -337,6 +363,8 @@ export class TransactionFlow {
                     const signature = await new TransactionBuilder({
                         rpc: this.config.rpc,
                         logLevel: 'verbose',
+                        ...this.builderOptions(),
+                        ...(this.config.computeUnits !== undefined && { computeUnits: this.config.computeUnits }),
                     })
                         .setFeePayerSigner(this.config.signer)
                         .addInstruction(instruction)
@@ -357,8 +385,9 @@ export class TransactionFlow {
 
                     const signature = await new TransactionBuilder({
                         rpc: this.config.rpc,
+                        ...this.builderOptions(),
                         // Set higher compute budget for atomic groups (DeFi swaps can need 300k+ CU)
-                        computeUnits: 400_000,
+                        computeUnits: this.config.computeUnits ?? 400_000,
                     })
                         .setFeePayerSigner(this.config.signer)
                         .addInstructions(instructions)

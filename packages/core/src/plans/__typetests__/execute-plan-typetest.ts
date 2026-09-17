@@ -131,3 +131,47 @@ const addressesByLookupTable = null as unknown as AddressesByLookupTableAddress;
         addressesByLookupTable,
     };
 }
+
+// [DESCRIBE] ExecutePlanConfig transaction version
+{
+    // It accepts version 1 without lookup tables
+    {
+        const config: ExecutePlanConfig = {
+            rpc: baseRpc,
+            rpcSubscriptions,
+            signer,
+            version: 1,
+        };
+        config satisfies ExecutePlanConfig;
+    }
+
+    // It accepts version 0 with lookup tables
+    {
+        const config: ExecutePlanConfig = {
+            rpc: rpcWithLookupFetch,
+            rpcSubscriptions,
+            signer,
+            version: 0,
+            lookupTableAddresses: [altAddress],
+        };
+        config satisfies ExecutePlanConfig;
+    }
+
+    // @ts-expect-error It rejects version 1 combined with lookupTableAddresses (v1 has no lookup tables)
+    const _v1WithAddresses: ExecutePlanConfig = {
+        rpc: rpcWithLookupFetch,
+        rpcSubscriptions,
+        signer,
+        version: 1,
+        lookupTableAddresses: [altAddress],
+    };
+
+    // @ts-expect-error It rejects version 1 combined with addressesByLookupTable (v1 has no lookup tables)
+    const _v1WithData: ExecutePlanConfig = {
+        rpc: baseRpc,
+        rpcSubscriptions,
+        signer,
+        version: 1,
+        addressesByLookupTable,
+    };
+}

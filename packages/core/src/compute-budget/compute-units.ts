@@ -1,11 +1,9 @@
 /**
- * Compute unit estimation and instruction creation.
+ * Compute unit and loaded-accounts-data-size estimation helpers.
  *
  * @packageDocumentation
  */
 
-import type { Instruction } from '@solana/instructions';
-import { getSetComputeUnitLimitInstruction } from '@solana-program/compute-budget';
 import type { ComputeUnitConfig, ComputeUnitEstimate } from './types.js';
 
 /**
@@ -32,32 +30,37 @@ export const DEFAULT_COMPUTE_BUFFER = 1.1;
 export const MAX_LOADED_ACCOUNTS_DATA_SIZE_LIMIT = 64 * 1024 * 1024;
 
 /**
- * Create SetComputeUnitLimit instruction.
- * Sets the maximum compute units a transaction can consume.
- *
- * @param units - Maximum compute units (max: 1,400,000)
- * @returns Instruction to set compute unit limit
- *
- * @example
- * ```ts
- * const ix = createSetComputeUnitLimitInstruction(300_000);
- * // Sets max CU to 300,000
- * ```
- *
- * @deprecated Use `setTransactionMessageComputeUnitLimit` from `@solana/kit`
- * (version-agnostic: instruction on legacy/v0, message config on v1) or
- * `getSetComputeUnitLimitInstruction` from `@solana-program/compute-budget`.
+ * Granularity the runtime charges loaded account data in (32 KiB pages).
+ * Loaded accounts data size limits are rounded up to this boundary.
  */
-export function createSetComputeUnitLimitInstruction(units: number): Instruction {
-    // Clamp to maximum
-    const clampedUnits = Math.min(units, MAX_COMPUTE_UNIT_LIMIT);
+export const LOADED_ACCOUNTS_DATA_SIZE_PAGE = 32 * 1024;
 
-    // Delegate to the generated builder; restore the empty accounts array the
-    // generated instruction omits to preserve this function's historical shape.
-    return {
-        ...getSetComputeUnitLimitInstruction({ units: clampedUnits }),
-        accounts: [],
-    };
+/**
+ * Apply a headroom multiplier and round up to a whole unit without
+ * floating-point artifacts (`100_000 * 1.1` is `110000.00000000001` in IEEE
+ * doubles, which a naive `Math.ceil` turns into 110_001).
+ *
+ * @param value - The simulated value (compute units or bytes)
+ * @param buffer - Multiplier, e.g. 1.1 for 10% headroom (6 decimal places honoured)
+ */
+export function applyBuffer(value: number, buffer: number): number {
+    const scaledBuffer = Math.round(buffer * 1_000_000);
+    return Math.ceil((value * scaledBuffer) / 1_000_000);
+}
+
+/**
+ * Round a loaded accounts data size up to the next 32 KiB page.
+ *
+ * Always returns at least one page so an estimate of zero bytes can never
+ * collapse back into the provisory value of 0 (which a version 1 transaction
+ * would fail on). Capped at {@link MAX_LOADED_ACCOUNTS_DATA_SIZE_LIMIT}.
+ *
+ * @param bytes - Loaded accounts data size in bytes
+ * @returns Page-aligned size in bytes
+ */
+export function roundUpToLoadedAccountsDataSizePage(bytes: number): number {
+    const pages = Math.max(1, Math.ceil(Math.max(0, bytes) / LOADED_ACCOUNTS_DATA_SIZE_PAGE));
+    return Math.min(pages * LOADED_ACCOUNTS_DATA_SIZE_PAGE, MAX_LOADED_ACCOUNTS_DATA_SIZE_LIMIT);
 }
 
 /**

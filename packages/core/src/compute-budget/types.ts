@@ -25,8 +25,20 @@ export interface PriorityFeeConfig {
 
     /**
      * Fixed micro-lamports per compute unit (for 'fixed' strategy).
+     *
+     * On version 1 transactions this is converted into a total fee using the
+     * final compute unit limit: `lamports = ceil(limit × microLamports / 1e6)`.
      */
     microLamports?: number;
+
+    /**
+     * Absolute total priority fee in lamports (for 'fixed' strategy).
+     *
+     * Version 1 transactions only: v1 expresses the priority fee as a total in
+     * lamports rather than a per-compute-unit price. When set, it overrides the
+     * per-CU conversion. Throws if used with legacy or version 0 transactions.
+     */
+    lamports?: bigint;
 
     /**
      * Percentile of recent fees to use (for 'percentile' strategy).

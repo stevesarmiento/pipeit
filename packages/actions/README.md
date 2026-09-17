@@ -362,6 +362,11 @@ await executePlan(combinedPlan, {
 
 Titan swaps often require Address Lookup Tables to stay under transaction size limits. The `@pipeit/core` `executePlan` function handles this automatically:
 
+> **Transaction v1 note:** version 1 transactions (SIMD-0385) allow 4096 bytes but do
+> not support lookup tables. Titan, Metis and Flash plans return `lookupTableAddresses`
+> and must run with `version: 0` (the default). Phoenix plans return no lookup tables and
+> can be executed with `executePlan(plan, { ..., version: 1 })`.
+
 1. **Planner-time compression**: ALTs are used during transaction planning, so Kit can pack more instructions per transaction.
 2. **Executor-time compression**: Messages are compressed before simulation and signing, ensuring what you simulate is what you send.
 

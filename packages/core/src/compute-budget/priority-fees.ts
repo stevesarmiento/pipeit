@@ -1,14 +1,12 @@
 /**
- * Priority fee estimation and instruction creation.
+ * Priority fee estimation and conversion helpers.
  *
  * @packageDocumentation
  */
 
 import type { Address } from '@solana/addresses';
-import type { Instruction } from '@solana/instructions';
 import type { Rpc } from '@solana/rpc';
 import { address } from '@solana/addresses';
-import { getSetComputeUnitPriceInstruction } from '@solana-program/compute-budget';
 import type { PriorityFeeConfig, PriorityFeeEstimate, PrioritizationFeeEntry } from './types.js';
 
 /**
@@ -37,33 +35,6 @@ interface GetRecentPrioritizationFeesApi {
         slot: bigint;
         prioritizationFee: bigint;
     }[];
-}
-
-/**
- * Create SetComputeUnitPrice instruction.
- * Sets the priority fee in micro-lamports per compute unit.
- *
- * @param microLamports - Fee in micro-lamports per compute unit
- * @returns Instruction to set compute unit price
- *
- * @example
- * ```ts
- * const ix = createSetComputeUnitPriceInstruction(10_000);
- * // Sets priority fee to 0.01 lamports per CU
- * ```
- *
- * @deprecated Use `setTransactionMessageComputeUnitPrice` from `@solana/kit`
- * (legacy/v0 only - v1 replaces the per-CU price with an absolute
- * `priorityFeeLamports`) or `getSetComputeUnitPriceInstruction` from
- * `@solana-program/compute-budget`.
- */
-export function createSetComputeUnitPriceInstruction(microLamports: number): Instruction {
-    // Delegate to the generated builder; restore the empty accounts array the
-    // generated instruction omits to preserve this function's historical shape.
-    return {
-        ...getSetComputeUnitPriceInstruction({ microLamports }),
-        accounts: [],
-    };
 }
 
 /**
@@ -170,4 +141,30 @@ export function getPriorityFeeFromLevel(level: PriorityFeeLevel): number {
 export function calculatePriorityFeeCost(microLamportsPerCU: number, computeUnits: number): number {
     // micro-lamports to lamports: divide by 1_000_000
     return (microLamportsPerCU * computeUnits) / 1_000_000;
+}
+
+/**
+ * Convert a per-compute-unit price into the total priority fee a version 1
+ * transaction pays.
+ *
+ * Legacy and version 0 transactions state a price in micro-lamports per compute
+ * unit; version 1 states the total in lamports. The runtime rounds the total up
+ * to whole lamports, so this does the same. This is the single conversion point
+ * Pipeit uses when a per-CU `priorityFee` is applied to a v1 transaction.
+ *
+ * @param microLamportsPerCU - Fee in micro-lamports per compute unit
+ * @param computeUnitLimit - The transaction's final compute unit limit
+ * @returns Total priority fee in lamports
+ *
+ * @example
+ * ```ts
+ * microLamportsToPriorityFeeLamports(10_000, 200_000); // 2_000n lamports
+ * microLamportsToPriorityFeeLamports(10_000, 333_333); // 3_334n (rounded up)
+ * ```
+ */
+export function microLamportsToPriorityFeeLamports(microLamportsPerCU: number, computeUnitLimit: number): bigint {
+    if (!Number.isFinite(microLamportsPerCU) || !Number.isFinite(computeUnitLimit)) return 0n;
+    if (microLamportsPerCU <= 0 || computeUnitLimit <= 0) return 0n;
+    const microLamports = BigInt(Math.round(microLamportsPerCU)) * BigInt(Math.round(computeUnitLimit));
+    return (microLamports + 999_999n) / 1_000_000n;
 }

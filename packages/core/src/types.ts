@@ -6,7 +6,7 @@
 
 import type { Address } from '@solana/addresses';
 import type { Instruction } from '@solana/instructions';
-import type { TransactionMessage } from '@solana/transaction-messages';
+import type { TransactionMessage, TransactionVersion } from '@solana/transaction-messages';
 import type { Rpc, GetLatestBlockhashApi } from '@solana/rpc';
 import type { ExecutionConfig } from './execution/types.js';
 
@@ -28,22 +28,23 @@ export type RequiredState = {
 };
 
 /**
- * Transaction versions Pipeit can construct today.
+ * Transaction versions Pipeit can construct.
  *
- * Mirrors Kit 7.0.0's constructor gate (`SupportedTransactionVersion =
- * Exclude<TransactionVersion, 1>`): the v1 (Alpenglow) format exists in Kit's
- * type system and wire codecs, but `createTransactionMessage` cannot produce
- * it yet. This alias is the single widening point once v1 construction lands
- * upstream.
+ * - `'legacy'`: original message format (1232-byte limit, no lookup tables)
+ * - `0`: versioned format with address lookup table support (1232-byte limit)
+ * - `1`: SIMD-0385 format (4096-byte limit, no lookup tables). Resource
+ *   limits and the priority fee live in the message config rather than in
+ *   ComputeBudget instructions, and the compute unit limit and loaded
+ *   accounts data size limit are mandatory.
  */
-export type SupportedTransactionVersion = 0 | 'legacy';
+export type SupportedTransactionVersion = TransactionVersion;
 
 /**
  * Configuration for transaction builder.
  */
 export interface BuilderConfig {
     /**
-     * Transaction version (0 for versioned transactions, 'legacy' for legacy).
+     * Transaction version: 0 (default), 'legacy', or 1 (SIMD-0385, up to 4096 bytes).
      */
     version?: SupportedTransactionVersion;
     /**

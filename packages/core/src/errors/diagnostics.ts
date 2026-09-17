@@ -18,7 +18,12 @@ import {
     SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_ALREADY_INITIALIZED,
     SOLANA_ERROR__INSTRUCTION_ERROR__UNINITIALIZED_ACCOUNT,
     SOLANA_ERROR__INSTRUCTION_ERROR__PROGRAM_FAILED_TO_COMPLETE,
+    SOLANA_ERROR__TRANSACTION__FAILED_TO_ESTIMATE_LOADED_ACCOUNTS_DATA_SIZE_LIMIT,
+    SOLANA_ERROR__JSON_RPC__SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION,
+    SOLANA_ERROR__TRANSACTION_ERROR__UNSUPPORTED_VERSION,
+    SOLANA_ERROR__TRANSACTION_ERROR__MAX_LOADED_ACCOUNTS_DATA_SIZE_EXCEEDED,
 } from '@solana/errors';
+import { ResourceLimitEstimationError, TransactionVersionUnsupportedError } from './errors.js';
 
 /**
  * Detailed error diagnosis result.
@@ -57,6 +62,9 @@ export type ErrorCategory =
     | 'invalid_data'
     | 'network_error'
     | 'user_rejected'
+    | 'unsupported_version'
+    | 'resource_limit_estimation'
+    | 'resource_limit_exceeded'
     | 'unknown';
 
 /**
@@ -89,6 +97,55 @@ export function diagnoseError(error: unknown): ErrorDiagnosis {
                 'The transaction took too long to confirm and the blockhash expired. Solana blockhashes are valid for approximately 60-90 seconds.',
             suggestion:
                 'Retry the transaction with a fresh blockhash. If using TransactionBuilder, it will automatically fetch a new blockhash.',
+            logs,
+            originalError: error,
+        };
+    }
+
+    // Transaction version not supported by the RPC node / cluster (v1)
+    if (
+        error instanceof TransactionVersionUnsupportedError ||
+        isSolanaError(error, SOLANA_ERROR__JSON_RPC__SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION) ||
+        isSolanaError(error, SOLANA_ERROR__TRANSACTION_ERROR__UNSUPPORTED_VERSION)
+    ) {
+        return {
+            category: 'unsupported_version',
+            summary: 'Transaction version not supported by this RPC node or cluster',
+            details:
+                'Version 1 (SIMD-0385) transactions require Agave 4.2.2+ RPC nodes and a cluster where the enable_tx_v1 feature is active. Older nodes reject them.',
+            suggestion:
+                'Point at an upgraded RPC endpoint, or build with version: 0 until your infrastructure supports v1.',
+            logs,
+            originalError: error,
+        };
+    }
+
+    // v1 resource-limit estimation impossible on this RPC
+    if (
+        error instanceof ResourceLimitEstimationError ||
+        isSolanaError(error, SOLANA_ERROR__TRANSACTION__FAILED_TO_ESTIMATE_LOADED_ACCOUNTS_DATA_SIZE_LIMIT)
+    ) {
+        return {
+            category: 'resource_limit_estimation',
+            summary: 'Could not estimate loaded accounts data size for a version 1 transaction',
+            details:
+                'The RPC node did not report loadedAccountsDataSize from simulateTransaction. Version 1 transactions fail on-chain without an explicit loaded accounts data size limit.',
+            suggestion:
+                'Upgrade the RPC node to Agave 4.2.2+, or set loadedAccountsDataSizeLimit explicitly in the builder config.',
+            logs,
+            originalError: error,
+        };
+    }
+
+    // Loaded accounts data size limit too low
+    if (isSolanaError(error, SOLANA_ERROR__TRANSACTION_ERROR__MAX_LOADED_ACCOUNTS_DATA_SIZE_EXCEEDED)) {
+        return {
+            category: 'resource_limit_exceeded',
+            summary: 'Transaction loaded more account data than its limit allows',
+            details:
+                'The loaded accounts data size limit was lower than the bytes the transaction actually loaded. Accounts that already exist cost more to load than accounts that do not, so an exact simulated limit can be too small once state changes.',
+            suggestion:
+                'Raise loadedAccountsDataSizeLimit, or increase the simulate-strategy buffer so the estimate carries more headroom.',
             logs,
             originalError: error,
         };

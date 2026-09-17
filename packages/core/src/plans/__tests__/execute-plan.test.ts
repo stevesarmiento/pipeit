@@ -9,13 +9,31 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { executePlan } from '../execute-plan.js';
+import { address } from '@solana/addresses';
+import type { Rpc } from '@solana/rpc';
+import type { TransactionSigner } from '@solana/signers';
+import { executePlan, createPlanTransactionMessage } from '../execute-plan.js';
 import {
     sequentialInstructionPlan,
     parallelInstructionPlan,
     createTransactionPlanner,
     createTransactionPlanExecutor,
 } from '../index.js';
+
+const FEE_PAYER = address('So11111111111111111111111111111111111111112');
+const LOOKUP_TABLE = address('Stake11111111111111111111111111111111111111');
+
+function stubRpc(): Rpc<any> {
+    return {
+        getLatestBlockhash: () => ({
+            send: async () => ({
+                value: { blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 100n },
+            }),
+        }),
+    } as unknown as Rpc<any>;
+}
+
+const signer = { address: FEE_PAYER } as unknown as TransactionSigner;
 
 describe('executePlan exports', () => {
     it('should export executePlan function', () => {
@@ -119,5 +137,55 @@ describe('ALT compression integration', () => {
         expect(plannerAltFlow.hook).toBe('onTransactionMessageUpdated');
         expect(plannerAltFlow.action).toContain('compressTransactionMessage');
         expect(plannerAltFlow.benefit).toContain('optimal packing');
+    });
+});
+
+describe('executePlan version handling', () => {
+    it('rejects version 1 combined with lookupTableAddresses', async () => {
+        await expect(
+            executePlan(sequentialInstructionPlan([]), {
+                rpc: stubRpc(),
+                rpcSubscriptions: {} as any,
+                signer,
+                version: 1,
+                lookupTableAddresses: [LOOKUP_TABLE],
+            } as any),
+        ).rejects.toThrow(/lookup tables are not supported by version 1/);
+    });
+
+    it('rejects version 1 combined with addressesByLookupTable', async () => {
+        await expect(
+            executePlan(sequentialInstructionPlan([]), {
+                rpc: stubRpc(),
+                rpcSubscriptions: {} as any,
+                signer,
+                version: 1,
+                addressesByLookupTable: { [LOOKUP_TABLE]: [FEE_PAYER] },
+            } as any),
+        ).rejects.toThrow(/lookup tables are not supported by version 1/);
+    });
+});
+
+describe('createPlanTransactionMessage', () => {
+    it('defaults to version 0 with a provisory compute unit limit instruction', async () => {
+        const message = await createPlanTransactionMessage({ rpc: stubRpc(), signer });
+
+        expect(message.version).toBe(0);
+        expect(message.feePayer.address).toBe(FEE_PAYER);
+        // Provisory SetComputeUnitLimit (discriminator 2, 0 units) reserved for later estimation
+        expect(message.instructions).toHaveLength(1);
+        expect(message.instructions[0]!.data![0]).toBe(2);
+        expect('config' in message).toBe(false);
+    });
+
+    it('builds a version 1 message with provisory limits in the config, not as instructions', async () => {
+        const message = await createPlanTransactionMessage({ rpc: stubRpc(), signer, version: 1 });
+
+        expect(message.version).toBe(1);
+        expect(message.instructions).toHaveLength(0);
+        const config = (message as { config?: { computeUnitLimit?: number; loadedAccountsDataSizeLimit?: number } })
+            .config;
+        expect(config?.computeUnitLimit).toBe(0);
+        expect(config?.loadedAccountsDataSizeLimit).toBe(0);
     });
 });

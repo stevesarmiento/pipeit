@@ -7,6 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { LegacySolTransfer } from './legacy-sol-transfer';
 import { ModernSolTransfer } from './modern-sol-transfer';
 import { PipeitSolTransfer } from './pipeit-sol-transfer';
+import { PipeitV1Transfer } from './pipeit-v1-transfer';
 
 export function TransactionDemo() {
     const { connected } = useConnector();
@@ -25,13 +26,17 @@ export function TransactionDemo() {
 
     return (
         <Tabs defaultValue="pipeit" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="pipeit">Simplified (Pipeit)</TabsTrigger>
+                <TabsTrigger value="pipeit-v1">Pipeit (tx v1)</TabsTrigger>
                 <TabsTrigger value="modern">Modern (Gill)</TabsTrigger>
                 <TabsTrigger value="legacy">Legacy (web3.js)</TabsTrigger>
             </TabsList>
             <TabsContent value="pipeit" className="mt-6">
                 <PipeitSolTransfer />
+            </TabsContent>
+            <TabsContent value="pipeit-v1" className="mt-6">
+                <PipeitV1Transfer />
             </TabsContent>
             <TabsContent value="modern" className="mt-6">
                 <ModernSolTransfer />
