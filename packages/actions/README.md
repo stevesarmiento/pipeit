@@ -15,13 +15,15 @@ This package provides Kit-compatible `InstructionPlan` factories that can be:
 | Titan             | `@pipeit/actions/titan`   | Swap quote and swap plan builders                            |
 | Jupiter Metis     | `@pipeit/actions/metis`   | Swap quote and swap instruction plan builders                |
 | Phoenix Perps     | `@pipeit/actions/phoenix` | Open/close position and cancel-order plan builders           |
-| Flash Trade Perps | `@pipeit/actions/flash`   | Open/close position, TP/SL, and trigger-cancel plan builders |
 
 ## Installation
 
 ```bash
 bun add @pipeit/actions @pipeit/core @solana/kit
 ```
+
+Some integrations have their own SDK as an optional peer dependency, installed
+only by consumers that use that subpath — see each integration's section below.
 
 ## Quick Start
 
@@ -136,7 +138,15 @@ const lookupTableAddresses = route.addressLookupTables.map(titanPubkeyToAddress)
 
 ## Phoenix Perps API
 
-Phoenix actions are exposed only through the Phoenix subpath. Create one
+Phoenix actions are exposed only through the Phoenix subpath and require the
+`@ellipsis-labs/rise` SDK, an optional peer dependency — install it only if
+you use `@pipeit/actions/phoenix`:
+
+```bash
+bun add @ellipsis-labs/rise
+```
+
+Create one
 client, reuse it across calls, and dispose it when done — it holds HTTP,
 exchange-metadata cache, and RPC resources (plan builders create and dispose
 a throwaway client per call when none is passed, re-fetching exchange
@@ -228,102 +238,6 @@ import {
 
 Phoenix is private beta software and requires Phoenix access. Phoenix states it is not available in the U.S. or sanctioned jurisdictions. These actions only build instructions; callers remain responsible for eligibility, trader account funding, signing, and trading outcomes.
 
-## Flash Trade Perps API
-
-Flash actions are exposed only through the Flash subpath:
-
-```typescript
-import { AnchorProvider } from '@coral-xyz/anchor';
-import { getFlashOpenPositionPlan, getFlashClosePositionPlan } from '@pipeit/actions/flash';
-import { executePlan } from '@pipeit/core';
-
-// The provider must point at a LIVE RPC endpoint: flash-sdk simulates a
-// sizing quote and checks token accounts through provider.connection while
-// the plan is being built. The provider wallet is the trader.
-const provider = new AnchorProvider(connection, wallet, {
-    commitment: 'processed',
-    preflightCommitment: 'processed',
-});
-
-// A SOL short collateralized with USDC. On the default Crypto.1 pool,
-// shorts collateralize with USDC while longs collateralize with the target
-// token itself (native SOL is unsupported in V1 — see below; SOL longs can
-// use JitoSOL).
-const openResult = await getFlashOpenPositionPlan({
-    clientConfig: { provider },
-    trader: { owner: provider.wallet.publicKey.toBase58() },
-    symbol: 'SOL',
-    side: 'short',
-    collateral: {
-        amount: '25',
-        symbol: 'USDC',
-    },
-    leverage: '2',
-    entry: {
-        type: 'market',
-        slippageBps: 80, // 0.8% — also the default
-    },
-    risk: {
-        takeProfit: { triggerPriceUsd: '145.00' },
-        stopLoss: { triggerPriceUsd: '180.00' },
-    },
-});
-
-await executePlan(openResult.plan, {
-    rpc,
-    rpcSubscriptions,
-    signer,
-    lookupTableAddresses: openResult.lookupTableAddresses,
-});
-
-const closeResult = await getFlashClosePositionPlan({
-    clientConfig: { provider },
-    trader: { owner: provider.wallet.publicKey.toBase58() },
-    symbol: 'SOL',
-    collateralSymbol: 'USDC',
-    side: 'short',
-    size: { percent: 100 },
-});
-```
-
-Behavior worth knowing:
-
-- **Plan building is not offline.** flash-sdk simulates the sizing quote via
-  `provider.connection` and may check ATA existence; a dead RPC endpoint
-  fails plan building, not just execution.
-- **`trader.owner` must equal the provider wallet.** flash-sdk builds every
-  instruction for `provider.wallet.publicKey`; a mismatch throws
-  `FlashTraderMismatchError` instead of producing a plan for the wrong
-  wallet.
-- **Native SOL collateral is rejected in V1** (`UnsupportedFlashCollateralError`):
-  flash-sdk would create an ephemeral wSOL keypair signer that `executePlan`
-  cannot sign. Use USDC or a wrapped/liquid token (WSOL, JitoSOL).
-- **Closes receive the collateral token.** `receiveSymbol` must equal
-  `collateralSymbol` (the collateral drives the position PDA derivation);
-  receiving another token needs flash-sdk's `closeAndSwap`, not wrapped yet.
-- **Prices come from Pyth Hermes by default** via each pool token's
-  `pythPriceId` (`createFlashPythPriceSource`). Inject your own
-  `priceSource` (and/or a custom `fetch`) to override.
-- **Default slippage is 80 bps (0.8%).** flash-sdk interprets slippage with
-  `BPS_DECIMALS = 4`.
-
-### Flash errors
-
-```typescript
-import {
-    FlashPlanError, // base class
-    FlashTraderMismatchError, // exposes .traderOwner and .providerWallet
-    FlashPriceSourceError, // exposes .statusCode and .responseBody
-    UnsupportedFlashCollateralError,
-    UnsupportedFlashOrderConfigError,
-    InvalidFlashAmountError,
-    InvalidFlashRiskConfigError,
-    FlashMarketConfigError,
-} from '@pipeit/actions/flash';
-```
-
-Flash docs describe the REST API as the primary integration path and the SDK as secondary. This package uses SDK instruction builders because Pipeit composes `InstructionPlan`s instead of opaque ready-to-sign transactions. Flash actions build instructions only; callers remain responsible for funding, signing, eligibility, and trading outcomes.
-
 ## Composing Plans
 
 The real power of InstructionPlans is composition. Combine multiple plans:
@@ -363,7 +277,7 @@ await executePlan(combinedPlan, {
 Titan swaps often require Address Lookup Tables to stay under transaction size limits. The `@pipeit/core` `executePlan` function handles this automatically:
 
 > **Transaction v1 note:** version 1 transactions (SIMD-0385) allow 4096 bytes but do
-> not support lookup tables. Titan, Metis and Flash plans return `lookupTableAddresses`
+> not support lookup tables. Titan and Metis plans return `lookupTableAddresses`
 > and must run with `version: 0` (the default). Phoenix plans return no lookup tables and
 > can be executed with `executePlan(plan, { ..., version: 1 })`.
 

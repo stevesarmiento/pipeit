@@ -23,7 +23,7 @@ Built on modern Solana libraries (@solana/kit) with a focus on type safety, deve
 | Package                                 | Description                                                              | Docs                                   |
 | --------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------- |
 | [@pipeit/core](./packages/core)         | Transaction builder with smart defaults, flows, and execution strategies | [README](./packages/core/README.md)    |
-| [@pipeit/actions](./packages/actions)   | InstructionPlan factories for DeFi (Titan, Metis, Phoenix, Flash)        | [README](./packages/actions/README.md) |
+| [@pipeit/actions](./packages/actions)   | InstructionPlan factories for DeFi (Titan, Metis, Phoenix)               | [README](./packages/actions/README.md) |
 | [@pipeit/fastlane](./packages/fastlane) | Native Rust QUIC client for direct TPU submission                        | [Package](./packages/fastlane)         |
 
 ## Package Overview
@@ -44,7 +44,7 @@ Composable InstructionPlan factories for DeFi:
 
 - Kit-compatible InstructionPlans for swaps and perps workflows
 - Titan and Metis aggregator integration
-- Phoenix and Flash Trade perps integrations
+- Phoenix perps integration
 - Address lookup table support
 - Composable with Kit's plan combinators
 
@@ -88,7 +88,7 @@ version 0. See the [@pipeit/core README](packages/core/README.md#transaction-v1-
 # Transaction builder (recommended starting point)
 bun add @pipeit/core @solana/kit
 
-# DeFi operations (swaps via Titan/Metis, perps via Phoenix/Flash)
+# DeFi operations (swaps via Titan/Metis, perps via Phoenix)
 bun add @pipeit/actions @pipeit/core @solana/kit
 
 # TPU direct submission (server-side only)
