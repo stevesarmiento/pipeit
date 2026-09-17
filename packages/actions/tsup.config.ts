@@ -6,7 +6,6 @@ export default defineConfig(options => ({
         'titan/index': 'src/titan/index.ts',
         'metis/index': 'src/metis/index.ts',
         'phoenix/index': 'src/phoenix/index.ts',
-        'flash/index': 'src/flash/index.ts',
     },
     format: ['cjs', 'esm'],
     dts: {
@@ -28,8 +27,5 @@ export default defineConfig(options => ({
         '@solana/signers',
         '@solana/transactions',
         '@ellipsis-labs/rise',
-        '@coral-xyz/anchor',
-        '@solana/web3.js',
-        'flash-sdk',
     ],
 }));
