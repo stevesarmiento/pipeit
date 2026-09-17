@@ -60,9 +60,10 @@ jobs:
       - name: Publish core
         if: inputs.package == 'core' || inputs.package == 'all'
         run: |
-          npm config set provenance true
           echo "Publishing @pipeit/core..."
-          npm publish --access public --no-git-checks
+          # Provenance is passed as a publish flag: `npm config set` refuses
+          # to run inside a workspaces project (ENOWORKSPACES).
+          npm publish --access public --provenance --no-git-checks
         working-directory: packages/core
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -70,9 +71,10 @@ jobs:
       - name: Publish actions
         if: inputs.package == 'actions' || inputs.package == 'all'
         run: |
-          npm config set provenance true
           echo "Publishing @pipeit/actions..."
-          npm publish --access public --no-git-checks
+          # Provenance is passed as a publish flag: `npm config set` refuses
+          # to run inside a workspaces project (ENOWORKSPACES).
+          npm publish --access public --provenance --no-git-checks
         working-directory: packages/actions
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
