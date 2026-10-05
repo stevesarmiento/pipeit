@@ -51,6 +51,7 @@ export type { Base64EncodedWireTransaction } from '@solana/transactions';
 // Type-safety types
 export type {
     BuilderState,
+    BuiltTransactionMessage,
     RequiredState,
     BuilderConfig,
     SupportedTransactionVersion,

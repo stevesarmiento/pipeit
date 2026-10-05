@@ -43,7 +43,6 @@
 
 import type { Address } from '@solana/addresses';
 import type { Instruction } from '@solana/instructions';
-import type { TransactionMessage } from '@solana/transaction-messages';
 import type { Blockhash } from '@solana/rpc-types';
 import type {
     Rpc,
@@ -93,6 +92,7 @@ import { getBase58Decoder } from '@solana/codecs-strings';
 import { SolanaError, SOLANA_ERROR__TRANSACTION__FEE_PAYER_MISSING } from '@solana/errors';
 import type {
     BuilderState,
+    BuiltTransactionMessage,
     RequiredState,
     LifetimeConstraint,
     ExecuteConfig,
@@ -291,9 +291,18 @@ export interface SimulationResult {
 }
 
 /**
+ * Type-only key anchoring the builder's state parameter. Without a member
+ * that mentions `TState`, every `TransactionBuilder<X>` is structurally
+ * identical and the `this` constraint on `build()` rejects nothing.
+ */
+declare const BUILDER_STATE: unique symbol;
+
+/**
  * Unified transaction builder with type-safe state tracking and smart defaults.
  */
-export class TransactionBuilder<TState extends BuilderState = BuilderState> {
+class TransactionBuilder<TState extends BuilderState = BuilderState> {
+    declare readonly [BUILDER_STATE]: TState;
+
     private feePayer?: Address;
     private feePayerSigner?: TransactionSigner;
     private lifetime?: LifetimeConstraint;
@@ -487,13 +496,16 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
 
     /**
      * Build the transaction message.
-     * Only available when all required fields (feePayer, lifetime) are set.
+     * Only available when all required fields (feePayer, lifetime) are set;
+     * passing `rpc` to the constructor counts as a lifetime because the
+     * blockhash is fetched here. The result carries its fee payer and lifetime
+     * in the type, so Kit's `compileTransaction` accepts it directly.
      *
      * If RPC was provided in constructor and lifetime not set, automatically fetches latest blockhash.
      * Automatically prepends compute budget instructions if configured.
      * Applies address lookup table compression if configured (version 0 only).
      */
-    async build(this: TransactionBuilder<RequiredState>): Promise<TransactionMessage> {
+    async build(this: TransactionBuilder<RequiredState>): Promise<BuiltTransactionMessage> {
         if (!this.feePayer) {
             throw new SolanaError(SOLANA_ERROR__TRANSACTION__FEE_PAYER_MISSING);
         }
@@ -1501,3 +1513,21 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         return builder;
     }
 }
+
+/**
+ * Constructor typing for {@link TransactionBuilder}. A class constructor
+ * cannot vary its type arguments by overload, so the overloads live here:
+ * passing `rpc` yields a builder whose lifetime is already satisfied, because
+ * `build()` fetches the latest blockhash through it.
+ */
+type TransactionBuilderConstructor = Pick<typeof TransactionBuilder, keyof typeof TransactionBuilder> & {
+    new (
+        config: TransactionBuilderConfig & { rpc: Rpc<GetLatestBlockhashApi & GetAccountInfoApi> },
+    ): TransactionBuilder<{ lifetime: true }>;
+    new (config?: TransactionBuilderConfig): TransactionBuilder;
+};
+
+const TypedTransactionBuilder = TransactionBuilder as TransactionBuilderConstructor;
+type TypedTransactionBuilder<TState extends BuilderState = BuilderState> = TransactionBuilder<TState>;
+
+export { TypedTransactionBuilder as TransactionBuilder };
