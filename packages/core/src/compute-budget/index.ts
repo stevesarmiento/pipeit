@@ -8,6 +8,10 @@
 export type {
     PriorityFeeStrategy,
     PriorityFeeConfig,
+    PriorityFeeContext,
+    PriorityFeeResolver,
+    ResolvedBudget,
+    ResolvedBudgetSource,
     ComputeUnitStrategy,
     ComputeUnitConfig,
     PriorityFeeEstimate,
@@ -24,7 +28,12 @@ export {
     getPriorityFeeFromLevel,
     calculatePriorityFeeCost,
     microLamportsToPriorityFeeLamports,
+    worstCaseComputeUnitLimit,
+    clampMicroLamportsToTotal,
 } from './priority-fees.js';
+
+// Writable accounts of a transaction (for account-based fee estimators)
+export { collectWritableAccounts } from './writable-accounts.js';
 
 // Compute units
 export {

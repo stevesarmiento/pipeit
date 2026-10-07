@@ -10,6 +10,8 @@ import {
     getPriorityFeeFromLevel,
     calculatePriorityFeeCost,
     microLamportsToPriorityFeeLamports,
+    worstCaseComputeUnitLimit,
+    clampMicroLamportsToTotal,
 } from '../priority-fees.js';
 import type { PrioritizationFeeEntry } from '../types.js';
 
@@ -111,5 +113,48 @@ describe('microLamportsToPriorityFeeLamports (v1 total fee)', () => {
     it('treats non-finite input as no fee', () => {
         expect(microLamportsToPriorityFeeLamports(Number.NaN, 1)).toBe(0n);
         expect(microLamportsToPriorityFeeLamports(1, Number.POSITIVE_INFINITY)).toBe(0n);
+    });
+});
+
+describe('worstCaseComputeUnitLimit', () => {
+    it('is 200,000 per instruction, at least one instruction', () => {
+        expect(worstCaseComputeUnitLimit(0)).toBe(200_000);
+        expect(worstCaseComputeUnitLimit(1)).toBe(200_000);
+        expect(worstCaseComputeUnitLimit(3)).toBe(600_000);
+    });
+
+    it('caps at 1,400,000', () => {
+        expect(worstCaseComputeUnitLimit(7)).toBe(1_400_000);
+        expect(worstCaseComputeUnitLimit(50)).toBe(1_400_000);
+    });
+});
+
+describe('clampMicroLamportsToTotal', () => {
+    it('reduces the price so price × limit stays under the cap', () => {
+        expect(clampMicroLamportsToTotal(10_000n, 200_000, 1_000n)).toBe(5_000n);
+        expect(clampMicroLamportsToTotal(10_000n, 400_000, 1_000n)).toBe(2_500n);
+    });
+
+    it('floors the reduced price', () => {
+        // 1_000 lamports / 300_000 CU = 3_333.33 micro-lamports per CU
+        expect(clampMicroLamportsToTotal(10_000n, 300_000, 1_000n)).toBe(3_333n);
+    });
+
+    it('returns the input unchanged under the cap', () => {
+        expect(clampMicroLamportsToTotal(10_000n, 200_000, 2_000n)).toBe(10_000n);
+        expect(clampMicroLamportsToTotal(10_000n, 200_000, 100_000n)).toBe(10_000n);
+    });
+
+    it('returns zero for a zero price or a zero cap', () => {
+        expect(clampMicroLamportsToTotal(0n, 200_000, 1_000n)).toBe(0n);
+        expect(clampMicroLamportsToTotal(10_000n, 200_000, 0n)).toBe(0n);
+    });
+
+    it('leaves the price alone when the limit is not positive', () => {
+        expect(clampMicroLamportsToTotal(10_000n, 0, 1_000n)).toBe(10_000n);
+    });
+
+    it("rejects the 'custom' strategy in estimatePriorityFee", async () => {
+        await expect(estimatePriorityFee(stubRpc([]), { strategy: 'custom' })).rejects.toThrow(/custom/);
     });
 });

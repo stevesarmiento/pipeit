@@ -5,4 +5,4 @@
  */
 
 export { TransactionBuilder } from './builder.js';
-export type { TransactionBuilderConfig, SimulationResult } from './builder.js';
+export type { TransactionBuilderConfig, SimulationResult, BuildWithBudgetResult } from './builder.js';
