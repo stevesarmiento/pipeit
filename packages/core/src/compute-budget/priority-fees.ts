@@ -8,6 +8,7 @@ import type { Address } from '@solana/addresses';
 import type { Rpc } from '@solana/rpc';
 import { address } from '@solana/addresses';
 import type { PriorityFeeConfig, PriorityFeeEstimate, PrioritizationFeeEntry } from './types.js';
+import { DEFAULT_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT } from './compute-units.js';
 
 /**
  * Compute Budget program address.
@@ -62,10 +63,17 @@ export async function estimatePriorityFee(
     // For fixed strategy, just return the configured value
     if (strategy === 'fixed') {
         return {
-            microLamports: microLamports ?? 0,
+            microLamports: Number(microLamports ?? 0),
             percentile: 0,
             recentFees: [],
         };
+    }
+
+    // The custom strategy needs the transaction context only the builder has
+    if (strategy === 'custom') {
+        throw new Error(
+            "estimatePriorityFee cannot run the 'custom' strategy: it is resolved by TransactionBuilder.build().",
+        );
     }
 
     // For 'none' strategy, return 0
@@ -178,4 +186,43 @@ export function microLamportsToPriorityFeeLamports(
     if (pricePerCU <= 0n) return 0n;
     const microLamports = pricePerCU * BigInt(Math.round(computeUnitLimit));
     return (microLamports + 999_999n) / 1_000_000n;
+}
+
+/**
+ * The compute unit limit the runtime applies to a legacy/v0 transaction that
+ * carries no SetComputeUnitLimit instruction: 200,000 CU per instruction,
+ * capped at 1,400,000. This is also the bound a verifier uses for the
+ * worst-case priority fee of such a transaction.
+ *
+ * @param instructionCount - Number of non-ComputeBudget instructions
+ */
+export function worstCaseComputeUnitLimit(instructionCount: number): number {
+    return Math.min(DEFAULT_COMPUTE_UNIT_LIMIT * Math.max(instructionCount, 1), MAX_COMPUTE_UNIT_LIMIT);
+}
+
+/**
+ * Reduce a per-CU price so that `price × computeUnitLimit` does not exceed
+ * `maxLamports`. Returns the input unchanged when it is already under the cap.
+ *
+ * @param microLamportsPerCU - Price in micro-lamports per compute unit
+ * @param computeUnitLimit - Compute unit limit the price multiplies
+ * @param maxLamports - Cap on the total priority fee in lamports
+ * @returns The (possibly reduced) price; `0n` when the cap is zero or lower
+ *
+ * @example
+ * ```ts
+ * clampMicroLamportsToTotal(10_000n, 200_000, 1_000n); // 5_000n (1_000 lamports / 200_000 CU)
+ * clampMicroLamportsToTotal(10_000n, 200_000, 5_000n); // 10_000n (under the cap)
+ * ```
+ */
+export function clampMicroLamportsToTotal(
+    microLamportsPerCU: bigint,
+    computeUnitLimit: number,
+    maxLamports: bigint,
+): bigint {
+    if (microLamportsPerCU <= 0n) return 0n;
+    if (maxLamports <= 0n) return 0n;
+    if (!Number.isFinite(computeUnitLimit) || computeUnitLimit <= 0) return microLamportsPerCU;
+    const maxPrice = (maxLamports * 1_000_000n) / BigInt(Math.round(computeUnitLimit));
+    return microLamportsPerCU < maxPrice ? microLamportsPerCU : maxPrice;
 }

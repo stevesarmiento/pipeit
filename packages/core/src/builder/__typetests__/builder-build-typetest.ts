@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-expressions */
 /**
  * Type tests for TransactionBuilder.build().
  *
@@ -18,8 +19,9 @@ import {
 } from '@solana/transactions';
 
 import { TransactionBuilder } from '../builder.js';
-import type { TransactionBuilderConfig } from '../builder.js';
+import type { TransactionBuilderConfig, BuildWithBudgetResult } from '../builder.js';
 import type { BuiltTransactionMessage } from '../../types.js';
+import type { ResolvedBudget } from '../../compute-budget/index.js';
 
 // Mock values for testing
 const rpc = null as unknown as Rpc<GetLatestBlockhashApi & GetAccountInfoApi>;
@@ -113,5 +115,50 @@ async () => {
         await new TransactionBuilder(config).setFeePayer(feePayer).build();
         // An explicit lifetime still satisfies it
         await new TransactionBuilder(config).setFeePayer(feePayer).setBlockhashLifetime(blockhash, 1n).build();
+    }
+};
+
+// [DESCRIBE] buildWithBudget()
+async () => {
+    // It returns the message and the resolved budget
+    {
+        const result = await new TransactionBuilder()
+            .setFeePayer(feePayer)
+            .setBlockhashLifetime(blockhash, 1n)
+            .buildWithBudget();
+        result satisfies BuildWithBudgetResult;
+        result.message satisfies BuiltTransactionMessage;
+        result.budget satisfies ResolvedBudget;
+        result.budget.priorityFeeLamports satisfies bigint;
+        result.budget.computeUnitLimit satisfies number | null;
+        compileTransaction(result.message);
+    }
+
+    // It has the same state requirements as build()
+    {
+        await new TransactionBuilder({ rpc }).setFeePayer(feePayer).buildWithBudget();
+        // @ts-expect-error fee payer and lifetime are missing
+        await new TransactionBuilder().buildWithBudget();
+        // @ts-expect-error lifetime is missing
+        await new TransactionBuilder().setFeePayer(feePayer).buildWithBudget();
+        // @ts-expect-error fee payer is missing
+        await new TransactionBuilder().setBlockhashLifetime(blockhash, 1n).buildWithBudget();
+    }
+
+    // It accepts the new priority fee options
+    {
+        new TransactionBuilder({
+            priorityFee: {
+                strategy: 'custom',
+                preferInstruction: true,
+                maxLamports: 100_000n,
+                resolve: async ctx => {
+                    ctx.draftTransactionBase64() satisfies string;
+                    ctx.computeUnitLimit satisfies number | null;
+                    return 7_000n;
+                },
+            },
+            computeUnits: { strategy: 'fixed', units: 300_000, preferInstruction: true },
+        });
     }
 };

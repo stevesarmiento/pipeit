@@ -299,12 +299,87 @@ new TransactionBuilder({
         percentile: 75, // Use 75th percentile of recent fees
     },
 });
+
+// Custom estimator (Helius getPriorityFeeEstimate, Triton, your own model, ...)
+new TransactionBuilder({
+    priorityFee: {
+        strategy: 'custom',
+        resolve: async ctx => {
+            // ctx.version, ctx.feePayer, ctx.instructions, ctx.writableAccounts,
+            // ctx.computeUnitLimit (when known), ctx.draftTransactionBase64()
+            const estimate = await myFeeApi(ctx.draftTransactionBase64());
+            return BigInt(Math.ceil(estimate)); // micro-lamports per CU
+        },
+    },
+});
 ```
 
 On version 1 transactions the per-CU price is converted to a total in lamports
 using the final compute unit limit, or set directly with
 `{ strategy: 'fixed', lamports: 5_000n }`. See
 [Transaction v1](#transaction-v1-larger-transactions).
+
+The `'custom'` resolver runs after the compute unit limit is resolved on v1
+(so `ctx.computeUnitLimit` is the final, possibly simulated, limit) and after
+`computeUnits` is resolved on legacy/v0 (`null` for `'auto'` and
+`'simulate'`). `ctx.draftTransactionBase64()` compiles the unsigned draft with
+the budget instructions omitted, only when called, and never simulates.
+Resolver errors propagate out of `build()`; there is no silent fallback.
+
+#### Prefer the route's price
+
+A fee config object accepts `preferInstruction: true`: when the added
+instructions carry a well-formed `SetComputeUnitPrice`, that price is used and
+the strategy is not consulted; otherwise the strategy resolves as usual. This
+is the "route's price if it has one, otherwise mine" policy a wallet wants for
+DEX swaps. `{ strategy: 'none', preferInstruction: true }` means "the route's
+price or nothing".
+
+```typescript
+new TransactionBuilder({
+    priorityFee: { strategy: 'percentile', percentile: 75, preferInstruction: true },
+});
+```
+
+#### Cap the total fee
+
+`maxLamports` caps the total priority fee after the price and the final
+compute unit limit are known. On v1 the lamport total is clamped. On legacy/v0
+the per-CU price is reduced to `floor(maxLamports × 1e6 / computeUnitLimit)`;
+when no limit instruction is emitted (`'auto'`, `'simulate'`) the runtime's
+worst-case bound `min(200,000 × instruction count, 1,400,000)` is used, which
+is also how a verifier bounds the fee. A price clamped to zero emits no price
+instruction. Clamps are logged unless `logLevel` is `'silent'`.
+
+```typescript
+new TransactionBuilder({
+    priorityFee: { strategy: 'custom', resolve, preferInstruction: true, maxLamports: 100_000n },
+});
+```
+
+#### Reading the resolved budget
+
+`buildWithBudget()` returns the same message as `build()` plus the compute
+budget that was resolved for it, so a wallet can show the fee before signing
+and reserve it in send-all amounts without decoding the message:
+
+```typescript
+const { message, budget } = await builder.buildWithBudget();
+
+budget.computeUnitLimit; // number, or null when legacy/v0 emits no limit instruction
+budget.computeUnitPriceMicroLamports; // 0n when none
+budget.priorityFeeLamports; // the v1 total, or price × limit on legacy/v0
+budget.loadedAccountsDataSizeLimit; // number | null
+budget.heapSize; // number | null
+budget.source; // { priorityFee: 'instruction' | 'config' | 'clamped', computeUnits: 'instruction' | 'config' | 'simulated' | 'default' }
+```
+
+On legacy/v0 with no limit instruction, `priorityFeeLamports` is the
+worst-case `price × min(200,000 × instruction count, 1,400,000)`, so reserving
+it never under-reserves. With `computeUnits: { strategy: 'simulate' }` on
+legacy/v0 the limit is estimated later, during `execute()` or `export()`, so
+the budget reports `computeUnitLimit: null` and `source.computeUnits:
+'simulated'`.
 
 ### Compute Units
 
@@ -330,6 +405,15 @@ new TransactionBuilder({
         strategy: 'simulate',
     },
 });
+
+// Prefer a route's SetComputeUnitLimit when it carries one, else 400,000
+new TransactionBuilder({
+    computeUnits: {
+        strategy: 'fixed',
+        units: 400_000,
+        preferInstruction: true,
+    },
+});
 ```
 
 ### Caller-supplied ComputeBudget instructions
@@ -344,6 +428,10 @@ Instead `build()` strips them and folds their values in:
   `priorityFee` or `loadedAccountsDataSizeLimit` to the constructor, that
   value is used and the instruction's value is dropped — including
   `computeUnits: 'auto'` and `priorityFee: 'none'`.
+- **Unless the config prefers the instruction.** A `priorityFee` or
+  `computeUnits` config object with `preferInstruction: true` uses the
+  instruction's value when present and the configured strategy only when it
+  is not. See [Prefer the route's price](#prefer-the-routes-price).
 - **Otherwise the instruction's value is used.** With the constructor defaults
   untouched, a caller-supplied limit, price or data size limit is applied as
   if you had configured it. A heap frame is always used (the builder has no
@@ -624,9 +712,14 @@ try {
 ### Compute Budget Types
 
 - `PriorityFeeLevel` - 'none' | 'low' | 'medium' | 'high' | 'veryHigh'
-- `PriorityFeeConfig` - Custom priority fee configuration
-- `ComputeUnitConfig` - Compute unit configuration
+- `PriorityFeeConfig` - Custom priority fee configuration (`strategy`, `microLamports`, `lamports`, `percentile`, `preferInstruction`, `maxLamports`, `resolve`)
+- `PriorityFeeContext` - What a `'custom'` resolver receives
+- `PriorityFeeResolver` - `(ctx: PriorityFeeContext) => Promise<bigint>`
+- `ComputeUnitConfig` - Compute unit configuration (`strategy`, `units`, `buffer`, `preferInstruction`)
+- `ResolvedBudget` / `ResolvedBudgetSource` - The budget `buildWithBudget()` reports
+- `BuildWithBudgetResult` - `{ message, budget }`
 - `PriorityFeeEstimate` - Result from fee estimation
+- `worstCaseComputeUnitLimit(count)`, `clampMicroLamportsToTotal(price, limit, max)`, `collectWritableAccounts(feePayer, instructions)` - helpers behind the cap and the resolver context
 
 ### Nonce Types
 

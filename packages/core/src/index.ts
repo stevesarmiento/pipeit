@@ -21,6 +21,7 @@ export { TransactionBuilder, TransactionExecutionError } from './builder/builder
 export type {
     TransactionBuilderConfig,
     SimulationResult,
+    BuildWithBudgetResult,
     ExportFormat,
     ExportedTransaction,
 } from './builder/builder.js';
