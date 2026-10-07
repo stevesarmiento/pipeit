@@ -21,6 +21,7 @@ export { TransactionBuilder, TransactionExecutionError } from './builder/builder
 export type {
     TransactionBuilderConfig,
     SimulationResult,
+    BuildWithBudgetResult,
     ExportFormat,
     ExportedTransaction,
 } from './builder/builder.js';
@@ -51,6 +52,7 @@ export type { Base64EncodedWireTransaction } from '@solana/transactions';
 // Type-safety types
 export type {
     BuilderState,
+    BuiltTransactionMessage,
     RequiredState,
     BuilderConfig,
     SupportedTransactionVersion,

@@ -6,7 +6,12 @@
 
 import type { Address } from '@solana/addresses';
 import type { Instruction } from '@solana/instructions';
-import type { TransactionMessage, TransactionVersion } from '@solana/transaction-messages';
+import type {
+    TransactionMessage,
+    TransactionMessageWithFeePayer,
+    TransactionMessageWithLifetime,
+    TransactionVersion,
+} from '@solana/transaction-messages';
 import type { Rpc, GetLatestBlockhashApi } from '@solana/rpc';
 import type { ExecutionConfig } from './execution/types.js';
 
@@ -26,6 +31,14 @@ export type RequiredState = {
     feePayer: true;
     lifetime: true;
 };
+
+/**
+ * Message returned by `TransactionBuilder.build()`: any supported version,
+ * with the fee payer and lifetime the builder required.
+ */
+export type BuiltTransactionMessage = TransactionMessage &
+    TransactionMessageWithFeePayer &
+    TransactionMessageWithLifetime;
 
 /**
  * Transaction versions Pipeit can construct.

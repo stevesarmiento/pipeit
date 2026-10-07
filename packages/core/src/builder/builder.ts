@@ -43,7 +43,6 @@
 
 import type { Address } from '@solana/addresses';
 import type { Instruction } from '@solana/instructions';
-import type { TransactionMessage } from '@solana/transaction-messages';
 import type { Blockhash } from '@solana/rpc-types';
 import type {
     Rpc,
@@ -68,6 +67,7 @@ import {
     setTransactionMessageLoadedAccountsDataSizeLimit,
     getTransactionMessageComputeUnitLimit,
     getTransactionMessageLoadedAccountsDataSizeLimit,
+    getTransactionMessageHeapSize,
     setTransactionMessageHeapSize,
     setTransactionMessagePriorityFeeLamports,
 } from '@solana/transaction-messages';
@@ -83,6 +83,7 @@ import {
     fillTransactionMessageProvisoryResourceLimits,
 } from '@solana/kit';
 import {
+    compileTransaction,
     getBase64EncodedWireTransaction,
     getTransactionEncoder,
     getTransactionMessageSize,
@@ -93,6 +94,7 @@ import { getBase58Decoder } from '@solana/codecs-strings';
 import { SolanaError, SOLANA_ERROR__TRANSACTION__FEE_PAYER_MISSING } from '@solana/errors';
 import type {
     BuilderState,
+    BuiltTransactionMessage,
     RequiredState,
     LifetimeConstraint,
     ExecuteConfig,
@@ -104,14 +106,19 @@ import { translateVersionError } from '../errors/version-errors.js';
 // Import new modules
 import {
     type PriorityFeeConfig,
+    type PriorityFeeContext,
     type ComputeUnitConfig,
+    type ResolvedBudget,
+    type ResolvedBudgetSource,
     estimatePriorityFee,
     PRIORITY_FEE_LEVELS,
     MAX_COMPUTE_UNIT_LIMIT,
     MAX_LOADED_ACCOUNTS_DATA_SIZE_LIMIT,
-    DEFAULT_COMPUTE_UNIT_LIMIT,
     DEFAULT_COMPUTE_BUFFER,
     microLamportsToPriorityFeeLamports,
+    worstCaseComputeUnitLimit,
+    clampMicroLamportsToTotal,
+    collectWritableAccounts,
     createBufferedResourceLimitsEstimator,
     type PriorityFeeLevel,
 } from '../compute-budget/index.js';
@@ -209,7 +216,17 @@ export interface TransactionBuilderConfig {
      *
      * A SetComputeUnitPrice instruction among the added instructions is
      * stripped and its price used only when this field is not set. Setting it
-     * (including `'none'`) always wins.
+     * (including `'none'`) always wins, unless the config object sets
+     * `preferInstruction: true`, in which case the instruction's price is used
+     * when present and the strategy only when it is not.
+     *
+     * `{ strategy: 'custom', resolve }` calls `resolve` with a
+     * {@link PriorityFeeContext} (instructions, writable accounts, the known
+     * compute unit limit and a lazy draft transaction) so a provider-specific
+     * fee API can price the transaction. `maxLamports` caps the total fee
+     * after the final compute unit limit is known. See
+     * {@link TransactionBuilder.buildWithBudget} to read back what was
+     * resolved.
      */
     priorityFee?: PriorityFeeLevel | PriorityFeeConfig;
 
@@ -229,7 +246,8 @@ export interface TransactionBuilderConfig {
      *
      * A SetComputeUnitLimit instruction among the added instructions is
      * stripped and its limit used only when this field is not set. Setting it
-     * (including `'auto'`) always wins.
+     * (including `'auto'`) always wins, unless the config object sets
+     * `preferInstruction: true`.
      */
     computeUnits?: 'auto' | number | ComputeUnitConfig;
 
@@ -291,9 +309,49 @@ export interface SimulationResult {
 }
 
 /**
+ * Result of {@link TransactionBuilder.buildWithBudget}.
+ */
+export interface BuildWithBudgetResult {
+    /** The built message, identical to what `build()` returns. */
+    message: BuiltTransactionMessage;
+    /** The compute budget resolved for it. */
+    budget: ResolvedBudget;
+}
+
+/** Internal: a resolved per-CU price and where it came from. */
+interface ResolvedPrice {
+    microLamports: bigint;
+    source: ResolvedBudgetSource['priorityFee'];
+}
+
+/** Internal: a resolved compute unit limit and where it came from. */
+interface ResolvedLimit {
+    /** `null` = emit nothing; `PROVISORY_CU_SENTINEL` = provisory limit. */
+    units: number | null;
+    source: ResolvedBudgetSource['computeUnits'];
+}
+
+/** Internal: inputs for building a {@link PriorityFeeContext} lazily. */
+interface PriorityFeeContextInputs {
+    instructions: readonly Instruction[];
+    computeUnitLimit: number | null;
+    /** Produces the draft message (fee payer, lifetime, instructions; no budget instructions). */
+    draftMessage: () => any;
+}
+
+/**
+ * Type-only key anchoring the builder's state parameter. Without a member
+ * that mentions `TState`, every `TransactionBuilder<X>` is structurally
+ * identical and the `this` constraint on `build()` rejects nothing.
+ */
+declare const BUILDER_STATE: unique symbol;
+
+/**
  * Unified transaction builder with type-safe state tracking and smart defaults.
  */
-export class TransactionBuilder<TState extends BuilderState = BuilderState> {
+class TransactionBuilder<TState extends BuilderState = BuilderState> {
+    declare readonly [BUILDER_STATE]: TState;
+
     private feePayer?: Address;
     private feePayerSigner?: TransactionSigner;
     private lifetime?: LifetimeConstraint;
@@ -353,6 +411,18 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
                 'priorityFee.lamports is only valid for version: 1 transactions. ' +
                     'Legacy and version 0 transactions price the fee per compute unit; use microLamports instead.',
             );
+        }
+
+        if (typeof this.config.priorityFee === 'object') {
+            if (
+                this.config.priorityFee.strategy === 'custom' &&
+                typeof this.config.priorityFee.resolve !== 'function'
+            ) {
+                throw new Error("priorityFee.resolve is required when priorityFee.strategy is 'custom'.");
+            }
+            if (this.config.priorityFee.maxLamports !== undefined && this.config.priorityFee.maxLamports < 0n) {
+                throw new Error('priorityFee.maxLamports must not be negative.');
+            }
         }
     }
 
@@ -487,13 +557,35 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
 
     /**
      * Build the transaction message.
-     * Only available when all required fields (feePayer, lifetime) are set.
+     * Only available when all required fields (feePayer, lifetime) are set;
+     * passing `rpc` to the constructor counts as a lifetime because the
+     * blockhash is fetched here. The result carries its fee payer and lifetime
+     * in the type, so Kit's `compileTransaction` accepts it directly.
      *
      * If RPC was provided in constructor and lifetime not set, automatically fetches latest blockhash.
      * Automatically prepends compute budget instructions if configured.
      * Applies address lookup table compression if configured (version 0 only).
+     *
+     * Use {@link buildWithBudget} to also get the resolved compute budget.
      */
-    async build(this: TransactionBuilder<RequiredState>): Promise<TransactionMessage> {
+    async build(this: TransactionBuilder<RequiredState>): Promise<BuiltTransactionMessage> {
+        const { message } = await this.buildWithBudget();
+        return message;
+    }
+
+    /**
+     * Build the transaction message and report the compute budget that was
+     * resolved for it: the compute unit limit and price, the total priority
+     * fee in lamports, and where each value came from. The message is exactly
+     * what {@link build} returns.
+     *
+     * @example
+     * ```ts
+     * const { message, budget } = await builder.buildWithBudget();
+     * showFee(budget.priorityFeeLamports);
+     * ```
+     */
+    async buildWithBudget(this: TransactionBuilder<RequiredState>): Promise<BuildWithBudgetResult> {
         if (!this.feePayer) {
             throw new SolanaError(SOLANA_ERROR__TRANSACTION__FEE_PAYER_MISSING);
         }
@@ -560,14 +652,28 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         if (this.config.version === 1) {
             // v1: resource limits and the priority fee live in the message config,
             // and the compute unit limit + loaded accounts data size are mandatory.
-            message = await this.buildV1Body(message, instructions, callerValues);
+            const built = await this.buildV1Body(message, instructions, callerValues);
 
             // Auto-validate before returning
-            validateTransaction(message);
-            validateTransactionSize(message);
+            validateTransaction(built.message);
+            validateTransactionSize(built.message);
 
-            return message;
+            return built;
         }
+
+        // The message so far (fee payer + lifetime, no budget) is the base of
+        // the draft handed to a 'custom' priority fee resolver.
+        const draftBase = message;
+        const draftMessage = () => {
+            let draft = draftBase;
+            for (const instruction of instructions) {
+                draft = appendTransactionMessageInstruction(instruction, draft);
+            }
+            if (lookupTableData && this.config.version === 0) {
+                draft = compressTransactionMessage(draft, lookupTableData);
+            }
+            return draft;
+        };
 
         // SET COMPUTE BUDGET FIRST (if configured)
         // Kit's setters are version-agnostic: on legacy/v0 they append-or-replace
@@ -577,16 +683,29 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         // builder has no explicit config for the field.
 
         // 1. Compute unit limit
-        const computeUnits = await this.resolveComputeUnits(callerValues);
-        if (computeUnits === TransactionBuilder.PROVISORY_CU_SENTINEL) {
+        const computeUnits = this.resolveComputeUnits(callerValues);
+        let emittedLimit: number | null = null;
+        if (computeUnits.units === TransactionBuilder.PROVISORY_CU_SENTINEL) {
             // Provisory (0 CU) limit - will be estimated via simulation during execute()
             message = fillTransactionMessageProvisoryResourceLimits(message);
-        } else if (computeUnits !== null) {
-            message = setTransactionMessageComputeUnitLimit(Math.min(computeUnits, MAX_COMPUTE_UNIT_LIMIT), message);
+        } else if (computeUnits.units !== null) {
+            emittedLimit = Math.min(computeUnits.units, MAX_COMPUTE_UNIT_LIMIT);
+            message = setTransactionMessageComputeUnitLimit(emittedLimit, message);
         }
 
         // 2. Priority fee / compute unit price
-        const priorityFee = await this.resolvePriorityFee(callerValues);
+        const resolvedPrice = await this.resolvePriorityFee(callerValues, {
+            instructions,
+            computeUnitLimit: emittedLimit,
+            draftMessage,
+        });
+        // Without a limit instruction the runtime bounds the fee at its default
+        // limit; the cap and the reported total use that same bound.
+        const limitForTotal = emittedLimit ?? worstCaseComputeUnitLimit(instructions.length);
+        const { microLamports: priorityFee, source: priceSource } = this.applyPriorityFeeCap(
+            resolvedPrice,
+            limitForTotal,
+        );
         if (this.config.logLevel !== 'silent') {
             console.log(
                 `[Pipeit] Priority fee: ${priorityFee.toLocaleString()} micro-lamports/CU (${(Number(priorityFee) / 1_000_000).toFixed(3)} lamports/CU)`,
@@ -622,7 +741,67 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         validateTransaction(message);
         validateTransactionSize(message);
 
-        return message;
+        const budget: ResolvedBudget = {
+            version: this.config.version,
+            computeUnitLimit: emittedLimit,
+            computeUnitPriceMicroLamports: priorityFee,
+            priorityFeeLamports: microLamportsToPriorityFeeLamports(priorityFee, limitForTotal),
+            loadedAccountsDataSizeLimit: loadedAccountsDataSizeLimit ?? null,
+            heapSize: callerValues.heapSize ?? null,
+            source: { priorityFee: priceSource, computeUnits: computeUnits.source },
+        };
+        return { message, budget };
+    }
+
+    /**
+     * Reduce a per-CU price so the total fee honours `priorityFee.maxLamports`
+     * (legacy/v0). A clamp is logged and attributed in the budget.
+     */
+    private applyPriorityFeeCap(price: ResolvedPrice, computeUnitLimit: number): ResolvedPrice {
+        const maxLamports = this.maxPriorityFeeLamports();
+        if (maxLamports === undefined) return price;
+        const clamped = clampMicroLamportsToTotal(price.microLamports, computeUnitLimit, maxLamports);
+        if (clamped === price.microLamports) return price;
+        if (this.config.logLevel !== 'silent') {
+            console.log(
+                `[Pipeit] Priority fee clamped: ${price.microLamports.toLocaleString()} → ${clamped.toLocaleString()} micro-lamports/CU ` +
+                    `to keep ${computeUnitLimit.toLocaleString()} CU under ${maxLamports.toLocaleString()} lamports`,
+            );
+        }
+        return { microLamports: clamped, source: 'clamped' };
+    }
+
+    /** The configured `priorityFee.maxLamports`, if any. */
+    private maxPriorityFeeLamports(): bigint | undefined {
+        const { priorityFee } = this.config;
+        return typeof priorityFee === 'object' ? priorityFee.maxLamports : undefined;
+    }
+
+    /**
+     * Whether a caller-supplied ComputeBudget value should be used over the
+     * builder's config: when the config was not set explicitly, or when it
+     * opts in with `preferInstruction`.
+     */
+    private prefersCallerValue(field: 'priorityFee' | 'computeUnits'): boolean {
+        if (!this.explicitConfig[field]) return true;
+        const config = this.config[field];
+        return typeof config === 'object' && config.preferInstruction === true;
+    }
+
+    /**
+     * Build the {@link PriorityFeeContext} handed to a 'custom' resolver.
+     * The draft transaction is compiled only if the resolver asks for it.
+     */
+    private createPriorityFeeContext(inputs: PriorityFeeContextInputs): PriorityFeeContext {
+        const feePayer = this.feePayer!;
+        return {
+            version: this.config.version,
+            feePayer,
+            instructions: inputs.instructions,
+            writableAccounts: collectWritableAccounts(feePayer, inputs.instructions),
+            computeUnitLimit: inputs.computeUnitLimit,
+            draftTransactionBase64: () => getBase64EncodedWireTransaction(compileTransaction(inputs.draftMessage())),
+        };
     }
 
     /**
@@ -636,7 +815,7 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         message: any,
         instructions: readonly Instruction[],
         callerValues: CallerComputeBudgetValues,
-    ): Promise<any> {
+    ): Promise<BuildWithBudgetResult> {
         // 1. User instructions first: config carries no ordering, and any
         //    simulation below must see the complete message.
         for (const instruction of instructions) {
@@ -645,9 +824,14 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
 
         // 2. Explicit limits from config (or the caller's instructions where
         //    the builder has none).
-        const computeUnits = await this.resolveComputeUnits(callerValues);
-        if (computeUnits !== null && computeUnits !== TransactionBuilder.PROVISORY_CU_SENTINEL) {
-            message = setTransactionMessageComputeUnitLimit(Math.min(computeUnits, MAX_COMPUTE_UNIT_LIMIT), message);
+        const computeUnits = this.resolveComputeUnits(callerValues);
+        const hasExplicitLimit =
+            computeUnits.units !== null && computeUnits.units !== TransactionBuilder.PROVISORY_CU_SENTINEL;
+        if (hasExplicitLimit) {
+            message = setTransactionMessageComputeUnitLimit(
+                Math.min(computeUnits.units!, MAX_COMPUTE_UNIT_LIMIT),
+                message,
+            );
         }
         const loadedAccountsDataSizeLimit =
             this.config.loadedAccountsDataSizeLimit ?? callerValues.loadedAccountsDataSizeLimit;
@@ -662,21 +846,51 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         //    and a missing data-size limit all take the same estimation path.
         message = fillTransactionMessageProvisoryResourceLimits(message);
 
+        let budget: ResolvedBudget;
         try {
             // 4. Replace provisory limits with estimates (or the no-RPC fallback).
             message = await this.finalizeV1ResourceLimits(message, instructions.length);
 
             // 5. Priority fee, computed against the final compute unit limit.
             const computeUnitLimit = getTransactionMessageComputeUnitLimit(message) ?? 0;
-            const lamports = await this.resolveV1PriorityFeeLamports(computeUnitLimit, callerValues);
+            const draftMessage = () => message;
+            const resolved = await this.resolveV1PriorityFeeLamports(computeUnitLimit, callerValues, {
+                instructions,
+                computeUnitLimit,
+                draftMessage,
+            });
+            let { lamports, source: priceSource } = resolved;
+            const maxLamports = this.maxPriorityFeeLamports();
+            if (maxLamports !== undefined && lamports > maxLamports) {
+                if (this.config.logLevel !== 'silent') {
+                    console.log(
+                        `[Pipeit] Priority fee clamped: ${lamports.toLocaleString()} → ${maxLamports.toLocaleString()} lamports total`,
+                    );
+                }
+                lamports = maxLamports;
+                priceSource = 'clamped';
+            }
             if (lamports > 0n) {
                 message = setTransactionMessagePriorityFeeLamports(lamports, message);
             }
+
+            budget = {
+                version: 1,
+                computeUnitLimit,
+                computeUnitPriceMicroLamports: resolved.microLamports,
+                priorityFeeLamports: lamports,
+                loadedAccountsDataSizeLimit: getTransactionMessageLoadedAccountsDataSizeLimit(message) ?? null,
+                heapSize: getTransactionMessageHeapSize(message) ?? null,
+                source: {
+                    priorityFee: priceSource,
+                    computeUnits: hasExplicitLimit ? computeUnits.source : this.config.rpc ? 'simulated' : 'default',
+                },
+            };
         } catch (error) {
             throw translateVersionError(error, 1);
         }
 
-        return message;
+        return { message, budget };
     }
 
     /**
@@ -721,10 +935,7 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
 
         let fallback = message;
         if (computeUnitLimit === 0) {
-            fallback = setTransactionMessageComputeUnitLimit(
-                Math.min(DEFAULT_COMPUTE_UNIT_LIMIT * Math.max(instructionCount, 1), MAX_COMPUTE_UNIT_LIMIT),
-                fallback,
-            );
+            fallback = setTransactionMessageComputeUnitLimit(worstCaseComputeUnitLimit(instructionCount), fallback);
         }
         if (loadedAccountsDataSizeLimit === 0) {
             fallback = setTransactionMessageLoadedAccountsDataSizeLimit(MAX_LOADED_ACCOUNTS_DATA_SIZE_LIMIT, fallback);
@@ -742,93 +953,101 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
 
     /**
      * Resolve the total priority fee (lamports) for a version 1 message.
-     * An explicit `priorityFee.lamports` wins; otherwise the per-CU price is
+     * A caller-supplied price applies per {@link prefersCallerValue}; then an
+     * explicit `priorityFee.lamports` wins; otherwise the per-CU price is
      * converted using the final compute unit limit.
      */
     private async resolveV1PriorityFeeLamports(
         computeUnitLimit: number,
         callerValues: CallerComputeBudgetValues,
-    ): Promise<bigint> {
+        context: PriorityFeeContextInputs,
+    ): Promise<{ lamports: bigint; microLamports: bigint; source: ResolvedBudgetSource['priorityFee'] }> {
         const { priorityFee } = this.config;
 
-        if (!this.explicitConfig.priorityFee && callerValues.computeUnitPriceMicroLamports !== undefined) {
-            const lamports = microLamportsToPriorityFeeLamports(
-                callerValues.computeUnitPriceMicroLamports,
-                computeUnitLimit,
-            );
+        if (this.prefersCallerValue('priorityFee') && callerValues.computeUnitPriceMicroLamports !== undefined) {
+            const microLamports = callerValues.computeUnitPriceMicroLamports;
+            const lamports = microLamportsToPriorityFeeLamports(microLamports, computeUnitLimit);
             if (this.config.logLevel !== 'silent') {
                 console.log(
                     `[Pipeit] Priority fee: ${lamports.toLocaleString()} lamports total ` +
-                        `(${callerValues.computeUnitPriceMicroLamports.toLocaleString()} micro-lamports/CU from instruction × ${computeUnitLimit.toLocaleString()} CU)`,
+                        `(${microLamports.toLocaleString()} micro-lamports/CU from instruction × ${computeUnitLimit.toLocaleString()} CU)`,
                 );
             }
-            return lamports;
+            return { lamports, microLamports, source: 'instruction' };
         }
 
         if (typeof priorityFee === 'object') {
-            if (priorityFee.strategy === 'none') return 0n;
+            if (priorityFee.strategy === 'none') return { lamports: 0n, microLamports: 0n, source: 'config' };
             if (priorityFee.lamports !== undefined) {
                 if (this.config.logLevel !== 'silent') {
                     console.log(
                         `[Pipeit] Priority fee: ${priorityFee.lamports.toLocaleString()} lamports total (explicit)`,
                     );
                 }
-                return priorityFee.lamports;
+                return { lamports: priorityFee.lamports, microLamports: 0n, source: 'config' };
             }
         }
 
-        const microLamportsPerCU = await this.resolveConfiguredPriorityFee();
-        const lamports = microLamportsToPriorityFeeLamports(microLamportsPerCU, computeUnitLimit);
+        const microLamports = await this.resolveConfiguredPriorityFee(context);
+        const lamports = microLamportsToPriorityFeeLamports(microLamports, computeUnitLimit);
         if (this.config.logLevel !== 'silent') {
             console.log(
                 `[Pipeit] Priority fee: ${lamports.toLocaleString()} lamports total ` +
-                    `(${microLamportsPerCU.toLocaleString()} micro-lamports/CU × ${computeUnitLimit.toLocaleString()} CU)`,
+                    `(${microLamports.toLocaleString()} micro-lamports/CU × ${computeUnitLimit.toLocaleString()} CU)`,
             );
         }
-        return lamports;
+        return { lamports, microLamports, source: 'config' };
     }
 
     /**
      * Resolve the per-CU priority fee (micro-lamports) based on configuration.
-     * A caller-supplied SetComputeUnitPrice is used only when `priorityFee`
-     * was not configured explicitly.
+     * A caller-supplied SetComputeUnitPrice is used when `priorityFee` was not
+     * configured explicitly, or when the config sets `preferInstruction`.
      */
-    private async resolvePriorityFee(callerValues?: CallerComputeBudgetValues): Promise<bigint> {
-        if (!this.explicitConfig.priorityFee && callerValues?.computeUnitPriceMicroLamports !== undefined) {
-            return callerValues.computeUnitPriceMicroLamports;
+    private async resolvePriorityFee(
+        callerValues: CallerComputeBudgetValues,
+        context: PriorityFeeContextInputs,
+    ): Promise<ResolvedPrice> {
+        if (this.prefersCallerValue('priorityFee') && callerValues.computeUnitPriceMicroLamports !== undefined) {
+            return { microLamports: callerValues.computeUnitPriceMicroLamports, source: 'instruction' };
         }
-        return BigInt(await this.resolveConfiguredPriorityFee());
+        return { microLamports: await this.resolveConfiguredPriorityFee(context), source: 'config' };
     }
 
     /**
      * Resolve the configured per-CU priority fee (micro-lamports), ignoring
      * caller-supplied instructions.
      */
-    private async resolveConfiguredPriorityFee(): Promise<number> {
+    private async resolveConfiguredPriorityFee(context: PriorityFeeContextInputs): Promise<bigint> {
         const { priorityFee } = this.config;
 
         // String level (preset)
         if (typeof priorityFee === 'string') {
-            return PRIORITY_FEE_LEVELS[priorityFee] ?? 0;
+            return BigInt(PRIORITY_FEE_LEVELS[priorityFee] ?? 0);
         }
 
         // Config object
         if (priorityFee.strategy === 'none') {
-            return 0;
+            return 0n;
         }
 
         if (priorityFee.strategy === 'fixed') {
-            return priorityFee.microLamports ?? 0;
+            return toMicroLamports(priorityFee.microLamports ?? 0);
+        }
+
+        // Custom strategy: the resolver's errors propagate as-is.
+        if (priorityFee.strategy === 'custom') {
+            return await priorityFee.resolve!(this.createPriorityFeeContext(context));
         }
 
         // Percentile strategy - requires RPC
         if (priorityFee.strategy === 'percentile' && this.config.rpc) {
             const estimate = await estimatePriorityFee(this.config.rpc as any, priorityFee);
-            return estimate.microLamports;
+            return toMicroLamports(estimate.microLamports);
         }
 
         // Fallback to medium
-        return PRIORITY_FEE_LEVELS.medium;
+        return BigInt(PRIORITY_FEE_LEVELS.medium);
     }
 
     /**
@@ -873,44 +1092,45 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
 
     /**
      * Resolve compute units based on configuration.
-     * Returns null if no compute unit instruction should be added.
-     * Returns PROVISORY_CU_SENTINEL if a provisory instruction should be added
+     * `units` is null if no compute unit instruction should be added, or
+     * PROVISORY_CU_SENTINEL if a provisory instruction should be added
      * (will be updated via simulation during execute()).
      */
-    private async resolveComputeUnits(callerValues?: CallerComputeBudgetValues): Promise<number | null> {
+    private resolveComputeUnits(callerValues: CallerComputeBudgetValues): ResolvedLimit {
         const { computeUnits } = this.config;
 
-        // A caller-supplied limit applies only when computeUnits was not configured
-        if (!this.explicitConfig.computeUnits && callerValues?.computeUnitLimit !== undefined) {
-            return callerValues.computeUnitLimit;
+        // A caller-supplied limit applies when computeUnits was not configured,
+        // or when the config prefers the instruction
+        if (this.prefersCallerValue('computeUnits') && callerValues.computeUnitLimit !== undefined) {
+            return { units: callerValues.computeUnitLimit, source: 'instruction' };
         }
 
         // 'auto' = no explicit instruction
         if (computeUnits === 'auto') {
-            return null;
+            return { units: null, source: 'default' };
         }
 
         // Fixed number
         if (typeof computeUnits === 'number') {
-            return computeUnits;
+            return { units: computeUnits, source: 'config' };
         }
 
         // Config object
         if (computeUnits.strategy === 'auto') {
-            return null;
+            return { units: null, source: 'default' };
         }
 
         if (computeUnits.strategy === 'fixed') {
-            return computeUnits.units ?? 200_000;
+            return { units: computeUnits.units ?? 200_000, source: 'config' };
         }
 
         // Simulate strategy - use provisory pattern
         // The actual CU limit will be estimated via simulation during execute()
         if (computeUnits.strategy === 'simulate') {
-            return TransactionBuilder.PROVISORY_CU_SENTINEL;
+            return { units: TransactionBuilder.PROVISORY_CU_SENTINEL, source: 'simulated' };
         }
 
-        return null;
+        return { units: null, source: 'default' };
     }
 
     /**
@@ -1501,3 +1721,27 @@ export class TransactionBuilder<TState extends BuilderState = BuilderState> {
         return builder;
     }
 }
+
+/** Normalise a configured or estimated price to a bigint of micro-lamports. */
+function toMicroLamports(value: number | bigint): bigint {
+    if (typeof value === 'bigint') return value;
+    return Number.isFinite(value) ? BigInt(Math.round(value)) : 0n;
+}
+
+/**
+ * Constructor typing for {@link TransactionBuilder}. A class constructor
+ * cannot vary its type arguments by overload, so the overloads live here:
+ * passing `rpc` yields a builder whose lifetime is already satisfied, because
+ * `build()` fetches the latest blockhash through it.
+ */
+type TransactionBuilderConstructor = Pick<typeof TransactionBuilder, keyof typeof TransactionBuilder> & {
+    new (
+        config: TransactionBuilderConfig & { rpc: Rpc<GetLatestBlockhashApi & GetAccountInfoApi> },
+    ): TransactionBuilder<{ lifetime: true }>;
+    new (config?: TransactionBuilderConfig): TransactionBuilder;
+};
+
+const TypedTransactionBuilder = TransactionBuilder as TransactionBuilderConstructor;
+type TypedTransactionBuilder<TState extends BuilderState = BuilderState> = TransactionBuilder<TState>;
+
+export { TypedTransactionBuilder as TransactionBuilder };

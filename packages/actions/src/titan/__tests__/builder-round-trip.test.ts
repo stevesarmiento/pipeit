@@ -69,12 +69,18 @@ type BuiltMessage = {
     };
 };
 
-function build(config: ConstructorParameters<typeof TransactionBuilder>[0]) {
-    const builder = new TransactionBuilder(config)
+/** The same route without a SetComputeUnitPrice: what Titan ships today. */
+const TITAN_ROUTE_WITHOUT_PRICE = TITAN_ROUTE.filter(ix => ix.d[0] !== SET_COMPUTE_UNIT_PRICE || ix.a.length > 0);
+
+function makeBuilder(config: ConstructorParameters<typeof TransactionBuilder>[0], route = TITAN_ROUTE) {
+    return new TransactionBuilder(config)
         .setFeePayer(FEE_PAYER)
         .setBlockhashLifetime(BLOCKHASH, 100n)
-        .addInstructions(titanInstructionsToKit(TITAN_ROUTE));
-    return (builder as any).build() as Promise<BuiltMessage>;
+        .addInstructions(titanInstructionsToKit(route));
+}
+
+function build(config: ConstructorParameters<typeof TransactionBuilder>[0], route = TITAN_ROUTE) {
+    return makeBuilder(config, route).build() as Promise<BuiltMessage>;
 }
 
 function computeBudgetInstructions(instructions: readonly Instruction[], discriminator?: number): Instruction[] {
@@ -143,5 +149,104 @@ describe('Titan route through TransactionBuilder', () => {
         } finally {
             warn.mockRestore();
         }
+    });
+
+    describe('wallet fee policy: route price if present, custom estimator otherwise, capped', () => {
+        const FEE_POLICY = {
+            strategy: 'custom' as const,
+            preferInstruction: true,
+            resolve: async () => 7_000n,
+            maxLamports: 100_000n,
+        };
+
+        it('legacy/v0: a route with a heap frame and no price gets the estimated price', async () => {
+            const { message, budget } = await makeBuilder(
+                { priorityFee: FEE_POLICY },
+                TITAN_ROUTE_WITHOUT_PRICE,
+            ).buildWithBudget();
+
+            const heap = computeBudgetInstructions(message.instructions, REQUEST_HEAP_FRAME);
+            const limit = computeBudgetInstructions(message.instructions, SET_COMPUTE_UNIT_LIMIT);
+            const price = computeBudgetInstructions(message.instructions, SET_COMPUTE_UNIT_PRICE);
+            expect(heap).toHaveLength(1);
+            expect(limit).toHaveLength(1);
+            expect(price).toHaveLength(1);
+            expect(readU32LE(heap[0]!.data as Uint8Array)).toBe(HEAP_BYTES);
+            expect(readU32LE(limit[0]!.data as Uint8Array)).toBe(LIMIT_UNITS);
+            expect(readU64LE(price[0]!.data as Uint8Array)).toBe(7_000n);
+
+            expect(budget).toEqual({
+                version: 0,
+                computeUnitLimit: LIMIT_UNITS,
+                computeUnitPriceMicroLamports: 7_000n,
+                // ceil(287_202 × 7_000 / 1e6) = 2_010.414 → 2_011 lamports
+                priorityFeeLamports: 2_011n,
+                loadedAccountsDataSizeLimit: null,
+                heapSize: HEAP_BYTES,
+                source: { priorityFee: 'config', computeUnits: 'instruction' },
+            });
+        });
+
+        it("legacy/v0: a route that carries a price keeps it and the estimator isn't consulted", async () => {
+            const resolve = vi.fn(async () => 7_000n);
+            const { message, budget } = await makeBuilder({
+                priorityFee: { ...FEE_POLICY, resolve },
+            }).buildWithBudget();
+
+            const price = computeBudgetInstructions(message.instructions, SET_COMPUTE_UNIT_PRICE);
+            expect(readU64LE(price[0]!.data as Uint8Array)).toBe(PRICE_MICRO_LAMPORTS);
+            expect(resolve).not.toHaveBeenCalled();
+            expect(budget.source.priorityFee).toBe('instruction');
+            expect(budget.priorityFeeLamports).toBe(1_437n);
+        });
+
+        it('version 1: the estimated price is converted against the route limit, under the cap', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            try {
+                const { message, budget } = await makeBuilder(
+                    { version: 1, loadedAccountsDataSizeLimit: 6_488_064, priorityFee: FEE_POLICY },
+                    TITAN_ROUTE_WITHOUT_PRICE,
+                ).buildWithBudget();
+
+                expect(computeBudgetInstructions(message.instructions)).toHaveLength(0);
+                expect(message.config).toEqual({
+                    computeUnitLimit: LIMIT_UNITS,
+                    loadedAccountsDataSizeLimit: 6_488_064,
+                    heapSize: HEAP_BYTES,
+                    priorityFeeLamports: 2_011n,
+                });
+                expect(budget).toEqual({
+                    version: 1,
+                    computeUnitLimit: LIMIT_UNITS,
+                    computeUnitPriceMicroLamports: 7_000n,
+                    priorityFeeLamports: 2_011n,
+                    loadedAccountsDataSizeLimit: 6_488_064,
+                    heapSize: HEAP_BYTES,
+                    source: { priorityFee: 'config', computeUnits: 'instruction' },
+                });
+                expect(warn).not.toHaveBeenCalled();
+            } finally {
+                warn.mockRestore();
+            }
+        });
+
+        it('version 1: the cap clamps the total and the budget says so', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            try {
+                const { message, budget } = await makeBuilder(
+                    {
+                        version: 1,
+                        loadedAccountsDataSizeLimit: 6_488_064,
+                        priorityFee: { ...FEE_POLICY, maxLamports: 1_000n },
+                    },
+                    TITAN_ROUTE_WITHOUT_PRICE,
+                ).buildWithBudget();
+                expect(message.config?.priorityFeeLamports).toBe(1_000n);
+                expect(budget.priorityFeeLamports).toBe(1_000n);
+                expect(budget.source.priorityFee).toBe('clamped');
+            } finally {
+                warn.mockRestore();
+            }
+        });
     });
 });
