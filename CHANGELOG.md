@@ -3,6 +3,20 @@
 All notable changes to the pipeit packages are documented here. Versions
 follow [Semantic Versioning](https://semver.org/).
 
+## @pipeit/core 0.5.1
+
+- Peer dependency on `@solana-program/compute-budget` widened to
+  `^0.18.1 || ^0.19.0 || ^0.20.0`, so projects on Kit 8.5+ program clients
+  no longer hit a peer conflict. No code changes.
+- Built and tested against `@solana/kit` 8.6.0. The Kit peer range stays
+  `^8.0.0`.
+
+## @pipeit/actions 0.4.3
+
+- Optional peer dependency on `@ellipsis-labs/rise` widened to
+  `^0.4.62 || ^0.8.2`. Rise 0.5 through 0.7 are untested and not in the
+  range. No code changes.
+
 ## @pipeit/core 0.5.0
 
 Priority-fee controls for wallet builders. Everything is additive: existing
