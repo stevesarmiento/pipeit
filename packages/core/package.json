@@ -47,7 +47,7 @@
         "url": "https://github.com/stevesarmiento/pipeit/issues"
     },
     "peerDependencies": {
-        "@solana-program/compute-budget": "^0.18.1",
+        "@solana-program/compute-budget": "^0.18.1 || ^0.19.0 || ^0.20.0",
         "@solana/addresses": "^8.0.0",
         "@solana/codecs-strings": "^8.0.0",
         "@solana/errors": "^8.0.0",
@@ -102,7 +102,7 @@
         }
     },
     "devDependencies": {
-        "@solana-program/compute-budget": "^0.18.1",
+        "@solana-program/compute-budget": "^0.20.0",
         "@solana/addresses": "^8.0.0",
         "@solana/codecs-strings": "^8.0.0",
         "@solana/errors": "^8.0.0",
@@ -117,10 +117,10 @@
         "@solana/signers": "^8.0.0",
         "@solana/transaction-messages": "^8.0.0",
         "@solana/transactions": "^8.0.0",
-        "@types/node": "^25.9.4",
-        "eslint": "^10.6.0",
-        "tsup": "^8.5.1",
+        "@types/node": "^26.6.6",
+        "eslint": "^10.15.0",
+        "tsup": "^9.0.0",
         "typescript": "^6.0.3",
-        "vitest": "^4.1.9"
+        "vitest": "^5.1.0"
     }
 }

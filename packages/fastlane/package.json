@@ -42,7 +42,7 @@
         "version": "napi version"
     },
     "devDependencies": {
-        "@napi-rs/cli": "^3.7.2"
+        "@napi-rs/cli": "^3.10.12"
     },
     "engines": {
         "node": ">= 18"
