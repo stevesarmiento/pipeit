@@ -73,7 +73,7 @@ export function createFakePhoenixClient(config: FakeMarketConfig = {}) {
             buildCancelAll: vi.fn(async () => createInstruction([6])),
             buildCancelOrdersById: vi.fn(async () => createInstruction([7])),
         },
-        dispose: vi.fn(),
+        dispose: vi.fn<() => void>(),
     };
 
     return { client, asClient: client as unknown as PhoenixClient, market, marketParams };
